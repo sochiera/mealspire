@@ -21,6 +21,11 @@ public final class RecipePromptBuilder {
     }
 
     public String userPrompt(String mealType, UserPreferences preferences) {
+        return userPrompt(mealType, preferences, java.util.Collections.<String>emptyList());
+    }
+
+    public String userPrompt(String mealType, UserPreferences preferences,
+                             Iterable<String> recentDishesToAvoid) {
         StringBuilder sb = new StringBuilder();
         sb.append("Zaproponuj jedno danie na: ").append(mealType).append(". ");
         sb.append("Podaj nazwę dania, listę składników i sposób przygotowania.");
@@ -29,6 +34,11 @@ public final class RecipePromptBuilder {
         }
         if (preferences != null && !preferences.getDislikes().isEmpty()) {
             sb.append(" Użytkownik unika: ").append(join(preferences.getDislikes())).append('.');
+        }
+        String recent = join(recentDishesToAvoid);
+        if (!recent.isEmpty()) {
+            sb.append(" Ostatnio proponowane dania (zaproponuj coś innego dla urozmaicenia): ")
+                    .append(recent).append('.');
         }
         return sb.toString();
     }

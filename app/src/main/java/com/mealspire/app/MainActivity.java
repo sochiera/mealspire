@@ -14,16 +14,23 @@ import android.widget.TextView;
 
 import android.widget.Toast;
 
+import com.mealspire.app.domain.MealHistory;
+import com.mealspire.app.domain.MealHistoryStore;
 import com.mealspire.app.domain.PreferenceStore;
 import com.mealspire.app.domain.Recipe;
 import com.mealspire.app.domain.RecipePromptBuilder;
 import com.mealspire.app.domain.RecipeService;
 import com.mealspire.app.domain.RecipeTextParser;
+import com.mealspire.app.domain.StaleMealSelector;
 import com.mealspire.app.domain.UserPreferences;
 import com.mealspire.app.net.HttpClaudeClient;
+import com.mealspire.app.storage.SharedPreferencesMealHistoryStore;
 import com.mealspire.app.storage.SharedPreferencesPreferenceStore;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Random;
 
 /**
@@ -82,6 +89,9 @@ public class MainActivity extends Activity {
     private RecipeService recipeService;
     private PreferenceStore preferenceStore;
     private UserPreferences preferences;
+    private MealHistoryStore historyStore;
+    private MealHistory history;
+    private final StaleMealSelector staleSelector = new StaleMealSelector();
     private Recipe currentRecipe;
 
     @Override
@@ -93,6 +103,8 @@ public class MainActivity extends Activity {
                 new RecipeTextParser());
         preferenceStore = new SharedPreferencesPreferenceStore(this);
         preferences = preferenceStore.load();
+        historyStore = new SharedPreferencesMealHistoryStore(this);
+        history = historyStore.load();
 
         ScrollView scrollView = new ScrollView(this);
         scrollView.setBackgroundColor(Color.rgb(255, 247, 237));
@@ -170,8 +182,27 @@ public class MainActivity extends Activity {
 
     private void showRandomRecipe() {
         int mealIndex = mealSpinner.getSelectedItemPosition();
-        Recipe[] recipes = RECIPES[mealIndex];
-        showRecipe(recipes[random.nextInt(recipes.length)]);
+        // Shuffle so ties (e.g. never-shown dishes) vary, then prefer the dish
+        // not seen for the longest time.
+        List<Recipe> pool = new ArrayList<>();
+        Collections.addAll(pool, RECIPES[mealIndex]);
+        Collections.shuffle(pool, random);
+
+        List<String> titles = new ArrayList<>();
+        for (Recipe recipe : pool) {
+            titles.add(recipe.getTitle());
+        }
+        String stalest = staleSelector.pickStalest(titles, history);
+
+        Recipe chosen = pool.get(0);
+        for (Recipe recipe : pool) {
+            if (recipe.getTitle().equals(stalest)) {
+                chosen = recipe;
+                break;
+            }
+        }
+        showRecipe(chosen);
+        recordChosen(chosen);
     }
 
     private void generateAiRecipe() {
@@ -188,11 +219,14 @@ public class MainActivity extends Activity {
         recipeTitle.setText("Wymyślam danie…");
         recipeDetails.setText("");
 
+        final List<String> recentToAvoid = history.recentTitles(5);
         new Thread(() -> {
             try {
-                final Recipe recipe = recipeService.generateRecipe(mealType, preferences);
+                final Recipe recipe = recipeService.generateRecipe(
+                        mealType, preferences, recentToAvoid);
                 runOnUiThread(() -> {
                     showRecipe(recipe);
+                    recordChosen(recipe);
                     aiButton.setEnabled(true);
                 });
             } catch (IOException e) {
@@ -214,6 +248,14 @@ public class MainActivity extends Activity {
         boolean hasDish = !recipe.getTitle().trim().isEmpty();
         likeButton.setEnabled(hasDish);
         dislikeButton.setEnabled(hasDish);
+    }
+
+    private void recordChosen(Recipe recipe) {
+        if (recipe == null || recipe.getTitle().trim().isEmpty()) {
+            return;
+        }
+        history = history.record(recipe.getTitle(), System.currentTimeMillis());
+        historyStore.save(history);
     }
 
     private void rateCurrentRecipe(boolean liked) {

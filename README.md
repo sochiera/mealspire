@@ -20,6 +20,13 @@ Ustaw go na jeden z dwóch sposobów:
 Bez klucza aplikacja nadal działa w trybie losowania gotowych przepisów, a przycisk
 AI wyświetla instrukcję konfiguracji.
 
+## Urozmaicenie — dania, których dawno nie było
+
+Aplikacja zapamiętuje, które dania ostatnio pokazywała (historia przeżywa obrót
+ekranu i restart). „Losuj gotowy przepis” podsuwa wtedy danie, którego najdłużej
+nie było, a generowanie z AI dostaje listę ostatnich dań z prośbą o coś innego —
+dzięki temu propozycje się nie powtarzają.
+
 ## Uczenie się preferencji
 
 Pod każdym pokazanym daniem są przyciski „Lubię to” i „Nie dla mnie”. Twoje oceny

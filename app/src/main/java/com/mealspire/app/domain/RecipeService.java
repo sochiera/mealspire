@@ -24,9 +24,14 @@ public final class RecipeService {
     }
 
     public Recipe generateRecipe(String mealType, UserPreferences preferences) throws IOException {
+        return generateRecipe(mealType, preferences, java.util.Collections.<String>emptyList());
+    }
+
+    public Recipe generateRecipe(String mealType, UserPreferences preferences,
+                                 Iterable<String> recentDishesToAvoid) throws IOException {
         String answer = client.complete(
                 promptBuilder.systemPrompt(),
-                promptBuilder.userPrompt(mealType, preferences));
+                promptBuilder.userPrompt(mealType, preferences, recentDishesToAvoid));
         return textParser.parse(answer);
     }
 }
