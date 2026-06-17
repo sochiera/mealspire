@@ -49,6 +49,16 @@ Zainstaluj aplikację:
 /home/jan/.local/android-sdk/platform-tools/adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## Jak uruchomić testy
+
+Logika domenowa (wybór, filtrowanie, preferencje, budowanie zapytań do LLM)
+jest pokryta szybkimi testami jednostkowymi JVM, które nie wymagają emulatora:
+
+```bash
+cd /home/jan/Sources/mealspire
+JAVA_HOME=/home/jan/.local/opt/jdk-17 ./gradlew test
+```
+
 ## Jak zrobić plik APK
 
 W Android Studio wybierz:
