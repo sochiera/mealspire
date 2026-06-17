@@ -1,5 +1,7 @@
 package com.mealspire.app.domain;
 
+import java.util.List;
+
 /**
  * Builds the system and user prompts for recipe generation. Kept separate from
  * the network layer so prompt wording is unit-testable and easy to tune.
@@ -26,21 +28,42 @@ public final class RecipePromptBuilder {
 
     public String userPrompt(String mealType, UserPreferences preferences,
                              Iterable<String> recentDishesToAvoid) {
+        List<String> recent = toList(recentDishesToAvoid);
+        return userPrompt(new RecipeRequest(mealType, preferences, recent,
+                java.util.Collections.<String>emptyList()));
+    }
+
+    public String userPrompt(RecipeRequest request) {
+        UserPreferences preferences = request.getPreferences();
         StringBuilder sb = new StringBuilder();
-        sb.append("Zaproponuj jedno danie na: ").append(mealType).append(". ");
+        sb.append("Zaproponuj jedno danie na: ").append(request.getMealType()).append(". ");
         sb.append("Podaj nazwę dania, listę składników i sposób przygotowania.");
-        if (preferences != null && !preferences.getLikes().isEmpty()) {
+        if (!preferences.getLikes().isEmpty()) {
             sb.append(" Użytkownik lubi: ").append(join(preferences.getLikes())).append('.');
         }
-        if (preferences != null && !preferences.getDislikes().isEmpty()) {
+        if (!preferences.getDislikes().isEmpty()) {
             sb.append(" Użytkownik unika: ").append(join(preferences.getDislikes())).append('.');
         }
-        String recent = join(recentDishesToAvoid);
+        String choices = join(request.getChoiceFragments());
+        if (!choices.isEmpty()) {
+            sb.append(" Uwzględnij wybory użytkownika: ").append(choices).append('.');
+        }
+        String recent = join(request.getRecentToAvoid());
         if (!recent.isEmpty()) {
             sb.append(" Ostatnio proponowane dania (zaproponuj coś innego dla urozmaicenia): ")
                     .append(recent).append('.');
         }
         return sb.toString();
+    }
+
+    private static List<String> toList(Iterable<String> values) {
+        List<String> list = new java.util.ArrayList<>();
+        if (values != null) {
+            for (String value : values) {
+                list.add(value);
+            }
+        }
+        return list;
     }
 
     private static String join(Iterable<String> items) {

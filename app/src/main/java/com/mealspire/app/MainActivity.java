@@ -7,18 +7,22 @@ import android.view.Gravity;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
-
 import android.widget.Toast;
 
+import com.mealspire.app.domain.ChoiceLearning;
+import com.mealspire.app.domain.MealChoiceOption;
+import com.mealspire.app.domain.MealChoices;
 import com.mealspire.app.domain.MealHistory;
 import com.mealspire.app.domain.MealHistoryStore;
 import com.mealspire.app.domain.PreferenceStore;
 import com.mealspire.app.domain.Recipe;
 import com.mealspire.app.domain.RecipePromptBuilder;
+import com.mealspire.app.domain.RecipeRequest;
 import com.mealspire.app.domain.RecipeService;
 import com.mealspire.app.domain.RecipeTextParser;
 import com.mealspire.app.domain.StaleMealSelector;
@@ -92,6 +96,8 @@ public class MainActivity extends Activity {
     private MealHistoryStore historyStore;
     private MealHistory history;
     private final StaleMealSelector staleSelector = new StaleMealSelector();
+    private final List<MealChoiceOption> choiceOptions = MealChoices.defaults();
+    private final List<CheckBox> choiceBoxes = new ArrayList<>();
     private Recipe currentRecipe;
 
     @Override
@@ -132,6 +138,21 @@ public class MainActivity extends Activity {
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, MEAL_TYPES);
         mealSpinner.setAdapter(adapter);
         root.addView(mealSpinner, marginTop(28));
+
+        TextView choicesLabel = new TextView(this);
+        choicesLabel.setText("Czego dziś szukasz? (wybierz dowolne)");
+        choicesLabel.setTextSize(16);
+        choicesLabel.setTextColor(Color.rgb(92, 78, 62));
+        root.addView(choicesLabel, marginTop(20));
+
+        for (MealChoiceOption option : choiceOptions) {
+            CheckBox box = new CheckBox(this);
+            box.setText(option.getLabel());
+            box.setTextSize(16);
+            box.setTextColor(Color.rgb(67, 56, 45));
+            choiceBoxes.add(box);
+            root.addView(box, marginTop(4));
+        }
 
         aiButton = new Button(this);
         aiButton.setText("Wymyśl danie (AI)");
@@ -219,11 +240,22 @@ public class MainActivity extends Activity {
         recipeTitle.setText("Wymyślam danie…");
         recipeDetails.setText("");
 
-        final List<String> recentToAvoid = history.recentTitles(5);
+        // Gather the user's choices: feed them into the prompt and learn from them.
+        List<MealChoiceOption> selected = selectedChoices();
+        List<String> fragments = new ArrayList<>();
+        for (MealChoiceOption option : selected) {
+            fragments.add(option.getPromptFragment());
+        }
+        if (!selected.isEmpty()) {
+            preferences = ChoiceLearning.learnFrom(preferences, selected);
+            preferenceStore.save(preferences);
+        }
+
+        final RecipeRequest request = new RecipeRequest(
+                mealType, preferences, history.recentTitles(5), fragments);
         new Thread(() -> {
             try {
-                final Recipe recipe = recipeService.generateRecipe(
-                        mealType, preferences, recentToAvoid);
+                final Recipe recipe = recipeService.generateRecipe(request);
                 runOnUiThread(() -> {
                     showRecipe(recipe);
                     recordChosen(recipe);
@@ -248,6 +280,16 @@ public class MainActivity extends Activity {
         boolean hasDish = !recipe.getTitle().trim().isEmpty();
         likeButton.setEnabled(hasDish);
         dislikeButton.setEnabled(hasDish);
+    }
+
+    private List<MealChoiceOption> selectedChoices() {
+        List<MealChoiceOption> selected = new ArrayList<>();
+        for (int i = 0; i < choiceOptions.size(); i++) {
+            if (choiceBoxes.get(i).isChecked()) {
+                selected.add(choiceOptions.get(i));
+            }
+        }
+        return selected;
     }
 
     private void recordChosen(Recipe recipe) {

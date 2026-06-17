@@ -20,6 +20,13 @@ Ustaw go na jeden z dwóch sposobów:
 Bez klucza aplikacja nadal działa w trybie losowania gotowych przepisów, a przycisk
 AI wyświetla instrukcję konfiguracji.
 
+## Wybory przy każdej propozycji
+
+Przed wygenerowaniem dania możesz zaznaczyć dowolne preferencje na dziś
+(np. „Szybkie”, „Wegetariańskie”, „Sycące”, „Lekkie”, „Tanie”, „Dla dzieci”).
+Wybory trafiają do zapytania do AI i jednocześnie są zapamiętywane jako Twoje
+upodobania — z każdym wyborem aplikacja coraz lepiej dopasowuje propozycje.
+
 ## Urozmaicenie — dania, których dawno nie było
 
 Aplikacja zapamiętuje, które dania ostatnio pokazywała (historia przeżywa obrót

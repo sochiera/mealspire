@@ -29,9 +29,18 @@ public final class RecipeService {
 
     public Recipe generateRecipe(String mealType, UserPreferences preferences,
                                  Iterable<String> recentDishesToAvoid) throws IOException {
+        java.util.List<String> recent = new java.util.ArrayList<>();
+        for (String dish : recentDishesToAvoid) {
+            recent.add(dish);
+        }
+        return generateRecipe(new RecipeRequest(mealType, preferences, recent,
+                java.util.Collections.<String>emptyList()));
+    }
+
+    public Recipe generateRecipe(RecipeRequest request) throws IOException {
         String answer = client.complete(
                 promptBuilder.systemPrompt(),
-                promptBuilder.userPrompt(mealType, preferences, recentDishesToAvoid));
+                promptBuilder.userPrompt(request));
         return textParser.parse(answer);
     }
 }
