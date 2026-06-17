@@ -20,6 +20,13 @@ Ustaw go na jeden z dwóch sposobów:
 Bez klucza aplikacja nadal działa w trybie losowania gotowych przepisów, a przycisk
 AI wyświetla instrukcję konfiguracji.
 
+## Uczenie się preferencji
+
+Pod każdym pokazanym daniem są przyciski „Lubię to” i „Nie dla mnie”. Twoje oceny
+są zapamiętywane (przeżywają obrót ekranu i ponowne uruchomienie aplikacji) i przy
+kolejnych pomysłach z AI są przekazywane do modelu, żeby podpowiadał dania bliższe
+Twoim gustom i omijał te, których nie lubisz.
+
 ## Jak uruchomić w Android Studio
 
 1. Zainstaluj Android Studio: <https://developer.android.com/studio>

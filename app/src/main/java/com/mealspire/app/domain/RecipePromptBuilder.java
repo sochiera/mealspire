@@ -17,7 +17,30 @@ public final class RecipePromptBuilder {
     }
 
     public String userPrompt(String mealType) {
-        return "Zaproponuj jedno danie na: " + mealType + ". "
-                + "Podaj nazwę dania, listę składników i sposób przygotowania.";
+        return userPrompt(mealType, UserPreferences.empty());
+    }
+
+    public String userPrompt(String mealType, UserPreferences preferences) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Zaproponuj jedno danie na: ").append(mealType).append(". ");
+        sb.append("Podaj nazwę dania, listę składników i sposób przygotowania.");
+        if (preferences != null && !preferences.getLikes().isEmpty()) {
+            sb.append(" Użytkownik lubi: ").append(join(preferences.getLikes())).append('.');
+        }
+        if (preferences != null && !preferences.getDislikes().isEmpty()) {
+            sb.append(" Użytkownik unika: ").append(join(preferences.getDislikes())).append('.');
+        }
+        return sb.toString();
+    }
+
+    private static String join(Iterable<String> items) {
+        StringBuilder sb = new StringBuilder();
+        for (String item : items) {
+            if (sb.length() > 0) {
+                sb.append(", ");
+            }
+            sb.append(item);
+        }
+        return sb.toString();
     }
 }

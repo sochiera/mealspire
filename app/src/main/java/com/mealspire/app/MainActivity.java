@@ -12,11 +12,16 @@ import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
 
+import android.widget.Toast;
+
+import com.mealspire.app.domain.PreferenceStore;
 import com.mealspire.app.domain.Recipe;
 import com.mealspire.app.domain.RecipePromptBuilder;
 import com.mealspire.app.domain.RecipeService;
 import com.mealspire.app.domain.RecipeTextParser;
+import com.mealspire.app.domain.UserPreferences;
 import com.mealspire.app.net.HttpClaudeClient;
+import com.mealspire.app.storage.SharedPreferencesPreferenceStore;
 
 import java.io.IOException;
 import java.util.Random;
@@ -70,9 +75,14 @@ public class MainActivity extends Activity {
     private TextView recipeTitle;
     private TextView recipeDetails;
     private Button aiButton;
+    private Button likeButton;
+    private Button dislikeButton;
 
     private HttpClaudeClient claudeClient;
     private RecipeService recipeService;
+    private PreferenceStore preferenceStore;
+    private UserPreferences preferences;
+    private Recipe currentRecipe;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -81,6 +91,8 @@ public class MainActivity extends Activity {
         claudeClient = new HttpClaudeClient(BuildConfig.ANTHROPIC_API_KEY);
         recipeService = new RecipeService(claudeClient, new RecipePromptBuilder(),
                 new RecipeTextParser());
+        preferenceStore = new SharedPreferencesPreferenceStore(this);
+        preferences = preferenceStore.load();
 
         ScrollView scrollView = new ScrollView(this);
         scrollView.setBackgroundColor(Color.rgb(255, 247, 237));
@@ -134,6 +146,24 @@ public class MainActivity extends Activity {
         recipeDetails.setTextColor(Color.rgb(80, 68, 54));
         root.addView(recipeDetails, marginTop(12));
 
+        LinearLayout feedbackRow = new LinearLayout(this);
+        feedbackRow.setOrientation(LinearLayout.HORIZONTAL);
+        root.addView(feedbackRow, marginTop(20));
+
+        likeButton = new Button(this);
+        likeButton.setText("Lubię to");
+        likeButton.setAllCaps(false);
+        likeButton.setTextSize(16);
+        likeButton.setOnClickListener(view -> rateCurrentRecipe(true));
+        feedbackRow.addView(likeButton, equalWidthRowItem());
+
+        dislikeButton = new Button(this);
+        dislikeButton.setText("Nie dla mnie");
+        dislikeButton.setAllCaps(false);
+        dislikeButton.setTextSize(16);
+        dislikeButton.setOnClickListener(view -> rateCurrentRecipe(false));
+        feedbackRow.addView(dislikeButton, equalWidthRowItem());
+
         setContentView(scrollView);
         showRandomRecipe();
     }
@@ -160,7 +190,7 @@ public class MainActivity extends Activity {
 
         new Thread(() -> {
             try {
-                final Recipe recipe = recipeService.generateRecipe(mealType);
+                final Recipe recipe = recipeService.generateRecipe(mealType, preferences);
                 runOnUiThread(() -> {
                     showRecipe(recipe);
                     aiButton.setEnabled(true);
@@ -178,8 +208,33 @@ public class MainActivity extends Activity {
     }
 
     private void showRecipe(Recipe recipe) {
+        currentRecipe = recipe;
         recipeTitle.setText(recipe.getTitle());
         recipeDetails.setText(recipe.getDetails());
+        boolean hasDish = !recipe.getTitle().trim().isEmpty();
+        likeButton.setEnabled(hasDish);
+        dislikeButton.setEnabled(hasDish);
+    }
+
+    private void rateCurrentRecipe(boolean liked) {
+        if (currentRecipe == null || currentRecipe.getTitle().trim().isEmpty()) {
+            return;
+        }
+        String dish = currentRecipe.getTitle();
+        preferences = liked ? preferences.withLike(dish) : preferences.withDislike(dish);
+        preferenceStore.save(preferences);
+        String message = liked
+                ? "Zapamiętano, że lubisz: " + dish
+                : "Zapamiętano, że unikasz: " + dish;
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+    }
+
+    private LinearLayout.LayoutParams equalWidthRowItem() {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        params.leftMargin = dp(4);
+        params.rightMargin = dp(4);
+        return params;
     }
 
     private LinearLayout.LayoutParams matchWrap() {

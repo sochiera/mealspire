@@ -20,9 +20,13 @@ public final class RecipeService {
     }
 
     public Recipe generateRecipe(String mealType) throws IOException {
+        return generateRecipe(mealType, UserPreferences.empty());
+    }
+
+    public Recipe generateRecipe(String mealType, UserPreferences preferences) throws IOException {
         String answer = client.complete(
                 promptBuilder.systemPrompt(),
-                promptBuilder.userPrompt(mealType));
+                promptBuilder.userPrompt(mealType, preferences));
         return textParser.parse(answer);
     }
 }
