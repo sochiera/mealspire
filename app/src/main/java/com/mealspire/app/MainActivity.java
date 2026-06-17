@@ -12,8 +12,20 @@ import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
 
+import com.mealspire.app.domain.Recipe;
+import com.mealspire.app.domain.RecipePromptBuilder;
+import com.mealspire.app.domain.RecipeService;
+import com.mealspire.app.domain.RecipeTextParser;
+import com.mealspire.app.net.HttpClaudeClient;
+
+import java.io.IOException;
 import java.util.Random;
 
+/**
+ * Thin UI layer: assembles the screen, reacts to clicks, and delegates recipe
+ * logic to the domain layer. It keeps the original offline random picker and adds
+ * AI-generated meal ideas via {@link RecipeService}.
+ */
 public class MainActivity extends Activity {
     private static final String[] MEAL_TYPES = {"Śniadanie", "Obiad", "Kolacja"};
 
@@ -57,10 +69,18 @@ public class MainActivity extends Activity {
     private Spinner mealSpinner;
     private TextView recipeTitle;
     private TextView recipeDetails;
+    private Button aiButton;
+
+    private HttpClaudeClient claudeClient;
+    private RecipeService recipeService;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        claudeClient = new HttpClaudeClient(BuildConfig.ANTHROPIC_API_KEY);
+        recipeService = new RecipeService(claudeClient, new RecipePromptBuilder(),
+                new RecipeTextParser());
 
         ScrollView scrollView = new ScrollView(this);
         scrollView.setBackgroundColor(Color.rgb(255, 247, 237));
@@ -78,7 +98,7 @@ public class MainActivity extends Activity {
         root.addView(title, matchWrap());
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("Wybierz porę dnia i wylosuj prosty przepis.");
+        subtitle.setText("Wybierz porę dnia i znajdź pomysł na danie.");
         subtitle.setTextSize(16);
         subtitle.setTextColor(Color.rgb(92, 78, 62));
         subtitle.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -89,12 +109,19 @@ public class MainActivity extends Activity {
         mealSpinner.setAdapter(adapter);
         root.addView(mealSpinner, marginTop(28));
 
+        aiButton = new Button(this);
+        aiButton.setText("Wymyśl danie (AI)");
+        aiButton.setAllCaps(false);
+        aiButton.setTextSize(18);
+        aiButton.setOnClickListener(view -> generateAiRecipe());
+        root.addView(aiButton, marginTop(16));
+
         Button drawButton = new Button(this);
-        drawButton.setText("Losuj przepis");
+        drawButton.setText("Losuj gotowy przepis");
         drawButton.setAllCaps(false);
         drawButton.setTextSize(18);
         drawButton.setOnClickListener(view -> showRandomRecipe());
-        root.addView(drawButton, marginTop(16));
+        root.addView(drawButton, marginTop(12));
 
         recipeTitle = new TextView(this);
         recipeTitle.setTextSize(24);
@@ -114,9 +141,45 @@ public class MainActivity extends Activity {
     private void showRandomRecipe() {
         int mealIndex = mealSpinner.getSelectedItemPosition();
         Recipe[] recipes = RECIPES[mealIndex];
-        Recipe recipe = recipes[random.nextInt(recipes.length)];
-        recipeTitle.setText(recipe.title);
-        recipeDetails.setText(recipe.details);
+        showRecipe(recipes[random.nextInt(recipes.length)]);
+    }
+
+    private void generateAiRecipe() {
+        if (!claudeClient.hasApiKey()) {
+            recipeTitle.setText("Brak klucza API");
+            recipeDetails.setText("Dodaj anthropic.api.key do pliku local.properties i zbuduj aplikację "
+                    + "ponownie, aby korzystać z generowania dań przez AI. Możesz też użyć opcji "
+                    + "„Losuj gotowy przepis”.");
+            return;
+        }
+
+        final String mealType = MEAL_TYPES[mealSpinner.getSelectedItemPosition()];
+        aiButton.setEnabled(false);
+        recipeTitle.setText("Wymyślam danie…");
+        recipeDetails.setText("");
+
+        new Thread(() -> {
+            try {
+                final Recipe recipe = recipeService.generateRecipe(mealType);
+                runOnUiThread(() -> {
+                    showRecipe(recipe);
+                    aiButton.setEnabled(true);
+                });
+            } catch (IOException e) {
+                final String message = e.getMessage();
+                runOnUiThread(() -> {
+                    recipeTitle.setText("Nie udało się wymyślić dania");
+                    recipeDetails.setText(message != null ? message
+                            : "Spróbuj ponownie lub skorzystaj z opcji „Losuj gotowy przepis”.");
+                    aiButton.setEnabled(true);
+                });
+            }
+        }).start();
+    }
+
+    private void showRecipe(Recipe recipe) {
+        recipeTitle.setText(recipe.getTitle());
+        recipeDetails.setText(recipe.getDetails());
     }
 
     private LinearLayout.LayoutParams matchWrap() {
@@ -134,15 +197,5 @@ public class MainActivity extends Activity {
 
     private int dp(int value) {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
-    }
-
-    private static class Recipe {
-        final String title;
-        final String details;
-
-        Recipe(String title, String details) {
-            this.title = title;
-            this.details = details;
-        }
     }
 }

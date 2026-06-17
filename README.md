@@ -1,6 +1,24 @@
 # Mealspire
 
-Najprostsza aplikacja Android: wybierasz `Śniadanie`, `Obiad` albo `Kolacja`, a aplikacja losuje jeden z trzech prostych przepisów dla wybranej pory dnia.
+Aplikacja Android, która pomaga wymyślić, co ugotować. Wybierasz porę dnia
+(`Śniadanie`, `Obiad`, `Kolacja`) i albo prosisz AI o nowy pomysł na danie wraz
+z przepisem, albo losujesz jeden z wbudowanych, prostych przepisów (tryb offline).
+
+## Pomysły na dania z AI
+
+Przycisk „Wymyśl danie (AI)” wysyła zapytanie do modelu Claude (Anthropic
+Messages API) i pokazuje wygenerowaną nazwę dania oraz przepis. Wymaga klucza API.
+
+### Konfiguracja klucza API
+
+Klucz jest wstrzykiwany do aplikacji przy budowaniu (nie jest trzymany w repo).
+Ustaw go na jeden z dwóch sposobów:
+
+- zmienna środowiskowa `ANTHROPIC_API_KEY`, albo
+- wpis `anthropic.api.key=...` w pliku `local.properties` (plik jest w `.gitignore`).
+
+Bez klucza aplikacja nadal działa w trybie losowania gotowych przepisów, a przycisk
+AI wyświetla instrukcję konfiguracji.
 
 ## Jak uruchomić w Android Studio
 
