@@ -21,6 +21,7 @@ import com.mealspire.app.domain.ChoiceLearning;
 import com.mealspire.app.domain.Cookbook;
 import com.mealspire.app.domain.CookbookEntry;
 import com.mealspire.app.domain.CookbookStore;
+import com.mealspire.app.domain.DataManager;
 import com.mealspire.app.domain.KnownDishImporter;
 import com.mealspire.app.domain.KnownDishPromptBuilder;
 import com.mealspire.app.domain.IngredientExtractor;
@@ -111,6 +112,7 @@ public class MainActivity extends Activity {
     private CookbookStore cookbookStore;
     private Cookbook cookbook;
     private KnownDishImporter dishImporter;
+    private DataManager dataManager;
     private EditText importField;
     private Button importButton;
     private final StaleMealSelector staleSelector = new StaleMealSelector();
@@ -136,6 +138,7 @@ public class MainActivity extends Activity {
         cookbook = cookbookStore.load();
         dishImporter = new KnownDishImporter(claudeClient, new HttpPageFetcher(),
                 new KnownDishPromptBuilder(), new RecipeTextParser());
+        dataManager = new DataManager(preferenceStore, historyStore, cookbookStore);
 
         ScrollView scrollView = new ScrollView(this);
         scrollView.setBackgroundColor(Color.rgb(255, 247, 237));
@@ -278,6 +281,14 @@ public class MainActivity extends Activity {
         importButton.setTextSize(16);
         importButton.setOnClickListener(view -> importKnownDish());
         root.addView(importButton, marginTop(8));
+
+        Button manageButton = new Button(this);
+        manageButton.setId(R.id.manage_button);
+        manageButton.setText("Zarządzaj moimi danymi");
+        manageButton.setAllCaps(false);
+        manageButton.setTextSize(16);
+        manageButton.setOnClickListener(view -> showManageDialog());
+        root.addView(manageButton, marginTop(24));
 
         setContentView(scrollView);
         showRandomRecipe();
@@ -422,6 +433,61 @@ public class MainActivity extends Activity {
             }
         }
         return selected;
+    }
+
+    private void showManageDialog() {
+        final String[] options = {
+                "Pokaż i usuń dania z bazy",
+                "Wyczyść preferencje (lubię / nie lubię)",
+                "Wyczyść historię podpowiedzi",
+                "Wyczyść całą bazę dań"
+        };
+        new AlertDialog.Builder(this)
+                .setTitle("Moje dane")
+                .setItems(options, (dialog, which) -> {
+                    switch (which) {
+                        case 0:
+                            showCookbookDialog();
+                            break;
+                        case 1:
+                            dataManager.clearPreferences();
+                            preferences = UserPreferences.empty();
+                            toast("Wyczyszczono preferencje.");
+                            break;
+                        case 2:
+                            dataManager.clearHistory();
+                            history = MealHistory.empty();
+                            toast("Wyczyszczono historię.");
+                            break;
+                        case 3:
+                            dataManager.clearCookbook();
+                            cookbook = Cookbook.empty();
+                            toast("Wyczyszczono bazę dań.");
+                            break;
+                        default:
+                            break;
+                    }
+                })
+                .show();
+    }
+
+    private void showCookbookDialog() {
+        final String[] titles = cookbook.titles().toArray(new String[0]);
+        if (titles.length == 0) {
+            toast("Twoja baza jest pusta.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Dotknij danie, aby je usunąć")
+                .setItems(titles, (dialog, which) -> {
+                    cookbook = dataManager.removeDish(titles[which]);
+                    toast("Usunięto z bazy: " + titles[which]);
+                })
+                .show();
+    }
+
+    private void toast(String message) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
     }
 
     private void showShoppingList() {

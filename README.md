@@ -43,6 +43,12 @@ Przed wygenerowaniem dania możesz zaznaczyć dowolne preferencje na dziś
 Wybory trafiają do zapytania do AI i jednocześnie są zapamiętywane jako Twoje
 upodobania — z każdym wyborem aplikacja coraz lepiej dopasowuje propozycje.
 
+## Zarządzanie danymi
+
+Przycisk „Zarządzaj moimi danymi" pozwala przejrzeć i usuwać pojedyncze dania
+z bazy oraz wyczyścić preferencje, historię podpowiedzi lub całą bazę — masz
+pełną kontrolę nad tym, co aplikacja o Tobie pamięta.
+
 ## Urozmaicenie — dania, których dawno nie było
 
 Aplikacja zapamiętuje, które dania ostatnio pokazywała (historia przeżywa obrót

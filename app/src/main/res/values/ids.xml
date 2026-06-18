@@ -12,4 +12,5 @@
     <item name="import_button" type="id" />
     <item name="save_button" type="id" />
     <item name="shopping_button" type="id" />
+    <item name="manage_button" type="id" />
 </resources>
