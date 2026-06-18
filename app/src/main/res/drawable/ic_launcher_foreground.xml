@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Mealspire launcher foreground: a steaming bowl with a fork and spoon,
+  drawn in white so it reads on the warm background. Kept inside the adaptive
+  icon safe zone (centre ~66dp of the 108dp viewport).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Steam rising from the bowl -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M48,30 C45,34 51,37 48,41 M60,30 C57,34 63,37 60,41" />
+
+    <!-- Bowl body -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,52 L78,52 C78,66 68,76 54,76 C40,76 30,66 30,52 Z" />
+
+    <!-- Bowl base -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M44,78 L64,78 C62,81 58,82 54,82 C50,82 46,81 44,78 Z" />
+
+    <!-- Fork (left) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M21,48 L23,48 L23,62 L21,62 Z M19,46 L20.2,46 L20.2,52 L19,52 Z M21.4,46 L22.6,46 L22.6,52 L21.4,52 Z M23.8,46 L25,46 L25,52 L23.8,52 Z M19,52 L25,52 L25,53.4 L19,53.4 Z" />
+
+    <!-- Spoon (right) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M86,48 m-3,0 a3,4 0 1,0 6,0 a3,4 0 1,0 -6,0 M85,52 L87,52 L87,62 L85,62 Z" />
+</vector>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fallback launcher icon for API 23-25 (pre adaptive-icon). Composes the same
+  warm background and white bowl foreground used by the adaptive icon.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/ic_launcher_background" />
+    <item android:drawable="@drawable/ic_launcher_foreground" />
+</layer-list>
