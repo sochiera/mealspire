@@ -1,17 +1,43 @@
 # Mealspire
 
 Aplikacja Android, która pomaga wymyślić, co ugotować. Wybierasz tylko porę dnia
-(`Śniadanie`, `Obiad`, `Kolacja`) oraz dla ilu osób, a resztą zajmuje się aplikacja.
-Interfejs jest celowo prosty: jeden główny przycisk **„Wygeneruj danie”**, ocena
-dania (`Lubię to` / `Nie dla mnie`) oraz menu **„Więcej…”** z dodatkowymi opcjami.
+(`Śniadanie`, `Obiad`, `Kolacja`), a resztą zajmuje się aplikacja. Interfejs jest
+celowo prosty: jeden główny przycisk **„Zaproponuj danie”**, krótka propozycja,
+a pełny przepis dopiero na żądanie. Każde kliknięcie ma natychmiastową akcję.
 
-## Jeden przycisk: „Wygeneruj danie”
+## Najpierw propozycja, dopiero potem przepis
 
-Przycisk „Wygeneruj danie” zawsze podaje jedno danie wraz z przepisem. Gdy
-skonfigurowany jest klucz API, danie generuje model Claude (Anthropic Messages
-API) — może przy tym **sięgnąć po danie z Twojej bazy** albo **wymyślić zupełnie
-nowe**, w zależności od tego, co pasuje. Bez klucza API aplikacja działa offline:
-losuje danie z wbudowanej puli i z Twojej bazy.
+Aplikacja **nie generuje od razu całego przepisu**. Najpierw pokazuje krótką
+**propozycję** dania: nazwę, jedno zdanie opisu, przybliżony czas i kluczowe
+składniki. Dzięki temu szybko ocenisz pomysł, nie czekając na cały przepis.
+
+- **„Pokaż przepis”** — dopiero teraz powstaje pełny przepis na wybrane danie.
+- **„Nie dla mnie”** — pytamy *dlaczego* (patrz niżej) i **od razu** podsuwamy
+  nową propozycję, żebyś nie musiał czekać i klikać po raz drugi.
+
+Gdy skonfigurowany jest klucz API, propozycje i przepisy tworzy model Claude
+(Anthropic Messages API) — może przy tym **sięgnąć po danie z Twojej bazy** albo
+**wymyślić zupełnie nowe**. Bez klucza API aplikacja działa offline: losuje danie
+z wbudowanej puli i z Twojej bazy.
+
+## „Nie dla mnie” — z powodem
+
+Kiedy odrzucasz propozycję, wybierasz krótki powód:
+
+- **Nie lubię tego wcale** — danie trafia na stałe na listę unikanych i już nie
+  wróci w podpowiedziach.
+- **Za trudne** — następna propozycja będzie prostsza i łatwiejsza do zrobienia.
+- **Dzisiaj nie mam czasu** — następna propozycja będzie szybka (do ~20 minut).
+- **Nie mam na to ochoty dzisiaj** — po prostu coś innego, bez zapamiętywania.
+
+Powody „na dziś” sterują tylko kolejną propozycją w tej sesji; tylko „nie lubię
+tego wcale” zostaje zapamiętane na stałe.
+
+## Zmiana przepisu (zamienniki przez AI)
+
+Przy pokazanym przepisie jest przycisk **„Zmień przepis”**. Możesz wpisać własną
+prośbę do AI, np. *„nie mam jogurtu — czym zastąpić?”*, a aplikacja zwróci
+poprawiony przepis z sensownym zamiennikiem. Wymaga klucza API.
 
 ### Klucz API zaszyfrowany hasłem (domyślnie)
 
@@ -36,19 +62,21 @@ Można też wstrzyknąć klucz przy budowaniu (wtedy pytanie o hasło się nie p
 - wpis `anthropic.api.key=...` w pliku `local.properties` (plik jest w `.gitignore`).
 
 Bez klucza (i bez hasła) aplikacja działa w trybie offline (losowanie z wbudowanej
-puli i z Twojej bazy), a przycisk „Wygeneruj danie” korzysta wtedy z tej puli.
+puli i z Twojej bazy), a przycisk „Zaproponuj danie” korzysta wtedy z tej puli.
 
-## Dla ilu osób (zapamiętywane)
+## Dla ilu osób (pytane tylko raz)
 
-Liczba osób, którą wybierzesz, jest **zapamiętywana** — przy kolejnym
-uruchomieniu aplikacja startuje z ostatnio wybraną wartością (przeżywa obrót
-ekranu i restart). Liczba osób trafia też do zapytania do AI, więc przepis jest
-dobrany do wielkości rodziny.
+Aplikacja pyta o liczbę osób **tylko przy pierwszym uruchomieniu**. Potem już
+nigdy nie pyta — pokazuje zapamiętaną wartość jako etykietę „Gotuję dla N osób”
+i dołącza ją do zapytań do AI, więc przepis jest dobrany do wielkości rodziny.
+Liczbę osób można w każdej chwili zmienić w menu **„Więcej…” → „Zmień liczbę
+osób”**. Ustawienie przeżywa obrót ekranu i restart aplikacji.
 
 ## Menu „Więcej…”
 
 Aby utrzymać główny ekran prostym, dodatkowe akcje są pod przyciskiem „Więcej…”:
 
+- **Zmień liczbę osób** — zmienia zapamiętaną liczbę osób, dla których gotujesz.
 - **Zapisz danie do mojej bazy** — zapisuje aktualnie pokazane danie.
 - **Lista zakupów** — wyciąga składniki z aktualnego przepisu i pokazuje je jako
   odhaczaną listę.
@@ -69,10 +97,11 @@ temu propozycje się nie powtarzają.
 
 ## Uczenie się preferencji
 
-Pod każdym pokazanym daniem są przyciski „Lubię to” i „Nie dla mnie”. Twoje oceny
-są zapamiętywane (przeżywają obrót ekranu i ponowne uruchomienie aplikacji) i przy
+Pod każdą propozycją są przyciski „Lubię to” i „Nie dla mnie”. Twoje oceny są
+zapamiętywane (przeżywają obrót ekranu i ponowne uruchomienie aplikacji) i przy
 kolejnych pomysłach z AI są przekazywane do modelu, żeby podpowiadał dania bliższe
-Twoim gustom i omijał te, których nie lubisz.
+Twoim gustom i omijał te, których nie lubisz. „Nie dla mnie” dodatkowo pyta o
+powód (patrz „Nie dla mnie — z powodem”).
 
 ## Jak uruchomić w Android Studio
 

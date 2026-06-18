@@ -21,4 +21,18 @@ public class RecipePromptBuilderTest {
         String user = builder.userPrompt("Obiad");
         assertTrue(user.contains("Obiad"));
     }
+
+    @Test
+    public void fullRecipePromptPinsDishNameAndCarriesChoices() {
+        com.mealspire.app.domain.RecipeRequest request =
+                new com.mealspire.app.domain.RecipeRequest("Obiad", UserPreferences.empty(),
+                        java.util.Collections.<String>emptyList(),
+                        java.util.Arrays.asList("dla 4 osób"));
+
+        String prompt = builder.fullRecipePrompt("Leczo", request);
+
+        assertTrue(prompt.contains("Leczo"));
+        assertTrue(prompt.contains("dla 4 osób"));
+        assertTrue(prompt.toLowerCase().contains("sposób przygotowania"));
+    }
 }
