@@ -48,6 +48,11 @@ public final class RecipePromptBuilder {
         if (!choices.isEmpty()) {
             sb.append(" Uwzględnij wybory użytkownika: ").append(choices).append('.');
         }
+        String known = join(request.getKnownDishes());
+        if (!known.isEmpty()) {
+            sb.append(" Dania, które użytkownik zna i lubi z własnej bazy (możesz się nimi "
+                    + "zainspirować, ale nie musisz ich powtarzać): ").append(known).append('.');
+        }
         String recent = join(request.getRecentToAvoid());
         if (!recent.isEmpty()) {
             sb.append(" Ostatnio proponowane dania (zaproponuj coś innego dla urozmaicenia): ")

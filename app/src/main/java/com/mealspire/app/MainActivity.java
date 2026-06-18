@@ -24,6 +24,7 @@ import com.mealspire.app.domain.KnownDishImporter;
 import com.mealspire.app.domain.KnownDishPromptBuilder;
 import com.mealspire.app.domain.MealChoiceOption;
 import com.mealspire.app.domain.MealChoices;
+import com.mealspire.app.domain.MealPoolBuilder;
 import com.mealspire.app.domain.MealHistory;
 import com.mealspire.app.domain.MealHistoryStore;
 import com.mealspire.app.domain.PreferenceStore;
@@ -110,6 +111,7 @@ public class MainActivity extends Activity {
     private EditText importField;
     private Button importButton;
     private final StaleMealSelector staleSelector = new StaleMealSelector();
+    private final MealPoolBuilder mealPoolBuilder = new MealPoolBuilder();
     private final List<MealChoiceOption> choiceOptions = MealChoices.defaults();
     private final List<CheckBox> choiceBoxes = new ArrayList<>();
     private Recipe currentRecipe;
@@ -297,10 +299,10 @@ public class MainActivity extends Activity {
 
     private void showRandomRecipe() {
         int mealIndex = mealSpinner.getSelectedItemPosition();
-        // Shuffle so ties (e.g. never-shown dishes) vary, then prefer the dish
+        // Pool = built-in recipes for this meal + the user's cookbook, with
+        // disliked dishes excluded. Shuffle so ties vary, then prefer the dish
         // not seen for the longest time.
-        List<Recipe> pool = new ArrayList<>();
-        Collections.addAll(pool, RECIPES[mealIndex]);
+        List<Recipe> pool = mealPoolBuilder.build(RECIPES[mealIndex], cookbook, preferences);
         Collections.shuffle(pool, random);
 
         List<String> titles = new ArrayList<>();
@@ -345,8 +347,12 @@ public class MainActivity extends Activity {
             preferenceStore.save(preferences);
         }
 
+        List<String> knownDishes = cookbook.titles();
+        if (knownDishes.size() > 10) {
+            knownDishes = knownDishes.subList(0, 10);
+        }
         final RecipeRequest request = new RecipeRequest(
-                mealType, preferences, history.recentTitles(5), fragments);
+                mealType, preferences, history.recentTitles(5), fragments, knownDishes);
         new Thread(() -> {
             try {
                 final Recipe recipe = recipeService.generateRecipe(request);
