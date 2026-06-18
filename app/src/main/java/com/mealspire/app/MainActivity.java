@@ -5,8 +5,10 @@ import android.app.AlertDialog;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.View;
 import android.view.ViewGroup;
 import android.text.TextUtils;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
@@ -17,6 +19,7 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.mealspire.app.domain.AppSettings;
 import com.mealspire.app.domain.ChoiceLearning;
 import com.mealspire.app.domain.Cookbook;
 import com.mealspire.app.domain.CookbookEntry;
@@ -41,6 +44,7 @@ import com.mealspire.app.domain.StaleMealSelector;
 import com.mealspire.app.domain.UserPreferences;
 import com.mealspire.app.net.HttpClaudeClient;
 import com.mealspire.app.net.HttpPageFetcher;
+import com.mealspire.app.storage.SharedPreferencesAppSettings;
 import com.mealspire.app.storage.SharedPreferencesCookbookStore;
 import com.mealspire.app.storage.SharedPreferencesMealHistoryStore;
 import com.mealspire.app.storage.SharedPreferencesPreferenceStore;
@@ -113,6 +117,7 @@ public class MainActivity extends Activity {
     private Cookbook cookbook;
     private KnownDishImporter dishImporter;
     private DataManager dataManager;
+    private AppSettings appSettings;
     private EditText importField;
     private Button importButton;
     private final StaleMealSelector staleSelector = new StaleMealSelector();
@@ -139,6 +144,7 @@ public class MainActivity extends Activity {
         dishImporter = new KnownDishImporter(claudeClient, new HttpPageFetcher(),
                 new KnownDishPromptBuilder(), new RecipeTextParser());
         dataManager = new DataManager(preferenceStore, historyStore, cookbookStore);
+        appSettings = new SharedPreferencesAppSettings(this);
 
         ScrollView scrollView = new ScrollView(this);
         scrollView.setBackgroundColor(Color.rgb(255, 247, 237));
@@ -179,7 +185,20 @@ public class MainActivity extends Activity {
         String[] portions = {"1 osoba", "2 osoby", "3 osoby", "4 osoby", "5 osób", "6 osób"};
         portionSpinner.setAdapter(new ArrayAdapter<>(this,
                 android.R.layout.simple_spinner_dropdown_item, portions));
-        portionSpinner.setSelection(1); // domyślnie 2 osoby
+        // Restore the remembered number of people (position = servings - 1).
+        int rememberedServings = appSettings.loadDefaultServings();
+        portionSpinner.setSelection(Math.max(0, Math.min(portions.length - 1,
+                rememberedServings - 1)));
+        portionSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                appSettings.saveDefaultServings(position + 1);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
+        });
         root.addView(portionSpinner, marginTop(4));
 
         TextView choicesLabel = new TextView(this);
