@@ -222,6 +222,14 @@ public class MainActivity extends Activity {
         dislikeButton.setOnClickListener(view -> rateCurrentRecipe(false));
         feedbackRow.addView(dislikeButton, equalWidthRowItem());
 
+        Button saveButton = new Button(this);
+        saveButton.setId(R.id.save_button);
+        saveButton.setText("Zapisz danie do mojej bazy");
+        saveButton.setAllCaps(false);
+        saveButton.setTextSize(16);
+        saveButton.setOnClickListener(view -> saveCurrentToCookbook());
+        root.addView(saveButton, marginTop(12));
+
         TextView importLabel = new TextView(this);
         importLabel.setText("Dodaj danie, które znasz i lubisz");
         importLabel.setTextSize(18);
@@ -376,6 +384,17 @@ public class MainActivity extends Activity {
             }
         }
         return selected;
+    }
+
+    private void saveCurrentToCookbook() {
+        if (currentRecipe == null || currentRecipe.getTitle().trim().isEmpty()) {
+            return;
+        }
+        cookbook = cookbook.add(new CookbookEntry(
+                currentRecipe.getTitle(), currentRecipe.getDetails(), "zapisane"));
+        cookbookStore.save(cookbook);
+        Toast.makeText(this, "Zapisano w bazie: " + currentRecipe.getTitle(),
+                Toast.LENGTH_SHORT).show();
     }
 
     private void recordChosen(Recipe recipe) {

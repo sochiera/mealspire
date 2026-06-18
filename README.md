@@ -27,6 +27,9 @@ albo **krótko opisać danie**. Aplikacja rozpozna danie (przy linku pobiera tre
 strony), zapisze je w Twojej bazie i oznaczy jako lubiane — dzięki temu trafia do
 puli podpowiedzi i wpływa na kolejne propozycje. Wymaga klucza API.
 
+Każde pokazane danie (z AI lub z losowania) możesz też zapisać do bazy jednym
+przyciskiem „Zapisz danie do mojej bazy".
+
 ## Wybory przy każdej propozycji
 
 Przed wygenerowaniem dania możesz zaznaczyć dowolne preferencje na dziś

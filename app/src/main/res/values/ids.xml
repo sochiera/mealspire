@@ -9,4 +9,5 @@
     <item name="recipe_details" type="id" />
     <item name="import_field" type="id" />
     <item name="import_button" type="id" />
+    <item name="save_button" type="id" />
 </resources>
