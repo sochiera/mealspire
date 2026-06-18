@@ -1,6 +1,7 @@
 package com.mealspire.app;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.view.Gravity;
@@ -22,6 +23,7 @@ import com.mealspire.app.domain.CookbookEntry;
 import com.mealspire.app.domain.CookbookStore;
 import com.mealspire.app.domain.KnownDishImporter;
 import com.mealspire.app.domain.KnownDishPromptBuilder;
+import com.mealspire.app.domain.IngredientExtractor;
 import com.mealspire.app.domain.MealChoiceOption;
 import com.mealspire.app.domain.MealChoices;
 import com.mealspire.app.domain.MealPoolBuilder;
@@ -112,6 +114,7 @@ public class MainActivity extends Activity {
     private Button importButton;
     private final StaleMealSelector staleSelector = new StaleMealSelector();
     private final MealPoolBuilder mealPoolBuilder = new MealPoolBuilder();
+    private final IngredientExtractor ingredientExtractor = new IngredientExtractor();
     private final List<MealChoiceOption> choiceOptions = MealChoices.defaults();
     private final List<CheckBox> choiceBoxes = new ArrayList<>();
     private Recipe currentRecipe;
@@ -231,6 +234,14 @@ public class MainActivity extends Activity {
         saveButton.setTextSize(16);
         saveButton.setOnClickListener(view -> saveCurrentToCookbook());
         root.addView(saveButton, marginTop(12));
+
+        Button shoppingButton = new Button(this);
+        shoppingButton.setId(R.id.shopping_button);
+        shoppingButton.setText("Lista zakupów");
+        shoppingButton.setAllCaps(false);
+        shoppingButton.setTextSize(16);
+        shoppingButton.setOnClickListener(view -> showShoppingList());
+        root.addView(shoppingButton, marginTop(12));
 
         TextView importLabel = new TextView(this);
         importLabel.setText("Dodaj danie, które znasz i lubisz");
@@ -390,6 +401,26 @@ public class MainActivity extends Activity {
             }
         }
         return selected;
+    }
+
+    private void showShoppingList() {
+        if (currentRecipe == null) {
+            return;
+        }
+        List<String> items = ingredientExtractor.extract(currentRecipe.getDetails());
+        if (items.isEmpty()) {
+            Toast.makeText(this, "Nie znalazłam listy składników w tym przepisie.",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String[] itemsArray = items.toArray(new String[0]);
+        boolean[] checked = new boolean[itemsArray.length];
+        new AlertDialog.Builder(this)
+                .setTitle("Lista zakupów")
+                .setMultiChoiceItems(itemsArray, checked, (dialog, which, isChecked) ->
+                        checked[which] = isChecked)
+                .setPositiveButton("Gotowe", null)
+                .show();
     }
 
     private void saveCurrentToCookbook() {

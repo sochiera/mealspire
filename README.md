@@ -30,6 +30,9 @@ puli podpowiedzi i wpływa na kolejne propozycje. Wymaga klucza API.
 Każde pokazane danie (z AI lub z losowania) możesz też zapisać do bazy jednym
 przyciskiem „Zapisz danie do mojej bazy".
 
+Przycisk „Lista zakupów" wyciąga składniki z aktualnego przepisu i pokazuje je
+jako odhaczaną listę.
+
 ## Wybory przy każdej propozycji
 
 Przed wygenerowaniem dania możesz zaznaczyć dowolne preferencje na dziś
