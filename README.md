@@ -13,16 +13,30 @@ API) — może przy tym **sięgnąć po danie z Twojej bazy** albo **wymyślić 
 nowe**, w zależności od tego, co pasuje. Bez klucza API aplikacja działa offline:
 losuje danie z wbudowanej puli i z Twojej bazy.
 
-### Konfiguracja klucza API
+### Klucz API zaszyfrowany hasłem (domyślnie)
 
-Klucz jest wstrzykiwany do aplikacji przy budowaniu (nie jest trzymany w repo).
-Ustaw go na jeden z dwóch sposobów:
+Klucz API jest zapisany w repo **w postaci zaszyfrowanej** (AES/GCM, klucz
+wyprowadzany z hasła przez PBKDF2) — w zasobie `app/src/main/res/values/secrets.xml`.
+**Hasło nie jest nigdzie w repo.** Po uruchomieniu aplikacja pyta o hasło i dopiero
+po jego podaniu odszyfrowuje klucz i odblokowuje generowanie przez AI. Błędne hasło
+nie odblokuje klucza (chroni go znacznik uwierzytelniający GCM).
+
+> To celowo umiarkowane zabezpieczenie: kto ma aplikację **i** hasło, odzyska klucz.
+> Chodzi tylko o to, by klucz nie leżał w repo otwartym tekstem.
+
+Możesz wygenerować nowy zaszyfrowany klucz tą samą metodą, której używa aplikacja
+(`com.mealspire.app.domain.ApiKeyCipher#encrypt(klucz, hasło)`), i podmienić wartość
+`encrypted_api_key` w `secrets.xml`.
+
+### Alternatywnie: klucz przy budowaniu
+
+Można też wstrzyknąć klucz przy budowaniu (wtedy pytanie o hasło się nie pojawia):
 
 - zmienna środowiskowa `ANTHROPIC_API_KEY`, albo
 - wpis `anthropic.api.key=...` w pliku `local.properties` (plik jest w `.gitignore`).
 
-Bez klucza aplikacja nadal działa w trybie offline (losowanie z wbudowanej puli
-i z Twojej bazy), a przycisk „Wygeneruj danie” korzysta wtedy z tej puli.
+Bez klucza (i bez hasła) aplikacja działa w trybie offline (losowanie z wbudowanej
+puli i z Twojej bazy), a przycisk „Wygeneruj danie” korzysta wtedy z tej puli.
 
 ## Dla ilu osób (zapamiętywane)
 

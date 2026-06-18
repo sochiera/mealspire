@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.text.InputType;
 import android.text.TextUtils;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -18,6 +19,7 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.mealspire.app.domain.ApiKeyCipher;
 import com.mealspire.app.domain.AppSettings;
 import com.mealspire.app.domain.Cookbook;
 import com.mealspire.app.domain.CookbookEntry;
@@ -46,6 +48,7 @@ import com.mealspire.app.storage.SharedPreferencesMealHistoryStore;
 import com.mealspire.app.storage.SharedPreferencesPreferenceStore;
 
 import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -122,23 +125,22 @@ public class MainActivity extends Activity {
     private final StaleMealSelector staleSelector = new StaleMealSelector();
     private final MealPoolBuilder mealPoolBuilder = new MealPoolBuilder();
     private final IngredientExtractor ingredientExtractor = new IngredientExtractor();
+    private final ApiKeyCipher apiKeyCipher = new ApiKeyCipher();
     private Recipe currentRecipe;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        claudeClient = new HttpClaudeClient(BuildConfig.ANTHROPIC_API_KEY);
-        recipeService = new RecipeService(claudeClient, new RecipePromptBuilder(),
-                new RecipeTextParser());
+        // The API key may be injected at build time (BuildConfig) or shipped
+        // encrypted and unlocked at runtime with a password (see promptForApiKeyPassword).
+        buildClaudeClients(BuildConfig.ANTHROPIC_API_KEY);
         preferenceStore = new SharedPreferencesPreferenceStore(this);
         preferences = preferenceStore.load();
         historyStore = new SharedPreferencesMealHistoryStore(this);
         history = historyStore.load();
         cookbookStore = new SharedPreferencesCookbookStore(this);
         cookbook = cookbookStore.load();
-        dishImporter = new KnownDishImporter(claudeClient, new HttpPageFetcher(),
-                new KnownDishPromptBuilder(), new RecipeTextParser());
         dataManager = new DataManager(preferenceStore, historyStore, cookbookStore);
         appSettings = new SharedPreferencesAppSettings(this);
 
@@ -247,6 +249,63 @@ public class MainActivity extends Activity {
 
         setContentView(scrollView);
         showRandomRecipe();
+
+        // If the key isn't already available (build-time), ask for the password
+        // that unlocks the encrypted key shipped with the app.
+        if (!claudeClient.hasApiKey() && !encryptedApiKey().isEmpty()) {
+            promptForApiKeyPassword(false);
+        }
+    }
+
+    /** (Re)creates the Claude-backed services with the given API key (may be empty). */
+    private void buildClaudeClients(String apiKey) {
+        claudeClient = new HttpClaudeClient(apiKey);
+        recipeService = new RecipeService(claudeClient, new RecipePromptBuilder(),
+                new RecipeTextParser());
+        dishImporter = new KnownDishImporter(claudeClient, new HttpPageFetcher(),
+                new KnownDishPromptBuilder(), new RecipeTextParser());
+    }
+
+    private String encryptedApiKey() {
+        return getString(R.string.encrypted_api_key).trim();
+    }
+
+    private void promptForApiKeyPassword(boolean retry) {
+        final EditText field = new EditText(this);
+        field.setHint("Hasło");
+        field.setInputType(InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        new AlertDialog.Builder(this)
+                .setTitle(retry ? "Niepoprawne hasło — spróbuj ponownie"
+                        : "Podaj hasło, aby odblokować AI")
+                .setMessage("Klucz API jest zaszyfrowany. Bez hasła aplikacja działa "
+                        + "offline (losuje dania z bazy).")
+                .setView(field)
+                .setPositiveButton("Odblokuj", (dialog, which) ->
+                        unlockApiKey(field.getText().toString()))
+                .setNegativeButton("Pomiń", null)
+                .show();
+    }
+
+    private void unlockApiKey(final String password) {
+        if (TextUtils.isEmpty(password)) {
+            promptForApiKeyPassword(true);
+            return;
+        }
+        final String blob = encryptedApiKey();
+        // PBKDF2 is intentionally slow, so derive/decrypt off the UI thread.
+        new Thread(() -> {
+            try {
+                final String key = apiKeyCipher.decrypt(blob, password);
+                runOnUiThread(() -> {
+                    buildClaudeClients(key);
+                    Toast.makeText(this, "Odblokowano AI — możesz generować dania.",
+                            Toast.LENGTH_SHORT).show();
+                });
+            } catch (GeneralSecurityException e) {
+                runOnUiThread(() -> promptForApiKeyPassword(true));
+            }
+        }).start();
     }
 
     /** Single entry point for the main action: AI when possible, offline otherwise. */
