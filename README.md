@@ -35,6 +35,9 @@ jako odhaczaną listę.
 
 ## Wybory przy każdej propozycji
 
+Możesz też wybrać, dla ilu osób ma być danie — liczba osób trafia do zapytania
+do AI, więc przepis jest dobrany do wielkości rodziny.
+
 Przed wygenerowaniem dania możesz zaznaczyć dowolne preferencje na dziś
 (np. „Szybkie”, „Wegetariańskie”, „Sycące”, „Lekkie”, „Tanie”, „Dla dzieci”).
 Wybory trafiają do zapytania do AI i jednocześnie są zapamiętywane jako Twoje

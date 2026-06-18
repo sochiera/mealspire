@@ -27,6 +27,7 @@ import com.mealspire.app.domain.IngredientExtractor;
 import com.mealspire.app.domain.MealChoiceOption;
 import com.mealspire.app.domain.MealChoices;
 import com.mealspire.app.domain.MealPoolBuilder;
+import com.mealspire.app.domain.PortionSize;
 import com.mealspire.app.domain.MealHistory;
 import com.mealspire.app.domain.MealHistoryStore;
 import com.mealspire.app.domain.PreferenceStore;
@@ -117,6 +118,7 @@ public class MainActivity extends Activity {
     private final IngredientExtractor ingredientExtractor = new IngredientExtractor();
     private final List<MealChoiceOption> choiceOptions = MealChoices.defaults();
     private final List<CheckBox> choiceBoxes = new ArrayList<>();
+    private Spinner portionSpinner;
     private Recipe currentRecipe;
 
     @Override
@@ -162,6 +164,20 @@ public class MainActivity extends Activity {
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, MEAL_TYPES);
         mealSpinner.setAdapter(adapter);
         root.addView(mealSpinner, marginTop(28));
+
+        TextView portionLabel = new TextView(this);
+        portionLabel.setText("Dla ilu osób?");
+        portionLabel.setTextSize(16);
+        portionLabel.setTextColor(Color.rgb(92, 78, 62));
+        root.addView(portionLabel, marginTop(16));
+
+        portionSpinner = new Spinner(this);
+        portionSpinner.setId(R.id.portion_spinner);
+        String[] portions = {"1 osoba", "2 osoby", "3 osoby", "4 osoby", "5 osób", "6 osób"};
+        portionSpinner.setAdapter(new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_dropdown_item, portions));
+        portionSpinner.setSelection(1); // domyślnie 2 osoby
+        root.addView(portionSpinner, marginTop(4));
 
         TextView choicesLabel = new TextView(this);
         choicesLabel.setText("Czego dziś szukasz? (wybierz dowolne)");
@@ -352,6 +368,11 @@ public class MainActivity extends Activity {
         List<String> fragments = new ArrayList<>();
         for (MealChoiceOption option : selected) {
             fragments.add(option.getPromptFragment());
+        }
+        String portionFragment = PortionSize.promptFragment(
+                portionSpinner.getSelectedItemPosition() + 1);
+        if (!portionFragment.isEmpty()) {
+            fragments.add(portionFragment);
         }
         if (!selected.isEmpty()) {
             preferences = ChoiceLearning.learnFrom(preferences, selected);
