@@ -1,13 +1,17 @@
 # Mealspire
 
-Aplikacja Android, która pomaga wymyślić, co ugotować. Wybierasz porę dnia
-(`Śniadanie`, `Obiad`, `Kolacja`) i albo prosisz AI o nowy pomysł na danie wraz
-z przepisem, albo losujesz jeden z wbudowanych, prostych przepisów (tryb offline).
+Aplikacja Android, która pomaga wymyślić, co ugotować. Wybierasz tylko porę dnia
+(`Śniadanie`, `Obiad`, `Kolacja`) oraz dla ilu osób, a resztą zajmuje się aplikacja.
+Interfejs jest celowo prosty: jeden główny przycisk **„Wygeneruj danie”**, ocena
+dania (`Lubię to` / `Nie dla mnie`) oraz menu **„Więcej…”** z dodatkowymi opcjami.
 
-## Pomysły na dania z AI
+## Jeden przycisk: „Wygeneruj danie”
 
-Przycisk „Wymyśl danie (AI)” wysyła zapytanie do modelu Claude (Anthropic
-Messages API) i pokazuje wygenerowaną nazwę dania oraz przepis. Wymaga klucza API.
+Przycisk „Wygeneruj danie” zawsze podaje jedno danie wraz z przepisem. Gdy
+skonfigurowany jest klucz API, danie generuje model Claude (Anthropic Messages
+API) — może przy tym **sięgnąć po danie z Twojej bazy** albo **wymyślić zupełnie
+nowe**, w zależności od tego, co pasuje. Bez klucza API aplikacja działa offline:
+losuje danie z wbudowanej puli i z Twojej bazy.
 
 ### Konfiguracja klucza API
 
@@ -17,44 +21,37 @@ Ustaw go na jeden z dwóch sposobów:
 - zmienna środowiskowa `ANTHROPIC_API_KEY`, albo
 - wpis `anthropic.api.key=...` w pliku `local.properties` (plik jest w `.gitignore`).
 
-Bez klucza aplikacja nadal działa w trybie losowania gotowych przepisów, a przycisk
-AI wyświetla instrukcję konfiguracji.
+Bez klucza aplikacja nadal działa w trybie offline (losowanie z wbudowanej puli
+i z Twojej bazy), a przycisk „Wygeneruj danie” korzysta wtedy z tej puli.
 
-## Dodawanie dań, które już znasz i lubisz
+## Dla ilu osób (zapamiętywane)
 
-W sekcji „Dodaj danie, które znasz i lubisz" możesz **wkleić link do przepisu**
-albo **krótko opisać danie**. Aplikacja rozpozna danie (przy linku pobiera treść
-strony), zapisze je w Twojej bazie i oznaczy jako lubiane — dzięki temu trafia do
-puli podpowiedzi i wpływa na kolejne propozycje. Wymaga klucza API.
+Liczba osób, którą wybierzesz, jest **zapamiętywana** — przy kolejnym
+uruchomieniu aplikacja startuje z ostatnio wybraną wartością (przeżywa obrót
+ekranu i restart). Liczba osób trafia też do zapytania do AI, więc przepis jest
+dobrany do wielkości rodziny.
 
-Każde pokazane danie (z AI lub z losowania) możesz też zapisać do bazy jednym
-przyciskiem „Zapisz danie do mojej bazy".
+## Menu „Więcej…”
 
-Przycisk „Lista zakupów" wyciąga składniki z aktualnego przepisu i pokazuje je
-jako odhaczaną listę.
+Aby utrzymać główny ekran prostym, dodatkowe akcje są pod przyciskiem „Więcej…”:
 
-## Wybory przy każdej propozycji
-
-Możesz też wybrać, dla ilu osób ma być danie — liczba osób trafia do zapytania
-do AI, więc przepis jest dobrany do wielkości rodziny.
-
-Przed wygenerowaniem dania możesz zaznaczyć dowolne preferencje na dziś
-(np. „Szybkie”, „Wegetariańskie”, „Sycące”, „Lekkie”, „Tanie”, „Dla dzieci”).
-Wybory trafiają do zapytania do AI i jednocześnie są zapamiętywane jako Twoje
-upodobania — z każdym wyborem aplikacja coraz lepiej dopasowuje propozycje.
-
-## Zarządzanie danymi
-
-Przycisk „Zarządzaj moimi danymi" pozwala przejrzeć i usuwać pojedyncze dania
-z bazy oraz wyczyścić preferencje, historię podpowiedzi lub całą bazę — masz
-pełną kontrolę nad tym, co aplikacja o Tobie pamięta.
+- **Zapisz danie do mojej bazy** — zapisuje aktualnie pokazane danie.
+- **Lista zakupów** — wyciąga składniki z aktualnego przepisu i pokazuje je jako
+  odhaczaną listę.
+- **Dodaj danie, które znasz i lubisz** — możesz **wkleić link do przepisu** albo
+  **krótko opisać danie**. Aplikacja rozpozna danie (przy linku pobiera treść
+  strony), zapisze je w Twojej bazie i oznaczy jako lubiane — dzięki temu trafia
+  do puli podpowiedzi. Wymaga klucza API.
+- **Zarządzaj moimi danymi** — przejrzyj i usuwaj pojedyncze dania z bazy oraz
+  wyczyść preferencje, historię podpowiedzi lub całą bazę. Masz pełną kontrolę
+  nad tym, co aplikacja o Tobie pamięta.
 
 ## Urozmaicenie — dania, których dawno nie było
 
 Aplikacja zapamiętuje, które dania ostatnio pokazywała (historia przeżywa obrót
-ekranu i restart). „Losuj gotowy przepis” podsuwa wtedy danie, którego najdłużej
-nie było, a generowanie z AI dostaje listę ostatnich dań z prośbą o coś innego —
-dzięki temu propozycje się nie powtarzają.
+ekranu i restart). Tryb offline podsuwa wtedy danie, którego najdłużej nie było,
+a generowanie z AI dostaje listę ostatnich dań z prośbą o coś innego — dzięki
+temu propozycje się nie powtarzają.
 
 ## Uczenie się preferencji
 
