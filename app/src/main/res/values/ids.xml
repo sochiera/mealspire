@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="meal_spinner" type="id" />
+    <item name="ai_button" type="id" />
+    <item name="draw_button" type="id" />
+    <item name="like_button" type="id" />
+    <item name="dislike_button" type="id" />
+    <item name="recipe_title" type="id" />
+    <item name="recipe_details" type="id" />
+</resources>

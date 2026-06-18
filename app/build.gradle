@@ -29,6 +29,7 @@ android {
         versionCode 1
         versionName "1.0"
         buildConfigField "String", "ANTHROPIC_API_KEY", "\"${anthropicApiKey()}\""
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildFeatures {
@@ -39,6 +40,12 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
+        }
+    }
 }
 
 dependencies {
@@ -46,4 +53,11 @@ dependencies {
     testImplementation "junit:junit:4.13.2"
     // Real org.json for tests: android.jar ships only stubbed org.json for unit tests.
     testImplementation "org.json:json:20240303"
+    // Robolectric: run Android components (Activity, SharedPreferences) on the JVM.
+    testImplementation "org.robolectric:robolectric:4.14.1"
+    testImplementation "androidx.test:core:1.6.1"
+
+    // Espresso instrumentation tests (run on a device/emulator or CI).
+    androidTestImplementation "androidx.test.ext:junit:1.2.1"
+    androidTestImplementation "androidx.test.espresso:espresso-core:3.6.1"
 }

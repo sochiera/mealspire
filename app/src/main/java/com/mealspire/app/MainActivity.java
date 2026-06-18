@@ -135,6 +135,7 @@ public class MainActivity extends Activity {
         root.addView(subtitle, marginTop(8));
 
         mealSpinner = new Spinner(this);
+        mealSpinner.setId(R.id.meal_spinner);
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, MEAL_TYPES);
         mealSpinner.setAdapter(adapter);
         root.addView(mealSpinner, marginTop(28));
@@ -155,6 +156,7 @@ public class MainActivity extends Activity {
         }
 
         aiButton = new Button(this);
+        aiButton.setId(R.id.ai_button);
         aiButton.setText("Wymyśl danie (AI)");
         aiButton.setAllCaps(false);
         aiButton.setTextSize(18);
@@ -162,6 +164,7 @@ public class MainActivity extends Activity {
         root.addView(aiButton, marginTop(16));
 
         Button drawButton = new Button(this);
+        drawButton.setId(R.id.draw_button);
         drawButton.setText("Losuj gotowy przepis");
         drawButton.setAllCaps(false);
         drawButton.setTextSize(18);
@@ -169,11 +172,13 @@ public class MainActivity extends Activity {
         root.addView(drawButton, marginTop(12));
 
         recipeTitle = new TextView(this);
+        recipeTitle.setId(R.id.recipe_title);
         recipeTitle.setTextSize(24);
         recipeTitle.setTextColor(Color.rgb(67, 56, 45));
         root.addView(recipeTitle, marginTop(28));
 
         recipeDetails = new TextView(this);
+        recipeDetails.setId(R.id.recipe_details);
         recipeDetails.setTextSize(17);
         recipeDetails.setLineSpacing(dp(4), 1.0f);
         recipeDetails.setTextColor(Color.rgb(80, 68, 54));
@@ -184,6 +189,7 @@ public class MainActivity extends Activity {
         root.addView(feedbackRow, marginTop(20));
 
         likeButton = new Button(this);
+        likeButton.setId(R.id.like_button);
         likeButton.setText("Lubię to");
         likeButton.setAllCaps(false);
         likeButton.setTextSize(16);
@@ -191,6 +197,7 @@ public class MainActivity extends Activity {
         feedbackRow.addView(likeButton, equalWidthRowItem());
 
         dislikeButton = new Button(this);
+        dislikeButton.setId(R.id.dislike_button);
         dislikeButton.setText("Nie dla mnie");
         dislikeButton.setAllCaps(false);
         dislikeButton.setTextSize(16);

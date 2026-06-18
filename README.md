@@ -98,6 +98,16 @@ cd /home/jan/Sources/mealspire
 JAVA_HOME=/home/jan/.local/opt/jdk-17 ./gradlew test
 ```
 
+Testy obejmują też warstwę UI uruchamianą na JVM przez Robolectric (`MainActivity`).
+
+### Testy instrumentacyjne (Espresso)
+
+Testy z `app/src/androidTest` wymagają podłączonego urządzenia lub emulatora:
+
+```bash
+JAVA_HOME=/home/jan/.local/opt/jdk-17 ./gradlew connectedDebugAndroidTest
+```
+
 ## Jak zrobić plik APK
 
 W Android Studio wybierz:
