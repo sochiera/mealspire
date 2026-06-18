@@ -2,15 +2,10 @@
 <resources>
     <item name="meal_spinner" type="id" />
     <item name="portion_spinner" type="id" />
-    <item name="ai_button" type="id" />
-    <item name="draw_button" type="id" />
+    <item name="generate_button" type="id" />
     <item name="like_button" type="id" />
     <item name="dislike_button" type="id" />
     <item name="recipe_title" type="id" />
     <item name="recipe_details" type="id" />
-    <item name="import_field" type="id" />
-    <item name="import_button" type="id" />
-    <item name="save_button" type="id" />
-    <item name="shopping_button" type="id" />
-    <item name="manage_button" type="id" />
+    <item name="more_button" type="id" />
 </resources>

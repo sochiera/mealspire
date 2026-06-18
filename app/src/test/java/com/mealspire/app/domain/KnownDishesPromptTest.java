@@ -18,6 +18,17 @@ public class KnownDishesPromptTest {
     }
 
     @Test
+    public void promptLetsModelReuseAKnownDishOrInventANewOne() {
+        RecipeRequest request = new RecipeRequest("Obiad", UserPreferences.empty(),
+                null, null, Arrays.asList("Bigos"));
+        String prompt = new RecipePromptBuilder().userPrompt(request).toLowerCase();
+        // The model may simply hand back one of the saved dishes...
+        assertTrue(prompt.contains("wybrać jedno z nich"));
+        // ...or propose a brand new dish.
+        assertTrue(prompt.contains("coś nowego"));
+    }
+
+    @Test
     public void fourArgConstructorStillHasNoKnownDishes() {
         RecipeRequest request = new RecipeRequest("Obiad", UserPreferences.empty(), null, null);
         assertTrue(request.getKnownDishes().isEmpty());

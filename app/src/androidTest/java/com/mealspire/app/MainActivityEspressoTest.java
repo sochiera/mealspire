@@ -5,7 +5,6 @@ import static androidx.test.espresso.action.ViewActions.click;
 import static androidx.test.espresso.assertion.ViewAssertions.matches;
 import static androidx.test.espresso.matcher.ViewMatchers.isDisplayed;
 import static androidx.test.espresso.matcher.ViewMatchers.withId;
-import static androidx.test.espresso.matcher.ViewMatchers.withText;
 
 import androidx.test.core.app.ActivityScenario;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -25,23 +24,23 @@ public class MainActivityEspressoTest {
     public void mainScreenShowsControls() {
         try (ActivityScenario<MainActivity> ignored = ActivityScenario.launch(MainActivity.class)) {
             onView(withId(R.id.meal_spinner)).check(matches(isDisplayed()));
-            onView(withId(R.id.ai_button)).check(matches(isDisplayed()));
-            onView(withId(R.id.draw_button)).check(matches(isDisplayed()));
+            onView(withId(R.id.portion_spinner)).check(matches(isDisplayed()));
+            onView(withId(R.id.generate_button)).check(matches(isDisplayed()));
         }
     }
 
     @Test
-    public void drawButtonShowsARecipe() {
+    public void generateButtonShowsARecipe() {
         try (ActivityScenario<MainActivity> ignored = ActivityScenario.launch(MainActivity.class)) {
-            onView(withId(R.id.draw_button)).perform(click());
+            onView(withId(R.id.generate_button)).perform(click());
             onView(withId(R.id.recipe_title)).check(matches(isDisplayed()));
         }
     }
 
     @Test
-    public void choiceOptionIsVisible() {
+    public void moreMenuButtonIsVisible() {
         try (ActivityScenario<MainActivity> ignored = ActivityScenario.launch(MainActivity.class)) {
-            onView(withText("Wegetariańskie")).check(matches(isDisplayed()));
+            onView(withId(R.id.more_button)).check(matches(isDisplayed()));
         }
     }
 }

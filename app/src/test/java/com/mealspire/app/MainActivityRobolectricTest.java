@@ -36,10 +36,11 @@ public class MainActivityRobolectricTest {
     }
 
     @Test
-    public void drawButtonKeepsARecipeVisible() {
+    public void generateButtonKeepsARecipeVisible() {
         MainActivity activity = launch();
-        Button draw = activity.findViewById(R.id.draw_button);
-        draw.performClick();
+        // No API key in the test build, so generate falls back to an offline pick.
+        Button generate = activity.findViewById(R.id.generate_button);
+        generate.performClick();
         TextView title = activity.findViewById(R.id.recipe_title);
         assertFalse(title.getText().toString().trim().isEmpty());
     }
