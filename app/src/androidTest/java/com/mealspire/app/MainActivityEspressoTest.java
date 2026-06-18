@@ -24,13 +24,13 @@ public class MainActivityEspressoTest {
     public void mainScreenShowsControls() {
         try (ActivityScenario<MainActivity> ignored = ActivityScenario.launch(MainActivity.class)) {
             onView(withId(R.id.meal_spinner)).check(matches(isDisplayed()));
-            onView(withId(R.id.portion_spinner)).check(matches(isDisplayed()));
+            onView(withId(R.id.servings_label)).check(matches(isDisplayed()));
             onView(withId(R.id.generate_button)).check(matches(isDisplayed()));
         }
     }
 
     @Test
-    public void generateButtonShowsARecipe() {
+    public void generateButtonShowsAProposal() {
         try (ActivityScenario<MainActivity> ignored = ActivityScenario.launch(MainActivity.class)) {
             onView(withId(R.id.generate_button)).perform(click());
             onView(withId(R.id.recipe_title)).check(matches(isDisplayed()));

@@ -12,6 +12,16 @@ public interface AppSettings {
     /** Returns the remembered number of people, or {@link #DEFAULT_SERVINGS} if none. */
     int loadDefaultServings();
 
-    /** Remembers the number of people for next time. Out-of-range values are ignored. */
+    /**
+     * Remembers the number of people for next time. Out-of-range values are
+     * ignored. A valid value also marks the choice as made, so the app never has
+     * to ask again ({@link #hasChosenServings()}).
+     */
     void saveDefaultServings(int servings);
+
+    /**
+     * Whether the user has ever picked the number of people. Once true, the app
+     * stops asking and just reuses {@link #loadDefaultServings()}.
+     */
+    boolean hasChosenServings();
 }

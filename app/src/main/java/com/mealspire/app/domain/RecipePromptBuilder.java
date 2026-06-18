@@ -33,6 +33,25 @@ public final class RecipePromptBuilder {
                 java.util.Collections.<String>emptyList()));
     }
 
+    /**
+     * Prompt for the full recipe of a dish the user already accepted from a
+     * proposal. Pins the dish name and carries over the user's choices (such as
+     * the number of people) so the recipe matches what was proposed.
+     */
+    public String fullRecipePrompt(String dishName, RecipeRequest request) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Podaj pełny przepis na danie: ").append(dishName == null ? "" : dishName.trim())
+                .append(". ");
+        sb.append("Wypisz listę składników i krok po kroku sposób przygotowania.");
+        if (request != null) {
+            String choices = join(request.getChoiceFragments());
+            if (!choices.isEmpty()) {
+                sb.append(" Uwzględnij wybory użytkownika: ").append(choices).append('.');
+            }
+        }
+        return sb.toString();
+    }
+
     public String userPrompt(RecipeRequest request) {
         UserPreferences preferences = request.getPreferences();
         StringBuilder sb = new StringBuilder();

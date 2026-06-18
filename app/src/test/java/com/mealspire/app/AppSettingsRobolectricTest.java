@@ -1,6 +1,8 @@
 package com.mealspire.app;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import androidx.test.core.app.ApplicationProvider;
 
@@ -39,5 +41,22 @@ public class AppSettingsRobolectricTest {
     public void ignoresOutOfRangeValuesAndKeepsDefault() {
         newStore().saveDefaultServings(0);
         assertEquals(2, newStore().loadDefaultServings());
+    }
+
+    @Test
+    public void hasNotChosenServingsByDefault() {
+        assertFalse(newStore().hasChosenServings());
+    }
+
+    @Test
+    public void savingValidServingsMarksThemChosen() {
+        newStore().saveDefaultServings(4);
+        assertTrue(newStore().hasChosenServings());
+    }
+
+    @Test
+    public void outOfRangeSaveDoesNotMarkChosen() {
+        newStore().saveDefaultServings(99);
+        assertFalse(newStore().hasChosenServings());
     }
 }

@@ -13,6 +13,7 @@ public final class SharedPreferencesAppSettings implements AppSettings {
 
     private static final String PREFS_NAME = "mealspire_settings";
     private static final String KEY_DEFAULT_SERVINGS = "default_servings";
+    private static final String KEY_SERVINGS_CHOSEN = "servings_chosen";
     private static final int MAX_SERVINGS = 12;
 
     private final SharedPreferences sharedPreferences;
@@ -33,7 +34,15 @@ public final class SharedPreferencesAppSettings implements AppSettings {
         if (!isValid(servings)) {
             return;
         }
-        sharedPreferences.edit().putInt(KEY_DEFAULT_SERVINGS, servings).apply();
+        sharedPreferences.edit()
+                .putInt(KEY_DEFAULT_SERVINGS, servings)
+                .putBoolean(KEY_SERVINGS_CHOSEN, true)
+                .apply();
+    }
+
+    @Override
+    public boolean hasChosenServings() {
+        return sharedPreferences.getBoolean(KEY_SERVINGS_CHOSEN, false);
     }
 
     private static boolean isValid(int servings) {
