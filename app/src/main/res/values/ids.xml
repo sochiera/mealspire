@@ -7,4 +7,6 @@
     <item name="dislike_button" type="id" />
     <item name="recipe_title" type="id" />
     <item name="recipe_details" type="id" />
+    <item name="import_field" type="id" />
+    <item name="import_button" type="id" />
 </resources>

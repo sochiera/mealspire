@@ -5,9 +5,11 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.ViewGroup;
+import android.text.TextUtils;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Spinner;
@@ -15,6 +17,11 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.mealspire.app.domain.ChoiceLearning;
+import com.mealspire.app.domain.Cookbook;
+import com.mealspire.app.domain.CookbookEntry;
+import com.mealspire.app.domain.CookbookStore;
+import com.mealspire.app.domain.KnownDishImporter;
+import com.mealspire.app.domain.KnownDishPromptBuilder;
 import com.mealspire.app.domain.MealChoiceOption;
 import com.mealspire.app.domain.MealChoices;
 import com.mealspire.app.domain.MealHistory;
@@ -28,6 +35,8 @@ import com.mealspire.app.domain.RecipeTextParser;
 import com.mealspire.app.domain.StaleMealSelector;
 import com.mealspire.app.domain.UserPreferences;
 import com.mealspire.app.net.HttpClaudeClient;
+import com.mealspire.app.net.HttpPageFetcher;
+import com.mealspire.app.storage.SharedPreferencesCookbookStore;
 import com.mealspire.app.storage.SharedPreferencesMealHistoryStore;
 import com.mealspire.app.storage.SharedPreferencesPreferenceStore;
 
@@ -95,6 +104,11 @@ public class MainActivity extends Activity {
     private UserPreferences preferences;
     private MealHistoryStore historyStore;
     private MealHistory history;
+    private CookbookStore cookbookStore;
+    private Cookbook cookbook;
+    private KnownDishImporter dishImporter;
+    private EditText importField;
+    private Button importButton;
     private final StaleMealSelector staleSelector = new StaleMealSelector();
     private final List<MealChoiceOption> choiceOptions = MealChoices.defaults();
     private final List<CheckBox> choiceBoxes = new ArrayList<>();
@@ -111,6 +125,10 @@ public class MainActivity extends Activity {
         preferences = preferenceStore.load();
         historyStore = new SharedPreferencesMealHistoryStore(this);
         history = historyStore.load();
+        cookbookStore = new SharedPreferencesCookbookStore(this);
+        cookbook = cookbookStore.load();
+        dishImporter = new KnownDishImporter(claudeClient, new HttpPageFetcher(),
+                new KnownDishPromptBuilder(), new RecipeTextParser());
 
         ScrollView scrollView = new ScrollView(this);
         scrollView.setBackgroundColor(Color.rgb(255, 247, 237));
@@ -204,8 +222,69 @@ public class MainActivity extends Activity {
         dislikeButton.setOnClickListener(view -> rateCurrentRecipe(false));
         feedbackRow.addView(dislikeButton, equalWidthRowItem());
 
+        TextView importLabel = new TextView(this);
+        importLabel.setText("Dodaj danie, które znasz i lubisz");
+        importLabel.setTextSize(18);
+        importLabel.setTextColor(Color.rgb(67, 56, 45));
+        root.addView(importLabel, marginTop(32));
+
+        importField = new EditText(this);
+        importField.setId(R.id.import_field);
+        importField.setHint("Wklej link do przepisu albo opisz danie");
+        importField.setTextSize(16);
+        root.addView(importField, marginTop(8));
+
+        importButton = new Button(this);
+        importButton.setId(R.id.import_button);
+        importButton.setText("Dodaj do mojej bazy");
+        importButton.setAllCaps(false);
+        importButton.setTextSize(16);
+        importButton.setOnClickListener(view -> importKnownDish());
+        root.addView(importButton, marginTop(8));
+
         setContentView(scrollView);
         showRandomRecipe();
+    }
+
+    private void importKnownDish() {
+        if (!claudeClient.hasApiKey()) {
+            Toast.makeText(this, "Dodawanie z linku/opisu wymaga klucza API.",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+        final String input = importField.getText().toString().trim();
+        if (TextUtils.isEmpty(input)) {
+            Toast.makeText(this, "Wklej link albo opisz danie.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        importButton.setEnabled(false);
+        recipeTitle.setText("Dodaję do bazy…");
+        recipeDetails.setText("");
+
+        new Thread(() -> {
+            try {
+                final CookbookEntry entry = dishImporter.importDish(input);
+                runOnUiThread(() -> {
+                    cookbook = cookbook.add(entry);
+                    cookbookStore.save(cookbook);
+                    preferences = preferences.withLike(entry.getTitle());
+                    preferenceStore.save(preferences);
+                    showRecipe(entry.toRecipe());
+                    importField.setText("");
+                    importButton.setEnabled(true);
+                    Toast.makeText(MainActivity.this,
+                            "Dodano do bazy: " + entry.getTitle(), Toast.LENGTH_SHORT).show();
+                });
+            } catch (IOException e) {
+                final String message = e.getMessage();
+                runOnUiThread(() -> {
+                    importButton.setEnabled(true);
+                    recipeTitle.setText("Nie udało się dodać dania");
+                    recipeDetails.setText(message != null ? message : "Spróbuj ponownie.");
+                });
+            }
+        }).start();
     }
 
     private void showRandomRecipe() {

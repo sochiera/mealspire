@@ -20,6 +20,13 @@ Ustaw go na jeden z dwóch sposobów:
 Bez klucza aplikacja nadal działa w trybie losowania gotowych przepisów, a przycisk
 AI wyświetla instrukcję konfiguracji.
 
+## Dodawanie dań, które już znasz i lubisz
+
+W sekcji „Dodaj danie, które znasz i lubisz" możesz **wkleić link do przepisu**
+albo **krótko opisać danie**. Aplikacja rozpozna danie (przy linku pobiera treść
+strony), zapisze je w Twojej bazie i oznaczy jako lubiane — dzięki temu trafia do
+puli podpowiedzi i wpływa na kolejne propozycje. Wymaga klucza API.
+
 ## Wybory przy każdej propozycji
 
 Przed wygenerowaniem dania możesz zaznaczyć dowolne preferencje na dziś
