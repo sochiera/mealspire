@@ -1,6 +1,8 @@
 package com.mealspire.app;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import android.widget.Button;
@@ -18,8 +20,7 @@ import org.robolectric.RobolectricTestRunner;
 
 /**
  * Robolectric tests run the real Activity + SharedPreferences on the JVM (no
- * emulator). They cover offline interactions only — the AI button is never
- * clicked here, so no network call happens.
+ * emulator). They cover the offline flow only — the AI is never called here.
  */
 @RunWith(RobolectricTestRunner.class)
 public class MainActivityRobolectricTest {
@@ -29,18 +30,22 @@ public class MainActivityRobolectricTest {
     }
 
     @Test
-    public void showsARecipeTitleOnLaunch() {
+    public void showsMealButtonsAndNoProposalsOnLaunch() {
         MainActivity activity = launch();
-        TextView title = activity.findViewById(R.id.recipe_title);
-        assertFalse(title.getText().toString().trim().isEmpty());
+        assertNotNull(activity.findViewById(R.id.meal_breakfast_button));
+        assertNotNull(activity.findViewById(R.id.meal_lunch_button));
+        assertNotNull(activity.findViewById(R.id.meal_dinner_button));
+        // Nothing is proposed until the user picks a meal.
+        assertNull(activity.findViewById(R.id.accept_button));
     }
 
     @Test
-    public void generateButtonKeepsARecipeVisible() {
+    public void pickingAMealShowsProposals() {
         MainActivity activity = launch();
-        // No API key in the test build, so generate falls back to an offline pick.
-        Button generate = activity.findViewById(R.id.generate_button);
-        generate.performClick();
+        activity.<Button>findViewById(R.id.meal_lunch_button).performClick();
+
+        // Proposal cards are built: the first card exposes title + actions.
+        assertNotNull(activity.findViewById(R.id.accept_button));
         TextView title = activity.findViewById(R.id.recipe_title);
         assertFalse(title.getText().toString().trim().isEmpty());
     }
@@ -48,13 +53,25 @@ public class MainActivityRobolectricTest {
     @Test
     public void likeButtonPersistsPreference() {
         MainActivity activity = launch();
-        TextView title = activity.findViewById(R.id.recipe_title);
-        String shownDish = title.getText().toString();
+        activity.<Button>findViewById(R.id.meal_lunch_button).performClick();
 
+        String shownDish = ((TextView) activity.findViewById(R.id.recipe_title))
+                .getText().toString();
         activity.<Button>findViewById(R.id.like_button).performClick();
 
         UserPreferences saved = new SharedPreferencesPreferenceStore(
                 ApplicationProvider.getApplicationContext()).load();
         assertTrue(saved.getLikes().contains(shownDish));
+    }
+
+    @Test
+    public void showRecipeRevealsFullRecipeOffline() {
+        MainActivity activity = launch();
+        activity.<Button>findViewById(R.id.meal_dinner_button).performClick();
+        activity.<Button>findViewById(R.id.accept_button).performClick();
+
+        TextView details = activity.findViewById(R.id.recipe_details);
+        assertFalse(details.getText().toString().trim().isEmpty());
+        assertNotNull(activity.findViewById(R.id.back_button));
     }
 }

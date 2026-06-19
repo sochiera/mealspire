@@ -1,13 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <item name="meal_spinner" type="id" />
+    <item name="meal_breakfast_button" type="id" />
+    <item name="meal_lunch_button" type="id" />
+    <item name="meal_dinner_button" type="id" />
     <item name="servings_label" type="id" />
-    <item name="generate_button" type="id" />
-    <item name="accept_button" type="id" />
-    <item name="change_button" type="id" />
-    <item name="like_button" type="id" />
-    <item name="dislike_button" type="id" />
     <item name="recipe_title" type="id" />
     <item name="recipe_details" type="id" />
+    <item name="accept_button" type="id" />
+    <item name="like_button" type="id" />
+    <item name="change_button" type="id" />
+    <item name="refresh_button" type="id" />
+    <item name="back_button" type="id" />
     <item name="more_button" type="id" />
 </resources>

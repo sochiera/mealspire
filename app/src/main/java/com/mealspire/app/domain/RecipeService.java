@@ -13,6 +13,7 @@ public final class RecipeService {
     private final RecipeTextParser textParser;
     private final ProposalPromptBuilder proposalPromptBuilder;
     private final ProposalParser proposalParser;
+    private final ProposalListParser proposalListParser = new ProposalListParser();
     private final ModifyRecipePromptBuilder modifyPromptBuilder;
 
     public RecipeService(ClaudeClient client, RecipePromptBuilder promptBuilder,
@@ -65,6 +66,15 @@ public final class RecipeService {
                 proposalPromptBuilder.systemPrompt(),
                 proposalPromptBuilder.userPrompt(request));
         return proposalParser.parse(answer);
+    }
+
+    /** First step, several at once: a handful of lightweight proposals in one call. */
+    public java.util.List<DishProposal> proposeDishes(RecipeRequest request, int count)
+            throws IOException {
+        String answer = client.complete(
+                proposalPromptBuilder.systemPrompt(),
+                proposalPromptBuilder.userPrompt(request, count));
+        return proposalListParser.parse(answer);
     }
 
     /** Second step: the full recipe for a dish the user accepted from a proposal. */

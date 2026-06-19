@@ -28,6 +28,9 @@ public class SaveToCookbookRobolectricTest {
     @Test
     public void saveItemInMoreMenuAddsShownRecipeToCookbook() {
         MainActivity activity = Robolectric.buildActivity(MainActivity.class).setup().get();
+        // Pick a meal, then open a proposal's full recipe so "Zapisz" is offered.
+        activity.<Button>findViewById(R.id.meal_lunch_button).performClick();
+        activity.<Button>findViewById(R.id.accept_button).performClick();
         String shownDish = ((TextView) activity.findViewById(R.id.recipe_title))
                 .getText().toString();
 

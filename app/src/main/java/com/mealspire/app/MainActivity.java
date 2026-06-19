@@ -3,18 +3,17 @@ package com.mealspire.app;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.text.InputType;
 import android.text.TextUtils;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
-import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -24,7 +23,6 @@ import com.mealspire.app.domain.Cookbook;
 import com.mealspire.app.domain.CookbookEntry;
 import com.mealspire.app.domain.CookbookStore;
 import com.mealspire.app.domain.DataManager;
-import com.mealspire.app.domain.DeclineReason;
 import com.mealspire.app.domain.DishProposal;
 import com.mealspire.app.domain.KnownDishImporter;
 import com.mealspire.app.domain.KnownDishPromptBuilder;
@@ -39,7 +37,6 @@ import com.mealspire.app.domain.RecipePromptBuilder;
 import com.mealspire.app.domain.RecipeRequest;
 import com.mealspire.app.domain.RecipeService;
 import com.mealspire.app.domain.RecipeTextParser;
-import com.mealspire.app.domain.StaleMealSelector;
 import com.mealspire.app.domain.UserPreferences;
 import com.mealspire.app.net.HttpClaudeClient;
 import com.mealspire.app.net.HttpPageFetcher;
@@ -52,22 +49,20 @@ import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Random;
-import java.util.Set;
 
 /**
- * Thin UI layer. The app proposes one dish at a time — name, short description,
- * time and key ingredients — without generating the whole recipe up front. The
- * user accepts ("Pokaż przepis") to get the full recipe, or skips ("Nie dla
- * mnie") and immediately gets a fresh proposal. A skip asks <em>why</em>, so a
- * real dislike is remembered while a "not today" reason only steers the next
- * idea. The number of people is asked once and then reused forever. Once a
- * recipe is shown it can be tweaked with a free-text request to the AI.
+ * Thin UI layer. The user taps a meal — Śniadanie / Obiad / Kolacja — and the
+ * app immediately offers a few simple proposals (name, short description, time,
+ * key ingredients) at once. Tapping "Pokaż przepis" reveals the full recipe;
+ * tapping "Lubię to" teaches the app the user's kitchen. The app only ever
+ * remembers what the user <em>likes</em> — nothing negative — and leans on those
+ * likes when suggesting the next, equally simple, everyday dishes.
  */
 public class MainActivity extends Activity {
     private static final String[] MEAL_TYPES = {"Śniadanie", "Obiad", "Kolacja"};
+    private static final int PROPOSAL_COUNT = 3;
     private static final int MAX_SERVINGS = 12;
 
     private static final Recipe[][] RECIPES = {
@@ -107,15 +102,10 @@ public class MainActivity extends Activity {
     };
 
     private final Random random = new Random();
-    private Spinner mealSpinner;
     private TextView servingsLabel;
-    private TextView recipeTitle;
-    private TextView recipeDetails;
-    private Button generateButton;
-    private Button acceptButton;
-    private Button changeButton;
-    private Button likeButton;
-    private Button dislikeButton;
+    private Button[] mealButtons;
+    private LinearLayout contentContainer;
+    private Button moreButton;
 
     private HttpClaudeClient claudeClient;
     private RecipeService recipeService;
@@ -128,26 +118,21 @@ public class MainActivity extends Activity {
     private KnownDishImporter dishImporter;
     private DataManager dataManager;
     private AppSettings appSettings;
-    private final StaleMealSelector staleSelector = new StaleMealSelector();
     private final MealPoolBuilder mealPoolBuilder = new MealPoolBuilder();
     private final IngredientExtractor ingredientExtractor = new IngredientExtractor();
     private final ApiKeyCipher apiKeyCipher = new ApiKeyCipher();
 
-    // What is on screen right now. A proposal always has a name; the full recipe
-    // is either resolved instantly (offline) or fetched on accept (AI).
-    private DishProposal currentProposal;
+    private int currentMealIndex = -1;
+    // The proposals currently on offer and (for the offline flow) their recipes.
+    private List<DishProposal> proposals = new ArrayList<>();
+    private List<Recipe> proposalRecipes = new ArrayList<>();
+    // The full recipe currently open, or null while the proposal list is shown.
     private Recipe currentRecipe;
-    // Offline: the full recipe behind the current proposal, ready for instant reveal.
-    private Recipe pendingRecipe;
-    // Steers the next proposal after a "not today" skip (kept only for this session).
-    private final Set<String> sessionHints = new LinkedHashSet<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // The API key may be injected at build time (BuildConfig) or shipped
-        // encrypted and unlocked at runtime with a password (see promptForApiKeyPassword).
         buildClaudeClients(BuildConfig.ANTHROPIC_API_KEY);
         preferenceStore = new SharedPreferencesPreferenceStore(this);
         preferences = preferenceStore.load();
@@ -174,106 +159,60 @@ public class MainActivity extends Activity {
         root.addView(title, matchWrap());
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("Wybierz porę dnia — podsunę pomysł na danie.");
+        subtitle.setText("Na co masz dziś ochotę?");
         subtitle.setTextSize(16);
         subtitle.setTextColor(Color.rgb(92, 78, 62));
         subtitle.setGravity(Gravity.CENTER_HORIZONTAL);
         root.addView(subtitle, marginTop(8));
 
-        mealSpinner = new Spinner(this);
-        mealSpinner.setId(R.id.meal_spinner);
-        mealSpinner.setAdapter(new ArrayAdapter<>(this,
-                android.R.layout.simple_spinner_dropdown_item, MEAL_TYPES));
-        root.addView(mealSpinner, marginTop(28));
-
-        // The number of people is asked once (see maybeAskServings) and then only
-        // shown here as a reminder; it can be changed from the "Więcej…" menu.
         servingsLabel = new TextView(this);
         servingsLabel.setId(R.id.servings_label);
-        servingsLabel.setTextSize(16);
-        servingsLabel.setTextColor(Color.rgb(92, 78, 62));
-        root.addView(servingsLabel, marginTop(16));
+        servingsLabel.setTextSize(15);
+        servingsLabel.setTextColor(Color.rgb(120, 104, 86));
+        servingsLabel.setGravity(Gravity.CENTER_HORIZONTAL);
+        root.addView(servingsLabel, marginTop(6));
 
-        generateButton = new Button(this);
-        generateButton.setId(R.id.generate_button);
-        generateButton.setText("Zaproponuj danie");
-        generateButton.setAllCaps(false);
-        generateButton.setTextSize(20);
-        generateButton.setOnClickListener(view -> generateProposal());
-        root.addView(generateButton, marginTop(24));
+        // One tap to pick the meal — replaces the old picker + generate button.
+        LinearLayout mealRow = new LinearLayout(this);
+        mealRow.setOrientation(LinearLayout.HORIZONTAL);
+        root.addView(mealRow, marginTop(20));
 
-        recipeTitle = new TextView(this);
-        recipeTitle.setId(R.id.recipe_title);
-        recipeTitle.setTextSize(24);
-        recipeTitle.setTextColor(Color.rgb(67, 56, 45));
-        root.addView(recipeTitle, marginTop(28));
+        int[] mealIds = {R.id.meal_breakfast_button, R.id.meal_lunch_button, R.id.meal_dinner_button};
+        mealButtons = new Button[MEAL_TYPES.length];
+        for (int i = 0; i < MEAL_TYPES.length; i++) {
+            final int index = i;
+            Button button = new Button(this);
+            button.setId(mealIds[i]);
+            button.setText(MEAL_TYPES[i]);
+            button.setAllCaps(false);
+            button.setTextSize(16);
+            button.setOnClickListener(v -> selectMeal(index));
+            mealButtons[i] = button;
+            mealRow.addView(button, equalWidthRowItem());
+        }
 
-        recipeDetails = new TextView(this);
-        recipeDetails.setId(R.id.recipe_details);
-        recipeDetails.setTextSize(17);
-        recipeDetails.setLineSpacing(dp(4), 1.0f);
-        recipeDetails.setTextColor(Color.rgb(80, 68, 54));
-        root.addView(recipeDetails, marginTop(12));
+        contentContainer = new LinearLayout(this);
+        contentContainer.setOrientation(LinearLayout.VERTICAL);
+        root.addView(contentContainer, marginTop(20));
 
-        acceptButton = new Button(this);
-        acceptButton.setId(R.id.accept_button);
-        acceptButton.setText("Pokaż przepis");
-        acceptButton.setAllCaps(false);
-        acceptButton.setTextSize(18);
-        acceptButton.setOnClickListener(view -> acceptProposal());
-        acceptButton.setVisibility(View.GONE);
-        root.addView(acceptButton, marginTop(18));
-
-        changeButton = new Button(this);
-        changeButton.setId(R.id.change_button);
-        changeButton.setText("Zmień przepis");
-        changeButton.setAllCaps(false);
-        changeButton.setTextSize(18);
-        changeButton.setOnClickListener(view -> showModifyRecipeDialog());
-        changeButton.setVisibility(View.GONE);
-        root.addView(changeButton, marginTop(12));
-
-        LinearLayout feedbackRow = new LinearLayout(this);
-        feedbackRow.setOrientation(LinearLayout.HORIZONTAL);
-        root.addView(feedbackRow, marginTop(14));
-
-        likeButton = new Button(this);
-        likeButton.setId(R.id.like_button);
-        likeButton.setText("Lubię to");
-        likeButton.setAllCaps(false);
-        likeButton.setTextSize(16);
-        likeButton.setOnClickListener(view -> likeCurrent());
-        feedbackRow.addView(likeButton, equalWidthRowItem());
-
-        dislikeButton = new Button(this);
-        dislikeButton.setId(R.id.dislike_button);
-        dislikeButton.setText("Nie dla mnie");
-        dislikeButton.setAllCaps(false);
-        dislikeButton.setTextSize(16);
-        dislikeButton.setOnClickListener(view -> showDeclineReasons());
-        feedbackRow.addView(dislikeButton, equalWidthRowItem());
-
-        Button moreButton = new Button(this);
+        moreButton = new Button(this);
         moreButton.setId(R.id.more_button);
         moreButton.setText("Więcej…");
         moreButton.setAllCaps(false);
         moreButton.setTextSize(16);
         moreButton.setOnClickListener(view -> showMoreMenu());
-        root.addView(moreButton, marginTop(20));
+        root.addView(moreButton, marginTop(24));
 
         setContentView(scrollView);
         updateServingsLabel();
-        generateProposal();
+        showHint("Wybierz porę dnia, a podsunę kilka prostych pomysłów.");
         maybeAskServings();
 
-        // If the key isn't already available (build-time), ask for the password
-        // that unlocks the encrypted key shipped with the app.
         if (!claudeClient.hasApiKey() && !encryptedApiKey().isEmpty()) {
             promptForApiKeyPassword(false);
         }
     }
 
-    /** (Re)creates the Claude-backed services with the given API key (may be empty). */
     private void buildClaudeClients(String apiKey) {
         claudeClient = new HttpClaudeClient(apiKey);
         recipeService = new RecipeService(claudeClient, new RecipePromptBuilder(),
@@ -309,7 +248,6 @@ public class MainActivity extends Activity {
             return;
         }
         final String blob = encryptedApiKey();
-        // PBKDF2 is intentionally slow, so derive/decrypt off the UI thread.
         new Thread(() -> {
             try {
                 final String key = apiKeyCipher.decrypt(blob, password);
@@ -324,123 +262,201 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    // ----- Proposals -------------------------------------------------------
+    // ----- Meal selection + proposals -------------------------------------
 
-    /** Main action: propose one dish (AI when possible, offline otherwise). */
-    private void generateProposal() {
-        if (claudeClient.hasApiKey()) {
-            proposeAiDish();
-        } else {
-            proposeOfflineDish();
+    private void selectMeal(int index) {
+        currentMealIndex = index;
+        highlightSelectedMeal();
+        generateProposals();
+    }
+
+    private void highlightSelectedMeal() {
+        for (int i = 0; i < mealButtons.length; i++) {
+            mealButtons[i].setTypeface(null, i == currentMealIndex ? Typeface.BOLD : Typeface.NORMAL);
         }
     }
 
-    private void proposeOfflineDish() {
-        int mealIndex = mealSpinner.getSelectedItemPosition();
-        // Pool = built-in recipes for this meal + the user's cookbook, with
-        // disliked dishes excluded. Shuffle so ties vary, then prefer the dish
-        // not seen for the longest time.
-        List<Recipe> pool = mealPoolBuilder.build(RECIPES[mealIndex], cookbook, preferences);
+    /** Offer a fresh set of proposals for the current meal (AI or offline). */
+    private void generateProposals() {
+        if (currentMealIndex < 0) {
+            return;
+        }
+        if (claudeClient.hasApiKey()) {
+            generateAiProposals();
+        } else {
+            generateOfflineProposals();
+        }
+    }
+
+    private void generateOfflineProposals() {
+        List<Recipe> pool = mealPoolBuilder.build(RECIPES[currentMealIndex], cookbook, preferences);
         Collections.shuffle(pool, random);
 
-        List<String> titles = new ArrayList<>();
+        List<DishProposal> newProposals = new ArrayList<>();
+        List<Recipe> newRecipes = new ArrayList<>();
         for (Recipe recipe : pool) {
-            titles.add(recipe.getTitle());
-        }
-        String stalest = staleSelector.pickStalest(titles, history);
-
-        Recipe chosen = pool.get(0);
-        for (Recipe recipe : pool) {
-            if (recipe.getTitle().equals(stalest)) {
-                chosen = recipe;
+            if (newProposals.size() >= PROPOSAL_COUNT) {
                 break;
             }
+            newProposals.add(proposalFromRecipe(recipe));
+            newRecipes.add(recipe);
         }
-        pendingRecipe = chosen;
-        showProposal(proposalFromRecipe(chosen));
-        recordChosen(chosen.getTitle());
+        showProposals(newProposals, newRecipes);
     }
 
-    /** Builds a lightweight proposal from a stored recipe for the offline flow. */
     private DishProposal proposalFromRecipe(Recipe recipe) {
         List<String> ingredients = ingredientExtractor.extract(recipe.getDetails());
         if (ingredients.size() > 5) {
             ingredients = new ArrayList<>(ingredients.subList(0, 5));
         }
         return new DishProposal(recipe.getTitle(),
-                "Sprawdzone danie z Twojej puli.", "", ingredients);
+                "Proste danie z Twojej puli.", "", ingredients);
     }
 
-    private void proposeAiDish() {
+    private void generateAiProposals() {
         final RecipeRequest request = buildRequest();
-        generateButton.setEnabled(false);
-        recipeTitle.setText("Szukam pomysłu…");
-        recipeDetails.setText("");
-        setProposalActionsEnabled(false);
+        setMealButtonsEnabled(false);
+        showHint("Szukam pomysłów…");
         new Thread(() -> {
             try {
-                final DishProposal proposal = recipeService.proposeDish(request);
+                final List<DishProposal> result =
+                        recipeService.proposeDishes(request, PROPOSAL_COUNT);
                 runOnUiThread(() -> {
-                    pendingRecipe = null;
-                    showProposal(proposal);
-                    recordChosen(proposal.getName());
-                    generateButton.setEnabled(true);
+                    setMealButtonsEnabled(true);
+                    if (result.isEmpty()) {
+                        showHint("Nie udało się wymyślić dań. Spróbuj ponownie.");
+                        return;
+                    }
+                    List<Recipe> noRecipes = new ArrayList<>();
+                    for (int i = 0; i < result.size(); i++) {
+                        noRecipes.add(null); // full recipe is fetched on demand
+                    }
+                    showProposals(result, noRecipes);
                 });
             } catch (IOException e) {
                 final String message = e.getMessage();
                 runOnUiThread(() -> {
-                    recipeTitle.setText("Nie udało się wymyślić dania");
-                    recipeDetails.setText(message != null ? message
-                            : "Spróbuj ponownie za chwilę.");
-                    generateButton.setEnabled(true);
+                    setMealButtonsEnabled(true);
+                    showHint(message != null ? message : "Spróbuj ponownie za chwilę.");
                 });
             }
         }).start();
     }
 
-    /** Bundles the meal type, learned preferences, recent dishes and this-session hints. */
     private RecipeRequest buildRequest() {
-        final String mealType = MEAL_TYPES[mealSpinner.getSelectedItemPosition()];
+        final String mealType = MEAL_TYPES[currentMealIndex];
         List<String> fragments = new ArrayList<>();
         String portionFragment = PortionSize.promptFragment(appSettings.loadDefaultServings());
         if (!portionFragment.isEmpty()) {
             fragments.add(portionFragment);
         }
-        fragments.addAll(sessionHints);
-
         List<String> knownDishes = cookbook.titles();
         if (knownDishes.size() > 10) {
             knownDishes = knownDishes.subList(0, 10);
         }
-        return new RecipeRequest(mealType, preferences, history.recentTitles(5),
+        return new RecipeRequest(mealType, preferences, history.recentTitles(8),
                 fragments, knownDishes);
     }
 
-    private void showProposal(DishProposal proposal) {
-        currentProposal = proposal;
-        currentRecipe = pendingRecipe; // null for AI proposals (no full recipe yet)
-        recipeTitle.setText(proposal.getName());
-        recipeDetails.setText(proposal.summary());
-        boolean hasDish = !proposal.isEmpty();
-        acceptButton.setVisibility(hasDish ? View.VISIBLE : View.GONE);
-        acceptButton.setEnabled(hasDish);
-        changeButton.setVisibility(View.GONE);
-        setProposalActionsEnabled(hasDish);
+    private void showProposals(List<DishProposal> newProposals, List<Recipe> newRecipes) {
+        proposals = newProposals;
+        proposalRecipes = newRecipes;
+        currentRecipe = null;
+        for (DishProposal proposal : newProposals) {
+            recordChosen(proposal.getName());
+        }
+        renderProposals();
     }
 
-    /** Accept: reveal the full recipe (instant offline, fetched for AI proposals). */
-    private void acceptProposal() {
-        if (currentProposal == null || currentProposal.isEmpty()) {
+    private void renderProposals() {
+        contentContainer.removeAllViews();
+        for (int i = 0; i < proposals.size(); i++) {
+            contentContainer.addView(buildProposalCard(i), marginTop(i == 0 ? 0 : 12));
+        }
+
+        Button refresh = new Button(this);
+        refresh.setId(R.id.refresh_button);
+        refresh.setText("Inne propozycje");
+        refresh.setAllCaps(false);
+        refresh.setTextSize(16);
+        refresh.setOnClickListener(v -> generateProposals());
+        contentContainer.addView(refresh, marginTop(16));
+    }
+
+    private View buildProposalCard(int index) {
+        DishProposal proposal = proposals.get(index);
+
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackgroundColor(Color.rgb(255, 237, 213));
+        card.setPadding(dp(16), dp(14), dp(16), dp(14));
+
+        TextView name = new TextView(this);
+        if (index == 0) {
+            name.setId(R.id.recipe_title); // first card title is the testable anchor
+        }
+        name.setText(proposal.getName());
+        name.setTextSize(20);
+        name.setTextColor(Color.rgb(67, 56, 45));
+        name.setTypeface(null, Typeface.BOLD);
+        card.addView(name, matchWrap());
+
+        String summary = proposal.summary();
+        if (!summary.isEmpty()) {
+            TextView body = new TextView(this);
+            body.setText(summary);
+            body.setTextSize(15);
+            body.setTextColor(Color.rgb(80, 68, 54));
+            card.addView(body, marginTop(6));
+        }
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        card.addView(actions, marginTop(10));
+
+        Button like = new Button(this);
+        if (index == 0) {
+            like.setId(R.id.like_button);
+        }
+        like.setText("Lubię to");
+        like.setAllCaps(false);
+        like.setTextSize(15);
+        like.setOnClickListener(v -> likeProposal(index));
+        actions.addView(like, equalWidthRowItem());
+
+        Button show = new Button(this);
+        if (index == 0) {
+            show.setId(R.id.accept_button);
+        }
+        show.setText("Pokaż przepis");
+        show.setAllCaps(false);
+        show.setTextSize(15);
+        show.setOnClickListener(v -> openRecipe(index));
+        actions.addView(show, equalWidthRowItem());
+
+        return card;
+    }
+
+    private void likeProposal(int index) {
+        if (index < 0 || index >= proposals.size()) {
             return;
         }
-        if (pendingRecipe != null) {
-            showFullRecipe(pendingRecipe);
+        rememberLike(proposals.get(index).getName());
+    }
+
+    /** Reveal the full recipe for a proposal: instant offline, fetched for AI. */
+    private void openRecipe(int index) {
+        if (index < 0 || index >= proposals.size()) {
             return;
         }
-        final String dishName = currentProposal.getName();
+        Recipe cached = index < proposalRecipes.size() ? proposalRecipes.get(index) : null;
+        if (cached != null) {
+            showFullRecipe(cached);
+            return;
+        }
+        final String dishName = proposals.get(index).getName();
         final RecipeRequest request = buildRequest();
-        acceptButton.setEnabled(false);
-        recipeDetails.setText("Przygotowuję przepis…");
+        showHint("Przygotowuję przepis…");
         new Thread(() -> {
             try {
                 final Recipe recipe = recipeService.generateRecipeFor(dishName, request);
@@ -448,9 +464,8 @@ public class MainActivity extends Activity {
             } catch (IOException e) {
                 final String message = e.getMessage();
                 runOnUiThread(() -> {
-                    recipeDetails.setText(message != null ? message
+                    showHint(message != null ? message
                             : "Nie udało się pobrać przepisu. Spróbuj ponownie.");
-                    acceptButton.setEnabled(true);
                 });
             }
         }).start();
@@ -458,46 +473,67 @@ public class MainActivity extends Activity {
 
     private void showFullRecipe(Recipe recipe) {
         currentRecipe = recipe;
-        // From now on the shown dish is the recipe itself (it may have been
-        // revised), so feedback should track its title rather than the proposal.
-        currentProposal = null;
-        recipeTitle.setText(recipe.getTitle());
-        recipeDetails.setText(recipe.getDetails());
-        acceptButton.setVisibility(View.GONE);
-        boolean canModify = claudeClient.hasApiKey();
-        changeButton.setVisibility(canModify ? View.VISIBLE : View.GONE);
-        changeButton.setEnabled(canModify);
-        setProposalActionsEnabled(true);
-        // Committing to a dish clears the temporary "not today" steering.
-        sessionHints.clear();
+        contentContainer.removeAllViews();
+
+        TextView name = new TextView(this);
+        name.setId(R.id.recipe_title);
+        name.setText(recipe.getTitle());
+        name.setTextSize(24);
+        name.setTextColor(Color.rgb(67, 56, 45));
+        name.setTypeface(null, Typeface.BOLD);
+        contentContainer.addView(name, matchWrap());
+
+        TextView details = new TextView(this);
+        details.setId(R.id.recipe_details);
+        details.setText(recipe.getDetails());
+        details.setTextSize(17);
+        details.setLineSpacing(dp(4), 1.0f);
+        details.setTextColor(Color.rgb(80, 68, 54));
+        contentContainer.addView(details, marginTop(12));
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        contentContainer.addView(actions, marginTop(16));
+
+        Button like = new Button(this);
+        like.setId(R.id.like_button);
+        like.setText("Lubię to");
+        like.setAllCaps(false);
+        like.setTextSize(16);
+        like.setOnClickListener(v -> rememberLike(recipe.getTitle()));
+        actions.addView(like, equalWidthRowItem());
+
+        if (claudeClient.hasApiKey()) {
+            Button change = new Button(this);
+            change.setId(R.id.change_button);
+            change.setText("Zmień przepis");
+            change.setAllCaps(false);
+            change.setTextSize(16);
+            change.setOnClickListener(v -> showModifyRecipeDialog());
+            actions.addView(change, equalWidthRowItem());
+        }
+
+        Button back = new Button(this);
+        back.setId(R.id.back_button);
+        back.setText("Wróć do propozycji");
+        back.setAllCaps(false);
+        back.setTextSize(16);
+        back.setOnClickListener(v -> {
+            currentRecipe = null;
+            renderProposals();
+        });
+        contentContainer.addView(back, marginTop(12));
     }
 
-    // ----- Skip with a reason ---------------------------------------------
+    // ----- Likes-only learning --------------------------------------------
 
-    private void showDeclineReasons() {
-        if (!hasCurrentDish()) {
+    private void rememberLike(String dish) {
+        if (dish == null || dish.trim().isEmpty()) {
             return;
         }
-        new AlertDialog.Builder(this)
-                .setTitle("Dlaczego nie dziś?")
-                .setItems(DeclineReason.labels(), (dialog, which) ->
-                        applyDecline(DeclineReason.values()[which]))
-                .show();
-    }
-
-    private void applyDecline(DeclineReason reason) {
-        String dish = currentDishName();
-        if (reason.isPermanentDislike()) {
-            if (!dish.isEmpty()) {
-                preferences = preferences.withDislike(dish);
-                preferenceStore.save(preferences);
-            }
-            toast("Zapamiętano, że unikasz: " + dish);
-        } else {
-            sessionHints.add(reason.getPromptHint());
-        }
-        // Every click has an action: immediately offer a fresh proposal.
-        generateProposal();
+        preferences = preferences.withLike(dish);
+        preferenceStore.save(preferences);
+        Toast.makeText(this, "Zapamiętane — lubisz: " + dish, Toast.LENGTH_SHORT).show();
     }
 
     // ----- Modify the shown recipe ----------------------------------------
@@ -529,8 +565,7 @@ public class MainActivity extends Activity {
             return;
         }
         final Recipe base = currentRecipe;
-        changeButton.setEnabled(false);
-        recipeDetails.setText("Zmieniam przepis…");
+        showHint("Zmieniam przepis…");
         new Thread(() -> {
             try {
                 final Recipe revised = recipeService.modifyRecipe(base, instruction);
@@ -544,18 +579,6 @@ public class MainActivity extends Activity {
                 });
             }
         }).start();
-    }
-
-    // ----- Likes -----------------------------------------------------------
-
-    private void likeCurrent() {
-        if (!hasCurrentDish()) {
-            return;
-        }
-        String dish = currentDishName();
-        preferences = preferences.withLike(dish);
-        preferenceStore.save(preferences);
-        Toast.makeText(this, "Zapamiętano, że lubisz: " + dish, Toast.LENGTH_SHORT).show();
     }
 
     // ----- "Więcej…" menu --------------------------------------------------
@@ -607,10 +630,7 @@ public class MainActivity extends Activity {
             Toast.makeText(this, "Wklej link albo opisz danie.", Toast.LENGTH_SHORT).show();
             return;
         }
-
-        recipeTitle.setText("Dodaję do bazy…");
-        recipeDetails.setText("");
-
+        showHint("Dodaję do bazy…");
         new Thread(() -> {
             try {
                 final CookbookEntry entry = dishImporter.importDish(input);
@@ -619,17 +639,14 @@ public class MainActivity extends Activity {
                     cookbookStore.save(cookbook);
                     preferences = preferences.withLike(entry.getTitle());
                     preferenceStore.save(preferences);
-                    pendingRecipe = entry.toRecipe();
                     showFullRecipe(entry.toRecipe());
                     Toast.makeText(MainActivity.this,
                             "Dodano do bazy: " + entry.getTitle(), Toast.LENGTH_SHORT).show();
                 });
             } catch (IOException e) {
                 final String message = e.getMessage();
-                runOnUiThread(() -> {
-                    recipeTitle.setText("Nie udało się dodać dania");
-                    recipeDetails.setText(message != null ? message : "Spróbuj ponownie.");
-                });
+                runOnUiThread(() ->
+                        showHint(message != null ? message : "Nie udało się dodać dania."));
             }
         }).start();
     }
@@ -637,7 +654,7 @@ public class MainActivity extends Activity {
     private void showManageDialog() {
         final String[] options = {
                 "Pokaż i usuń dania z bazy",
-                "Wyczyść preferencje (lubię / nie lubię)",
+                "Wyczyść polubione dania",
                 "Wyczyść historię podpowiedzi",
                 "Wyczyść całą bazę dań"
         };
@@ -651,7 +668,7 @@ public class MainActivity extends Activity {
                         case 1:
                             dataManager.clearPreferences();
                             preferences = UserPreferences.empty();
-                            toast("Wyczyszczono preferencje.");
+                            toast("Wyczyszczono polubione dania.");
                             break;
                         case 2:
                             dataManager.clearHistory();
@@ -724,7 +741,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** @param regenerate whether to refresh the proposal after a change. */
     private void showServingsDialog(final boolean regenerate) {
         final String[] options = new String[MAX_SERVINGS];
         for (int i = 0; i < MAX_SERVINGS; i++) {
@@ -738,8 +754,8 @@ public class MainActivity extends Activity {
                             appSettings.saveDefaultServings(which + 1);
                             updateServingsLabel();
                             dialog.dismiss();
-                            if (regenerate) {
-                                generateProposal();
+                            if (regenerate && currentMealIndex >= 0) {
+                                generateProposals();
                             }
                         })
                 .show();
@@ -756,23 +772,20 @@ public class MainActivity extends Activity {
 
     // ----- Shared helpers --------------------------------------------------
 
-    private boolean hasCurrentDish() {
-        return !currentDishName().isEmpty();
+    /** Shows a single informational line in the content area (no recipe yet). */
+    private void showHint(String text) {
+        contentContainer.removeAllViews();
+        TextView hint = new TextView(this);
+        hint.setText(text);
+        hint.setTextSize(16);
+        hint.setTextColor(Color.rgb(120, 104, 86));
+        contentContainer.addView(hint, matchWrap());
     }
 
-    private String currentDishName() {
-        if (currentProposal != null && !currentProposal.isEmpty()) {
-            return currentProposal.getName();
+    private void setMealButtonsEnabled(boolean enabled) {
+        for (Button button : mealButtons) {
+            button.setEnabled(enabled);
         }
-        if (currentRecipe != null) {
-            return currentRecipe.getTitle().trim();
-        }
-        return "";
-    }
-
-    private void setProposalActionsEnabled(boolean enabled) {
-        likeButton.setEnabled(enabled);
-        dislikeButton.setEnabled(enabled);
     }
 
     private void recordChosen(String dishTitle) {
