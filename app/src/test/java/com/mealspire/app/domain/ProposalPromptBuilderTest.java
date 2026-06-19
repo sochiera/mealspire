@@ -44,6 +44,25 @@ public class ProposalPromptBuilderTest {
     }
 
     @Test
+    public void userPromptAsksForDishesSharingTheUsersTaste() {
+        RecipeRequest request = new RecipeRequest("Obiad", UserPreferences.empty(),
+                Collections.<String>emptyList(), Collections.<String>emptyList(),
+                Collections.<String>emptyList(), Arrays.asList("kurczak", "kasza"));
+
+        String user = builder.userPrompt(request);
+
+        assertTrue(user.contains("kurczak"));
+        assertTrue(user.contains("kasza"));
+        // Must ask for new dishes that share something, not only the liked ones.
+        assertTrue(user.toLowerCase().contains("coś wspólnego"));
+    }
+
+    @Test
+    public void systemPromptEncouragesSimilarInSpiritNewDishes() {
+        assertTrue(builder.systemPrompt().toLowerCase().contains("coś wspólnego"));
+    }
+
+    @Test
     public void userPromptIncludesChoiceFragmentsAndRecentDishes() {
         RecipeRequest request = new RecipeRequest("Kolacja", UserPreferences.empty(),
                 Arrays.asList("Pierogi"), Arrays.asList("dla 4 osób, coś szybkiego"));
