@@ -10,8 +10,9 @@ public final class RecipePromptBuilder {
 
     public String systemPrompt() {
         return "Jesteś pomocnym asystentem kulinarnym dla osoby, która gotuje w domu "
-                + "dla siebie i swojej rodziny. Proponujesz konkretne, realne do ugotowania "
-                + "dania z łatwo dostępnych składników. Odpowiadasz wyłącznie po polsku.\n\n"
+                + "dla siebie i swojej rodziny. Proponujesz proste, realne do ugotowania "
+                + "dania z łatwo dostępnych, powszechnych składników — takich, które zwykle "
+                + "są w kuchni. Odpowiadasz wyłącznie po polsku.\n\n"
                 + "Format odpowiedzi:\n"
                 + "- pierwsza linia: sama nazwa dania (bez znaczników, bez słowa \"Przepis\"),\n"
                 + "- następnie pusta linia,\n"

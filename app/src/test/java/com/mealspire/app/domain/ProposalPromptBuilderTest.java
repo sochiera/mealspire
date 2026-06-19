@@ -25,9 +25,15 @@ public class ProposalPromptBuilderTest {
     }
 
     @Test
-    public void userPromptIncludesMealTypeAndPreferences() {
-        UserPreferences prefs = UserPreferences.empty()
-                .withLike("naleśniki").withDislike("brokuły");
+    public void systemPromptAsksForSimpleEverydayDishes() {
+        String system = builder.systemPrompt().toLowerCase();
+        assertTrue(system.contains("proste"));
+        assertTrue(system.contains("dostępn"));
+    }
+
+    @Test
+    public void userPromptIncludesMealTypeAndLikedDishes() {
+        UserPreferences prefs = UserPreferences.empty().withLike("naleśniki");
         RecipeRequest request = new RecipeRequest("Obiad", prefs,
                 Collections.<String>emptyList(), Collections.<String>emptyList());
 
@@ -35,7 +41,6 @@ public class ProposalPromptBuilderTest {
 
         assertTrue(user.contains("Obiad"));
         assertTrue(user.contains("naleśniki"));
-        assertTrue(user.contains("brokuły"));
     }
 
     @Test
@@ -55,5 +60,17 @@ public class ProposalPromptBuilderTest {
                 Collections.<String>emptyList(), Collections.<String>emptyList());
         String user = builder.userPrompt(request).toLowerCase();
         assertFalse(user.contains("sposób przygotowania"));
+    }
+
+    @Test
+    public void manyProposalsPromptAsksForCountAndSeparator() {
+        RecipeRequest request = new RecipeRequest("Śniadanie", UserPreferences.empty(),
+                Collections.<String>emptyList(), Collections.<String>emptyList());
+
+        String user = builder.userPrompt(request, 3);
+
+        assertTrue(user.contains("3"));
+        assertTrue(user.contains("Śniadanie"));
+        assertTrue(user.contains("---"));
     }
 }

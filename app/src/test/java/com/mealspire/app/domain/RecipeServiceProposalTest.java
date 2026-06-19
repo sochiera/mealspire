@@ -48,6 +48,22 @@ public class RecipeServiceProposalTest {
     }
 
     @Test
+    public void proposeDishesReturnsSeveralProposalsFromOneCall() throws Exception {
+        FakeClaudeClient client = new FakeClaudeClient(
+                "Nazwa: Jajecznica\nCzas: 10 min\nSkładniki: jajka\n"
+                        + "---\nNazwa: Owsianka\nCzas: 8 min\nSkładniki: płatki\n"
+                        + "---\nNazwa: Tost\nCzas: 5 min\nSkładniki: chleb");
+        RecipeRequest request = new RecipeRequest("Śniadanie", UserPreferences.empty(),
+                Collections.<String>emptyList(), Collections.<String>emptyList());
+
+        java.util.List<DishProposal> proposals = service(client).proposeDishes(request, 3);
+
+        assertEquals(3, proposals.size());
+        assertEquals("Jajecznica", proposals.get(0).getName());
+        assertTrue(client.lastUser.contains("3"));
+    }
+
+    @Test
     public void generateRecipeForPinsTheAcceptedDishName() throws Exception {
         FakeClaudeClient client = new FakeClaudeClient(
                 "Leczo\n\nSkładniki: papryka...\nDusić warzywa.");
