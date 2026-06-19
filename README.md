@@ -104,6 +104,17 @@ aplikacji) i przy kolejnych pomysłach z AI są przekazywane do modelu, żeby
 podpowiadał dania w podobnym duchu. Aplikacja **nie zapamiętuje nic negatywnie** —
 jeśli pomysł Ci nie pasuje, po prostu poproś o „Inne propozycje”.
 
+### Podpowiada nie tylko to, co już lubisz
+
+Aplikacja nie ogranicza się do dań, które już polubiłeś. Z Twoich polubień
+wyciąga **cechy wspólne** — powracające składniki i słowa-klucze (np. *kurczak*,
+*kasza*, *feta*) — i na tej podstawie podsuwa również **nowe** dania, które mają z
+nimi coś wspólnego (podobne składniki, technika, charakter). Te cechy trafiają do
+zapytania do AI, a w trybie offline służą do ustawiania propozycji: dania bliższe
+Twojemu gustowi są wyżej, ale wciąż z odrobiną losowości dla urozmaicenia. Profil
+gustu buduje `TasteProfiler` na podstawie nazw polubionych dań oraz — jeśli są
+znane — ich składników (z Twojej bazy i z wbudowanej puli).
+
 ## Jak uruchomić w Android Studio
 
 1. Zainstaluj Android Studio: <https://developer.android.com/studio>

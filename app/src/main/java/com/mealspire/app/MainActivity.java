@@ -37,6 +37,8 @@ import com.mealspire.app.domain.RecipePromptBuilder;
 import com.mealspire.app.domain.RecipeRequest;
 import com.mealspire.app.domain.RecipeService;
 import com.mealspire.app.domain.RecipeTextParser;
+import com.mealspire.app.domain.TasteProfile;
+import com.mealspire.app.domain.TasteProfiler;
 import com.mealspire.app.domain.UserPreferences;
 import com.mealspire.app.net.HttpClaudeClient;
 import com.mealspire.app.net.HttpPageFetcher;
@@ -49,7 +51,9 @@ import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 /**
@@ -120,6 +124,7 @@ public class MainActivity extends Activity {
     private AppSettings appSettings;
     private final MealPoolBuilder mealPoolBuilder = new MealPoolBuilder();
     private final IngredientExtractor ingredientExtractor = new IngredientExtractor();
+    private final TasteProfiler tasteProfiler = new TasteProfiler();
     private final ApiKeyCipher apiKeyCipher = new ApiKeyCipher();
 
     private int currentMealIndex = -1;
@@ -290,7 +295,15 @@ public class MainActivity extends Activity {
 
     private void generateOfflineProposals() {
         List<Recipe> pool = mealPoolBuilder.build(RECIPES[currentMealIndex], cookbook, preferences);
+        // Shuffle for variety, then float dishes that share something with what the
+        // user likes to the top — so suggestions generalise beyond exact likes.
         Collections.shuffle(pool, random);
+        final TasteProfile profile = buildTasteProfile();
+        if (!profile.isEmpty()) {
+            pool.sort((a, b) -> Integer.compare(
+                    profile.score(b.getTitle() + "\n" + b.getDetails()),
+                    profile.score(a.getTitle() + "\n" + a.getDetails())));
+        }
 
         List<DishProposal> newProposals = new ArrayList<>();
         List<Recipe> newRecipes = new ArrayList<>();
@@ -302,6 +315,20 @@ public class MainActivity extends Activity {
             newRecipes.add(recipe);
         }
         showProposals(newProposals, newRecipes);
+    }
+
+    /** Distils the user's likes into recurring "taste" terms (with known recipe details). */
+    private TasteProfile buildTasteProfile() {
+        Map<String, String> detailsByTitle = new HashMap<>();
+        for (Recipe[] meal : RECIPES) {
+            for (Recipe recipe : meal) {
+                detailsByTitle.put(recipe.getTitle(), recipe.getDetails());
+            }
+        }
+        for (CookbookEntry entry : cookbook.getEntries()) {
+            detailsByTitle.put(entry.getTitle(), entry.getRecipe());
+        }
+        return tasteProfiler.build(preferences.getLikes(), detailsByTitle);
     }
 
     private DishProposal proposalFromRecipe(Recipe recipe) {
@@ -355,7 +382,7 @@ public class MainActivity extends Activity {
             knownDishes = knownDishes.subList(0, 10);
         }
         return new RecipeRequest(mealType, preferences, history.recentTitles(8),
-                fragments, knownDishes);
+                fragments, knownDishes, buildTasteProfile().getAffinities());
     }
 
     private void showProposals(List<DishProposal> newProposals, List<Recipe> newRecipes) {

@@ -12,8 +12,9 @@ public final class ProposalPromptBuilder {
         return "Jesteś pomocnym asystentem kulinarnym dla osoby, która gotuje w domu "
                 + "dla siebie i swojej rodziny. Proponujesz proste dania z łatwo dostępnych, "
                 + "powszechnych składników — takie, które można zrobić z tego, co zwykle jest "
-                + "w kuchni. Uczysz się kuchni użytkownika: jeśli wiesz, jakie dania lubi, "
-                + "proponuj podobne. Odpowiadasz wyłącznie po polsku.\n\n"
+                + "w kuchni. Uczysz się kuchni użytkownika: proponuj zarówno dania podobne do "
+                + "tych, które lubi, jak i NOWE dania, które mają z nimi coś wspólnego "
+                + "(podobne składniki, kuchnia lub styl). Odpowiadasz wyłącznie po polsku.\n\n"
                 + "Na tym etapie NIE podajesz pełnego przepisu — tylko krótką propozycję dania.\n"
                 + "Każdą propozycję podaj dokładnie w tym formacie, każde pole w osobnej linii:\n"
                 + "Nazwa: <nazwa dania>\n"
@@ -49,8 +50,16 @@ public final class ProposalPromptBuilder {
     private void appendContext(StringBuilder sb, RecipeRequest request) {
         UserPreferences preferences = request.getPreferences();
         if (!preferences.getLikes().isEmpty()) {
-            sb.append(" Dania, które użytkownik lubi (proponuj w podobnym duchu): ")
+            sb.append(" Dania, które użytkownik lubi: ")
                     .append(join(preferences.getLikes())).append('.');
+        }
+        String affinities = join(request.getTasteAffinities());
+        if (!affinities.isEmpty()) {
+            sb.append(" Cechy wspólne dań, które lubi (np. składniki, styl): ")
+                    .append(affinities)
+                    .append(". Zaproponuj też nowe dania, które mają z nimi coś wspólnego — "
+                            + "podobne składniki, technikę lub charakter — a niekoniecznie "
+                            + "dokładnie te same potrawy.");
         }
         String choices = join(request.getChoiceFragments());
         if (!choices.isEmpty()) {

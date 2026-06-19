@@ -16,6 +16,7 @@ public final class RecipeRequest {
     private final List<String> recentToAvoid;
     private final List<String> choiceFragments;
     private final List<String> knownDishes;
+    private final List<String> tasteAffinities;
 
     public RecipeRequest(String mealType, UserPreferences preferences,
                          List<String> recentToAvoid, List<String> choiceFragments) {
@@ -25,11 +26,18 @@ public final class RecipeRequest {
     public RecipeRequest(String mealType, UserPreferences preferences,
                          List<String> recentToAvoid, List<String> choiceFragments,
                          List<String> knownDishes) {
+        this(mealType, preferences, recentToAvoid, choiceFragments, knownDishes, null);
+    }
+
+    public RecipeRequest(String mealType, UserPreferences preferences,
+                         List<String> recentToAvoid, List<String> choiceFragments,
+                         List<String> knownDishes, List<String> tasteAffinities) {
         this.mealType = mealType;
         this.preferences = preferences != null ? preferences : UserPreferences.empty();
         this.recentToAvoid = copy(recentToAvoid);
         this.choiceFragments = copy(choiceFragments);
         this.knownDishes = copy(knownDishes);
+        this.tasteAffinities = copy(tasteAffinities);
     }
 
     public String getMealType() {
@@ -50,6 +58,11 @@ public final class RecipeRequest {
 
     public List<String> getKnownDishes() {
         return knownDishes;
+    }
+
+    /** Recurring features of the dishes the user likes, to suggest similar-in-spirit meals. */
+    public List<String> getTasteAffinities() {
+        return tasteAffinities;
     }
 
     private static List<String> copy(List<String> values) {
