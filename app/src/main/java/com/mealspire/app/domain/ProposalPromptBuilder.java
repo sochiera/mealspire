@@ -14,7 +14,9 @@ public final class ProposalPromptBuilder {
                 + "powszechnych składników — takie, które można zrobić z tego, co zwykle jest "
                 + "w kuchni. Uczysz się kuchni użytkownika: proponuj zarówno dania podobne do "
                 + "tych, które lubi, jak i NOWE dania, które mają z nimi coś wspólnego "
-                + "(podobne składniki, kuchnia lub styl). Odpowiadasz wyłącznie po polsku.\n\n"
+                + "(podobne składniki, kuchnia lub styl). Gust to tylko wskazówka, nie sztywna "
+                + "reguła: dbaj o różnorodność i NIE proponuj naraz kilku dań opartych na tym "
+                + "samym głównym składniku (np. samego kurczaka). Odpowiadasz wyłącznie po polsku.\n\n"
                 + "Na tym etapie NIE podajesz pełnego przepisu — tylko krótką propozycję dania.\n"
                 + "Każdą propozycję podaj dokładnie w tym formacie, każde pole w osobnej linii:\n"
                 + "Nazwa: <nazwa dania>\n"
@@ -42,6 +44,8 @@ public final class ProposalPromptBuilder {
         sb.append("Zaproponuj ").append(count).append(" różne, proste dania na: ")
                 .append(request.getMealType()).append(". ");
         sb.append("Dla każdego podaj tylko: nazwę, krótki opis, czas i kluczowe składniki. ");
+        sb.append("Zadbaj o różnorodność — najlepiej każda propozycja z innym głównym "
+                + "składnikiem, a przynajmniej jedna zupełnie nowa, inna niż zwykle. ");
         sb.append("Oddziel każdą propozycję osobną linią z trzema myślnikami: ---.");
         appendContext(sb, request);
         return sb.toString();
@@ -55,11 +59,11 @@ public final class ProposalPromptBuilder {
         }
         String affinities = join(request.getTasteAffinities());
         if (!affinities.isEmpty()) {
-            sb.append(" Cechy wspólne dań, które lubi (np. składniki, styl): ")
+            sb.append(" Cechy wspólne dań, które lubi (luźna wskazówka, nie wymóg): ")
                     .append(affinities)
-                    .append(". Zaproponuj też nowe dania, które mają z nimi coś wspólnego — "
-                            + "podobne składniki, technikę lub charakter — a niekoniecznie "
-                            + "dokładnie te same potrawy.");
+                    .append(". Część propozycji może mieć z nimi coś wspólnego, ale zadbaj o "
+                            + "różnorodność: NIE proponuj samych dań z tym samym składnikiem — "
+                            + "dorzuć też nowe, inne dania.");
         }
         String choices = join(request.getChoiceFragments());
         if (!choices.isEmpty()) {
