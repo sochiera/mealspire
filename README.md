@@ -104,16 +104,23 @@ aplikacji) i przy kolejnych pomysłach z AI są przekazywane do modelu, żeby
 podpowiadał dania w podobnym duchu. Aplikacja **nie zapamiętuje nic negatywnie** —
 jeśli pomysł Ci nie pasuje, po prostu poproś o „Inne propozycje”.
 
-### Podpowiada nie tylko to, co już lubisz
+### Podpowiada nie tylko to, co już lubisz — i nie zapętla się na jednym
 
 Aplikacja nie ogranicza się do dań, które już polubiłeś. Z Twoich polubień
 wyciąga **cechy wspólne** — powracające składniki i słowa-klucze (np. *kurczak*,
 *kasza*, *feta*) — i na tej podstawie podsuwa również **nowe** dania, które mają z
-nimi coś wspólnego (podobne składniki, technika, charakter). Te cechy trafiają do
-zapytania do AI, a w trybie offline służą do ustawiania propozycji: dania bliższe
-Twojemu gustowi są wyżej, ale wciąż z odrobiną losowości dla urozmaicenia. Profil
-gustu buduje `TasteProfiler` na podstawie nazw polubionych dań oraz — jeśli są
-znane — ich składników (z Twojej bazy i z wbudowanej puli).
+nimi coś wspólnego (podobne składniki, technika, charakter). Profil gustu buduje
+`TasteProfiler` na podstawie nazw polubionych dań oraz — jeśli są znane — ich
+składników (z Twojej bazy i z wbudowanej puli).
+
+Gust to jednak tylko **wskazówka, nie reguła**. Jeśli polubisz np. trzy dania z
+kurczakiem, aplikacja **nie będzie proponować samego kurczaka**:
+
+- **AI** dostaje wyraźną prośbę o różnorodność — najlepiej każda z propozycji z
+  innym głównym składnikiem i przynajmniej jedna zupełnie nowa, inna niż zwykle.
+- **Offline** `VariedMealPicker` bierze najwyżej **jedną** propozycję „pod gust",
+  a pozostałe dobiera losowo — więc dania pasujące do Twoich upodobań się
+  pojawiają, ale obok nich zawsze jest coś innego.
 
 ## Jak uruchomić w Android Studio
 

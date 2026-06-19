@@ -40,6 +40,7 @@ import com.mealspire.app.domain.RecipeTextParser;
 import com.mealspire.app.domain.TasteProfile;
 import com.mealspire.app.domain.TasteProfiler;
 import com.mealspire.app.domain.UserPreferences;
+import com.mealspire.app.domain.VariedMealPicker;
 import com.mealspire.app.net.HttpClaudeClient;
 import com.mealspire.app.net.HttpPageFetcher;
 import com.mealspire.app.storage.SharedPreferencesAppSettings;
@@ -125,6 +126,7 @@ public class MainActivity extends Activity {
     private final MealPoolBuilder mealPoolBuilder = new MealPoolBuilder();
     private final IngredientExtractor ingredientExtractor = new IngredientExtractor();
     private final TasteProfiler tasteProfiler = new TasteProfiler();
+    private final VariedMealPicker variedMealPicker = new VariedMealPicker();
     private final ApiKeyCipher apiKeyCipher = new ApiKeyCipher();
 
     private int currentMealIndex = -1;
@@ -295,22 +297,15 @@ public class MainActivity extends Activity {
 
     private void generateOfflineProposals() {
         List<Recipe> pool = mealPoolBuilder.build(RECIPES[currentMealIndex], cookbook, preferences);
-        // Shuffle for variety, then float dishes that share something with what the
-        // user likes to the top — so suggestions generalise beyond exact likes.
+        // Shuffle for variety, then let the picker take at most one taste-led pick
+        // and keep the rest varied — so liking three chicken dishes does not turn
+        // every suggestion into chicken.
         Collections.shuffle(pool, random);
-        final TasteProfile profile = buildTasteProfile();
-        if (!profile.isEmpty()) {
-            pool.sort((a, b) -> Integer.compare(
-                    profile.score(b.getTitle() + "\n" + b.getDetails()),
-                    profile.score(a.getTitle() + "\n" + a.getDetails())));
-        }
+        List<Recipe> chosen = variedMealPicker.pick(pool, buildTasteProfile(), PROPOSAL_COUNT);
 
         List<DishProposal> newProposals = new ArrayList<>();
         List<Recipe> newRecipes = new ArrayList<>();
-        for (Recipe recipe : pool) {
-            if (newProposals.size() >= PROPOSAL_COUNT) {
-                break;
-            }
+        for (Recipe recipe : chosen) {
             newProposals.add(proposalFromRecipe(recipe));
             newRecipes.add(recipe);
         }

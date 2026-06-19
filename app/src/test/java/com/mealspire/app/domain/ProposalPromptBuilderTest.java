@@ -63,6 +63,30 @@ public class ProposalPromptBuilderTest {
     }
 
     @Test
+    public void systemPromptDemandsVarietyNotOneIngredient() {
+        String system = builder.systemPrompt().toLowerCase();
+        assertTrue(system.contains("różnorodn"));
+        assertTrue(system.contains("nie proponuj"));
+    }
+
+    @Test
+    public void manyProposalsPromptAsksForVariety() {
+        RecipeRequest request = new RecipeRequest("Obiad", UserPreferences.empty(),
+                Collections.<String>emptyList(), Collections.<String>emptyList());
+        assertTrue(builder.userPrompt(request, 3).toLowerCase().contains("różnorodn"));
+    }
+
+    @Test
+    public void affinitiesAreFramedAsAHintNotAMandate() {
+        RecipeRequest request = new RecipeRequest("Obiad", UserPreferences.empty(),
+                Collections.<String>emptyList(), Collections.<String>emptyList(),
+                Collections.<String>emptyList(), Arrays.asList("kurczak"));
+        String user = builder.userPrompt(request).toLowerCase();
+        assertTrue(user.contains("różnorodn"));
+        assertTrue(user.contains("nie proponuj samych"));
+    }
+
+    @Test
     public void userPromptIncludesChoiceFragmentsAndRecentDishes() {
         RecipeRequest request = new RecipeRequest("Kolacja", UserPreferences.empty(),
                 Arrays.asList("Pierogi"), Arrays.asList("dla 4 osób, coś szybkiego"));
