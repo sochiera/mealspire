@@ -2,8 +2,11 @@ package com.mealspire.app;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -26,8 +29,9 @@ import com.mealspire.app.domain.DataManager;
 import com.mealspire.app.domain.DishProposal;
 import com.mealspire.app.domain.KnownDishImporter;
 import com.mealspire.app.domain.KnownDishPromptBuilder;
+import com.mealspire.app.domain.BuiltInRecipes;
 import com.mealspire.app.domain.IngredientExtractor;
-import com.mealspire.app.domain.MealPoolBuilder;
+import com.mealspire.app.domain.OfflineProposalGenerator;
 import com.mealspire.app.domain.PortionSize;
 import com.mealspire.app.domain.MealHistory;
 import com.mealspire.app.domain.MealHistoryStore;
@@ -37,24 +41,24 @@ import com.mealspire.app.domain.RecipePromptBuilder;
 import com.mealspire.app.domain.RecipeRequest;
 import com.mealspire.app.domain.RecipeService;
 import com.mealspire.app.domain.RecipeTextParser;
+import com.mealspire.app.domain.SecretStore;
 import com.mealspire.app.domain.TasteProfile;
 import com.mealspire.app.domain.TasteProfiler;
 import com.mealspire.app.domain.UserPreferences;
-import com.mealspire.app.domain.VariedMealPicker;
 import com.mealspire.app.net.HttpClaudeClient;
 import com.mealspire.app.net.HttpPageFetcher;
+import com.mealspire.app.notify.MealNotifications;
+import com.mealspire.app.notify.MealReminderScheduler;
 import com.mealspire.app.storage.SharedPreferencesAppSettings;
 import com.mealspire.app.storage.SharedPreferencesCookbookStore;
 import com.mealspire.app.storage.SharedPreferencesMealHistoryStore;
 import com.mealspire.app.storage.SharedPreferencesPreferenceStore;
+import com.mealspire.app.storage.SharedPreferencesSecretStore;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 
 /**
@@ -70,41 +74,9 @@ public class MainActivity extends Activity {
     private static final int PROPOSAL_COUNT = 3;
     private static final int MAX_SERVINGS = 12;
 
-    private static final Recipe[][] RECIPES = {
-            {
-                    new Recipe("Owsianka z jabłkiem",
-                            "Składniki: płatki owsiane, mleko, jabłko, cynamon, orzechy.\n\n" +
-                                    "Gotuj płatki w mleku przez kilka minut. Dodaj starte jabłko, cynamon i orzechy."),
-                    new Recipe("Jajecznica ze szczypiorkiem",
-                            "Składniki: jajka, masło, szczypiorek, sól, pieprz.\n\n" +
-                                    "Rozpuść masło, wlej roztrzepane jajka i mieszaj do ścięcia. Posyp szczypiorkiem."),
-                    new Recipe("Tost z awokado",
-                            "Składniki: pieczywo, awokado, sok z cytryny, sól, płatki chili.\n\n" +
-                                    "Podpiecz pieczywo. Rozgnieć awokado z cytryną i przyprawami, rozsmaruj na toście.")
-            },
-            {
-                    new Recipe("Makaron z pomidorami",
-                            "Składniki: makaron, passata, czosnek, oliwa, bazylia.\n\n" +
-                                    "Ugotuj makaron. Podsmaż czosnek na oliwie, dodaj passatę i bazylię, połącz z makaronem."),
-                    new Recipe("Ryż z warzywami",
-                            "Składniki: ryż, marchew, papryka, groszek, sos sojowy.\n\n" +
-                                    "Ugotuj ryż. Podsmaż warzywa, dopraw sosem sojowym i wymieszaj z ryżem."),
-                    new Recipe("Kurczak z kaszą",
-                            "Składniki: pierś z kurczaka, kasza, ogórek, jogurt, koperek.\n\n" +
-                                    "Usmaż lub upiecz kurczaka. Podaj z kaszą i szybkim sosem jogurtowo-koperkowym.")
-            },
-            {
-                    new Recipe("Sałatka grecka",
-                            "Składniki: pomidor, ogórek, feta, oliwki, oliwa, oregano.\n\n" +
-                                    "Pokrój warzywa i fetę. Dodaj oliwki, oliwę oraz oregano, delikatnie wymieszaj."),
-                    new Recipe("Kanapki z twarożkiem",
-                            "Składniki: pieczywo, twaróg, jogurt, rzodkiewka, szczypiorek.\n\n" +
-                                    "Wymieszaj twaróg z jogurtem i warzywami. Nałóż na pieczywo."),
-                    new Recipe("Omlet warzywny",
-                            "Składniki: jajka, papryka, cebula, szpinak, ser.\n\n" +
-                                    "Podsmaż warzywa, zalej jajkami i smaż na małym ogniu. Na koniec dodaj ser.")
-            }
-    };
+    /** Intent extra: which meal to open (0=breakfast, 1=lunch, 2=dinner). */
+    public static final String EXTRA_MEAL_INDEX = "meal_index";
+    private static final int REQ_POST_NOTIFICATIONS = 1001;
 
     private final Random random = new Random();
     private TextView servingsLabel;
@@ -123,10 +95,10 @@ public class MainActivity extends Activity {
     private KnownDishImporter dishImporter;
     private DataManager dataManager;
     private AppSettings appSettings;
-    private final MealPoolBuilder mealPoolBuilder = new MealPoolBuilder();
+    private SecretStore secretStore;
+    private final OfflineProposalGenerator offlineProposalGenerator = new OfflineProposalGenerator();
     private final IngredientExtractor ingredientExtractor = new IngredientExtractor();
     private final TasteProfiler tasteProfiler = new TasteProfiler();
-    private final VariedMealPicker variedMealPicker = new VariedMealPicker();
     private final ApiKeyCipher apiKeyCipher = new ApiKeyCipher();
 
     private int currentMealIndex = -1;
@@ -149,6 +121,7 @@ public class MainActivity extends Activity {
         cookbook = cookbookStore.load();
         dataManager = new DataManager(preferenceStore, historyStore, cookbookStore);
         appSettings = new SharedPreferencesAppSettings(this);
+        secretStore = new SharedPreferencesSecretStore(this);
 
         ScrollView scrollView = new ScrollView(this);
         scrollView.setBackgroundColor(Color.rgb(255, 247, 237));
@@ -215,8 +188,50 @@ public class MainActivity extends Activity {
         showHint("Wybierz porę dnia, a podsunę kilka prostych pomysłów.");
         maybeAskServings();
 
-        if (!claudeClient.hasApiKey() && !encryptedApiKey().isEmpty()) {
-            promptForApiKeyPassword(false);
+        // Key sources, in order: build-time key, a key remembered from a previous
+        // unlock (so the password is asked only once), then the encrypted-in-repo
+        // key which still needs the password.
+        if (!claudeClient.hasApiKey()) {
+            if (secretStore.hasApiKey()) {
+                buildClaudeClients(secretStore.loadApiKey());
+            } else if (!encryptedApiKey().isEmpty()) {
+                promptForApiKeyPassword(false);
+            }
+        }
+
+        // Daily meal reminders (8/12/18). Scheduling is idempotent.
+        MealNotifications.ensureChannel(this);
+        new MealReminderScheduler().scheduleAll(this);
+        maybeRequestNotificationPermission();
+        handleMealIntent(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleMealIntent(intent);
+    }
+
+    /** Opens the meal carried by a tapped reminder notification, if any. */
+    private void handleMealIntent(Intent intent) {
+        if (intent == null) {
+            return;
+        }
+        int mealIndex = intent.getIntExtra(EXTRA_MEAL_INDEX, -1);
+        if (mealIndex >= 0 && mealIndex < MEAL_TYPES.length) {
+            selectMeal(mealIndex);
+        }
+    }
+
+    /** On Android 13+ notifications need a runtime permission; ask once. */
+    private void maybeRequestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(
+                    new String[]{android.Manifest.permission.POST_NOTIFICATIONS},
+                    REQ_POST_NOTIFICATIONS);
         }
     }
 
@@ -260,6 +275,8 @@ public class MainActivity extends Activity {
                 final String key = apiKeyCipher.decrypt(blob, password);
                 runOnUiThread(() -> {
                     buildClaudeClients(key);
+                    // Remember the unlocked key so the password is asked only once.
+                    secretStore.saveApiKey(key);
                     Toast.makeText(this, "Odblokowano AI — możesz generować dania.",
                             Toast.LENGTH_SHORT).show();
                 });
@@ -296,12 +313,12 @@ public class MainActivity extends Activity {
     }
 
     private void generateOfflineProposals() {
-        List<Recipe> pool = mealPoolBuilder.build(RECIPES[currentMealIndex], cookbook, preferences);
-        // Shuffle for variety, then let the picker take at most one taste-led pick
-        // and keep the rest varied — so liking three chicken dishes does not turn
-        // every suggestion into chicken.
-        Collections.shuffle(pool, random);
-        List<Recipe> chosen = variedMealPicker.pick(pool, buildTasteProfile(), PROPOSAL_COUNT);
+        // Shared offline pipeline: pool -> shuffle -> at most one taste-led pick,
+        // the rest kept varied (so liking three chicken dishes does not turn every
+        // suggestion into chicken).
+        List<Recipe> chosen = offlineProposalGenerator.generate(
+                BuiltInRecipes.forMeal(currentMealIndex), cookbook, preferences,
+                buildTasteProfile(), PROPOSAL_COUNT, random);
 
         List<DishProposal> newProposals = new ArrayList<>();
         List<Recipe> newRecipes = new ArrayList<>();
@@ -314,16 +331,8 @@ public class MainActivity extends Activity {
 
     /** Distils the user's likes into recurring "taste" terms (with known recipe details). */
     private TasteProfile buildTasteProfile() {
-        Map<String, String> detailsByTitle = new HashMap<>();
-        for (Recipe[] meal : RECIPES) {
-            for (Recipe recipe : meal) {
-                detailsByTitle.put(recipe.getTitle(), recipe.getDetails());
-            }
-        }
-        for (CookbookEntry entry : cookbook.getEntries()) {
-            detailsByTitle.put(entry.getTitle(), entry.getRecipe());
-        }
-        return tasteProfiler.build(preferences.getLikes(), detailsByTitle);
+        return tasteProfiler.build(preferences.getLikes(),
+                BuiltInRecipes.detailsByTitle(cookbook));
     }
 
     private DishProposal proposalFromRecipe(Recipe recipe) {
@@ -674,39 +683,51 @@ public class MainActivity extends Activity {
     }
 
     private void showManageDialog() {
-        final String[] options = {
-                "Pokaż i usuń dania z bazy",
-                "Wyczyść polubione dania",
-                "Wyczyść historię podpowiedzi",
-                "Wyczyść całą bazę dań"
-        };
+        final List<String> labels = new ArrayList<>();
+        final List<Runnable> actions = new ArrayList<>();
+
+        labels.add("Pokaż i usuń dania z bazy");
+        actions.add(this::showCookbookDialog);
+        labels.add("Wyczyść polubione dania");
+        actions.add(() -> {
+            dataManager.clearPreferences();
+            preferences = UserPreferences.empty();
+            toast("Wyczyszczono polubione dania.");
+        });
+        labels.add("Wyczyść historię podpowiedzi");
+        actions.add(() -> {
+            dataManager.clearHistory();
+            history = MealHistory.empty();
+            toast("Wyczyszczono historię.");
+        });
+        labels.add("Wyczyść całą bazę dań");
+        actions.add(() -> {
+            dataManager.clearCookbook();
+            cookbook = Cookbook.empty();
+            toast("Wyczyszczono bazę dań.");
+        });
+        // Only offer "forget" when AI was unlocked with the password (not when the
+        // key is baked in at build time, which clearing here would not undo).
+        if (secretStore.hasApiKey() && BuildConfig.ANTHROPIC_API_KEY.isEmpty()) {
+            labels.add("Zablokuj AI (zapomnij hasło)");
+            actions.add(this::forgetApiKey);
+        }
+
         new AlertDialog.Builder(this)
                 .setTitle("Moje dane")
-                .setItems(options, (dialog, which) -> {
-                    switch (which) {
-                        case 0:
-                            showCookbookDialog();
-                            break;
-                        case 1:
-                            dataManager.clearPreferences();
-                            preferences = UserPreferences.empty();
-                            toast("Wyczyszczono polubione dania.");
-                            break;
-                        case 2:
-                            dataManager.clearHistory();
-                            history = MealHistory.empty();
-                            toast("Wyczyszczono historię.");
-                            break;
-                        case 3:
-                            dataManager.clearCookbook();
-                            cookbook = Cookbook.empty();
-                            toast("Wyczyszczono bazę dań.");
-                            break;
-                        default:
-                            break;
-                    }
-                })
+                .setItems(labels.toArray(new String[0]),
+                        (dialog, which) -> actions.get(which).run())
                 .show();
+    }
+
+    private void forgetApiKey() {
+        secretStore.clear();
+        buildClaudeClients(BuildConfig.ANTHROPIC_API_KEY);
+        // Refresh the open recipe so the AI-only "Zmień przepis" button disappears.
+        if (currentRecipe != null) {
+            showFullRecipe(currentRecipe);
+        }
+        toast("Zablokowano AI — aplikacja działa offline. Hasło przy następnym starcie.");
     }
 
     private void showCookbookDialog() {
