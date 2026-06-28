@@ -200,3 +200,10 @@ Po zakończeniu Android Studio pokaże link `locate`. APK będzie zwykle tutaj:
 `app/build/outputs/apk/debug/app-debug.apk`
 
 Taki plik można skopiować na telefon i otworzyć, ale telefon może poprosić o zgodę na instalację aplikacji spoza sklepu.
+
+## Licencja
+
+Projekt jest udostępniony na licencji **PolyForm Noncommercial License 1.0.0** —
+możesz go używać, modyfikować i rozpowszechniać **za darmo do celów
+niekomercyjnych**. Użycie komercyjne wymaga osobnej zgody autora. Pełny tekst
+znajdziesz w pliku [`LICENSE.md`](LICENSE.md).
