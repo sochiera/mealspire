@@ -27,6 +27,19 @@ Gdy skonfigurowany jest klucz API, propozycje i przepisy tworzy model Claude
 z wbudowanej puli i z Twojej bazy. Dania są celowo proste, do zrobienia z tego,
 co zwykle jest w kuchni.
 
+## Codzienne powiadomienia z propozycjami (8 / 12 / 18)
+
+Aplikacja sama przypomina o posiłkach: **codziennie o 8:00, 12:00 i 18:00**
+wysyła powiadomienie z kilkoma propozycjami odpowiednio na **śniadanie**,
+**obiad** i **kolację**. Dotknięcie powiadomienia otwiera aplikację od razu na tej
+porze dnia, z gotowymi pomysłami.
+
+Propozycje w powiadomieniach powstają **offline** (z wbudowanej puli i Twojej
+bazy, z uwzględnieniem polubień), więc działają zawsze — także bez internetu i bez
+klucza API. Przypomnienia korzystają z `AlarmManager` (lekko, bez dodatkowych
+bibliotek) i przeżywają restart telefonu. Na Androidzie 13+ aplikacja poprosi raz
+o zgodę na powiadomienia; bez zgody reszta działa normalnie, tylko bez przypomnień.
+
 ## Aplikacja uczy się Twojej kuchni (tylko pozytywnie)
 
 Aplikacja **zapamiętuje wyłącznie to, co lubisz** — dotknięcie „Lubię to” dodaje
@@ -50,6 +63,16 @@ nie odblokuje klucza (chroni go znacznik uwierzytelniający GCM).
 
 > To celowo umiarkowane zabezpieczenie: kto ma aplikację **i** hasło, odzyska klucz.
 > Chodzi tylko o to, by klucz nie leżał w repo otwartym tekstem.
+
+#### Hasło pytane tylko raz
+
+Po **pierwszym** poprawnym podaniu hasła odblokowany klucz jest zapamiętywany w
+prywatnych preferencjach aplikacji, więc kolejne uruchomienia od razu mają dostęp
+do AI — **bez ponownego pytania o hasło**. Zapamiętany klucz żyje w prywatnym
+magazynie aplikacji (ten sam, umiarkowany model zagrożeń co wyżej — nie jest
+dodatkowo szyfrowany na urządzeniu). Możesz w każdej chwili go usunąć i wrócić do
+trybu offline: **„Więcej…” → „Zarządzaj moimi danymi” → „Zablokuj AI (zapomnij
+hasło)”**; przy następnym starcie aplikacja znów zapyta o hasło.
 
 Możesz wygenerować nowy zaszyfrowany klucz tą samą metodą, której używa aplikacja
 (`com.mealspire.app.domain.ApiKeyCipher#encrypt(klucz, hasło)`), i podmienić wartość
