@@ -26,8 +26,9 @@ import com.mealspire.app.domain.DataManager;
 import com.mealspire.app.domain.DishProposal;
 import com.mealspire.app.domain.KnownDishImporter;
 import com.mealspire.app.domain.KnownDishPromptBuilder;
+import com.mealspire.app.domain.BuiltInRecipes;
 import com.mealspire.app.domain.IngredientExtractor;
-import com.mealspire.app.domain.MealPoolBuilder;
+import com.mealspire.app.domain.OfflineProposalGenerator;
 import com.mealspire.app.domain.PortionSize;
 import com.mealspire.app.domain.MealHistory;
 import com.mealspire.app.domain.MealHistoryStore;
@@ -41,7 +42,6 @@ import com.mealspire.app.domain.SecretStore;
 import com.mealspire.app.domain.TasteProfile;
 import com.mealspire.app.domain.TasteProfiler;
 import com.mealspire.app.domain.UserPreferences;
-import com.mealspire.app.domain.VariedMealPicker;
 import com.mealspire.app.net.HttpClaudeClient;
 import com.mealspire.app.net.HttpPageFetcher;
 import com.mealspire.app.storage.SharedPreferencesAppSettings;
@@ -53,10 +53,7 @@ import com.mealspire.app.storage.SharedPreferencesSecretStore;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 
 /**
@@ -71,42 +68,6 @@ public class MainActivity extends Activity {
     private static final String[] MEAL_TYPES = {"Śniadanie", "Obiad", "Kolacja"};
     private static final int PROPOSAL_COUNT = 3;
     private static final int MAX_SERVINGS = 12;
-
-    private static final Recipe[][] RECIPES = {
-            {
-                    new Recipe("Owsianka z jabłkiem",
-                            "Składniki: płatki owsiane, mleko, jabłko, cynamon, orzechy.\n\n" +
-                                    "Gotuj płatki w mleku przez kilka minut. Dodaj starte jabłko, cynamon i orzechy."),
-                    new Recipe("Jajecznica ze szczypiorkiem",
-                            "Składniki: jajka, masło, szczypiorek, sól, pieprz.\n\n" +
-                                    "Rozpuść masło, wlej roztrzepane jajka i mieszaj do ścięcia. Posyp szczypiorkiem."),
-                    new Recipe("Tost z awokado",
-                            "Składniki: pieczywo, awokado, sok z cytryny, sól, płatki chili.\n\n" +
-                                    "Podpiecz pieczywo. Rozgnieć awokado z cytryną i przyprawami, rozsmaruj na toście.")
-            },
-            {
-                    new Recipe("Makaron z pomidorami",
-                            "Składniki: makaron, passata, czosnek, oliwa, bazylia.\n\n" +
-                                    "Ugotuj makaron. Podsmaż czosnek na oliwie, dodaj passatę i bazylię, połącz z makaronem."),
-                    new Recipe("Ryż z warzywami",
-                            "Składniki: ryż, marchew, papryka, groszek, sos sojowy.\n\n" +
-                                    "Ugotuj ryż. Podsmaż warzywa, dopraw sosem sojowym i wymieszaj z ryżem."),
-                    new Recipe("Kurczak z kaszą",
-                            "Składniki: pierś z kurczaka, kasza, ogórek, jogurt, koperek.\n\n" +
-                                    "Usmaż lub upiecz kurczaka. Podaj z kaszą i szybkim sosem jogurtowo-koperkowym.")
-            },
-            {
-                    new Recipe("Sałatka grecka",
-                            "Składniki: pomidor, ogórek, feta, oliwki, oliwa, oregano.\n\n" +
-                                    "Pokrój warzywa i fetę. Dodaj oliwki, oliwę oraz oregano, delikatnie wymieszaj."),
-                    new Recipe("Kanapki z twarożkiem",
-                            "Składniki: pieczywo, twaróg, jogurt, rzodkiewka, szczypiorek.\n\n" +
-                                    "Wymieszaj twaróg z jogurtem i warzywami. Nałóż na pieczywo."),
-                    new Recipe("Omlet warzywny",
-                            "Składniki: jajka, papryka, cebula, szpinak, ser.\n\n" +
-                                    "Podsmaż warzywa, zalej jajkami i smaż na małym ogniu. Na koniec dodaj ser.")
-            }
-    };
 
     private final Random random = new Random();
     private TextView servingsLabel;
@@ -126,10 +87,9 @@ public class MainActivity extends Activity {
     private DataManager dataManager;
     private AppSettings appSettings;
     private SecretStore secretStore;
-    private final MealPoolBuilder mealPoolBuilder = new MealPoolBuilder();
+    private final OfflineProposalGenerator offlineProposalGenerator = new OfflineProposalGenerator();
     private final IngredientExtractor ingredientExtractor = new IngredientExtractor();
     private final TasteProfiler tasteProfiler = new TasteProfiler();
-    private final VariedMealPicker variedMealPicker = new VariedMealPicker();
     private final ApiKeyCipher apiKeyCipher = new ApiKeyCipher();
 
     private int currentMealIndex = -1;
@@ -309,12 +269,12 @@ public class MainActivity extends Activity {
     }
 
     private void generateOfflineProposals() {
-        List<Recipe> pool = mealPoolBuilder.build(RECIPES[currentMealIndex], cookbook, preferences);
-        // Shuffle for variety, then let the picker take at most one taste-led pick
-        // and keep the rest varied — so liking three chicken dishes does not turn
-        // every suggestion into chicken.
-        Collections.shuffle(pool, random);
-        List<Recipe> chosen = variedMealPicker.pick(pool, buildTasteProfile(), PROPOSAL_COUNT);
+        // Shared offline pipeline: pool -> shuffle -> at most one taste-led pick,
+        // the rest kept varied (so liking three chicken dishes does not turn every
+        // suggestion into chicken).
+        List<Recipe> chosen = offlineProposalGenerator.generate(
+                BuiltInRecipes.forMeal(currentMealIndex), cookbook, preferences,
+                buildTasteProfile(), PROPOSAL_COUNT, random);
 
         List<DishProposal> newProposals = new ArrayList<>();
         List<Recipe> newRecipes = new ArrayList<>();
@@ -327,16 +287,8 @@ public class MainActivity extends Activity {
 
     /** Distils the user's likes into recurring "taste" terms (with known recipe details). */
     private TasteProfile buildTasteProfile() {
-        Map<String, String> detailsByTitle = new HashMap<>();
-        for (Recipe[] meal : RECIPES) {
-            for (Recipe recipe : meal) {
-                detailsByTitle.put(recipe.getTitle(), recipe.getDetails());
-            }
-        }
-        for (CookbookEntry entry : cookbook.getEntries()) {
-            detailsByTitle.put(entry.getTitle(), entry.getRecipe());
-        }
-        return tasteProfiler.build(preferences.getLikes(), detailsByTitle);
+        return tasteProfiler.build(preferences.getLikes(),
+                BuiltInRecipes.detailsByTitle(cookbook));
     }
 
     private DishProposal proposalFromRecipe(Recipe recipe) {
