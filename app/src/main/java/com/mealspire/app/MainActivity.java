@@ -2,8 +2,11 @@ package com.mealspire.app;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -44,6 +47,8 @@ import com.mealspire.app.domain.TasteProfiler;
 import com.mealspire.app.domain.UserPreferences;
 import com.mealspire.app.net.HttpClaudeClient;
 import com.mealspire.app.net.HttpPageFetcher;
+import com.mealspire.app.notify.MealNotifications;
+import com.mealspire.app.notify.MealReminderScheduler;
 import com.mealspire.app.storage.SharedPreferencesAppSettings;
 import com.mealspire.app.storage.SharedPreferencesCookbookStore;
 import com.mealspire.app.storage.SharedPreferencesMealHistoryStore;
@@ -68,6 +73,10 @@ public class MainActivity extends Activity {
     private static final String[] MEAL_TYPES = {"Śniadanie", "Obiad", "Kolacja"};
     private static final int PROPOSAL_COUNT = 3;
     private static final int MAX_SERVINGS = 12;
+
+    /** Intent extra: which meal to open (0=breakfast, 1=lunch, 2=dinner). */
+    public static final String EXTRA_MEAL_INDEX = "meal_index";
+    private static final int REQ_POST_NOTIFICATIONS = 1001;
 
     private final Random random = new Random();
     private TextView servingsLabel;
@@ -188,6 +197,41 @@ public class MainActivity extends Activity {
             } else if (!encryptedApiKey().isEmpty()) {
                 promptForApiKeyPassword(false);
             }
+        }
+
+        // Daily meal reminders (8/12/18). Scheduling is idempotent.
+        MealNotifications.ensureChannel(this);
+        new MealReminderScheduler().scheduleAll(this);
+        maybeRequestNotificationPermission();
+        handleMealIntent(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleMealIntent(intent);
+    }
+
+    /** Opens the meal carried by a tapped reminder notification, if any. */
+    private void handleMealIntent(Intent intent) {
+        if (intent == null) {
+            return;
+        }
+        int mealIndex = intent.getIntExtra(EXTRA_MEAL_INDEX, -1);
+        if (mealIndex >= 0 && mealIndex < MEAL_TYPES.length) {
+            selectMeal(mealIndex);
+        }
+    }
+
+    /** On Android 13+ notifications need a runtime permission; ask once. */
+    private void maybeRequestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(
+                    new String[]{android.Manifest.permission.POST_NOTIFICATIONS},
+                    REQ_POST_NOTIFICATIONS);
         }
     }
 
