@@ -37,6 +37,7 @@ import com.mealspire.app.domain.RecipePromptBuilder;
 import com.mealspire.app.domain.RecipeRequest;
 import com.mealspire.app.domain.RecipeService;
 import com.mealspire.app.domain.RecipeTextParser;
+import com.mealspire.app.domain.SecretStore;
 import com.mealspire.app.domain.TasteProfile;
 import com.mealspire.app.domain.TasteProfiler;
 import com.mealspire.app.domain.UserPreferences;
@@ -47,6 +48,7 @@ import com.mealspire.app.storage.SharedPreferencesAppSettings;
 import com.mealspire.app.storage.SharedPreferencesCookbookStore;
 import com.mealspire.app.storage.SharedPreferencesMealHistoryStore;
 import com.mealspire.app.storage.SharedPreferencesPreferenceStore;
+import com.mealspire.app.storage.SharedPreferencesSecretStore;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
@@ -123,6 +125,7 @@ public class MainActivity extends Activity {
     private KnownDishImporter dishImporter;
     private DataManager dataManager;
     private AppSettings appSettings;
+    private SecretStore secretStore;
     private final MealPoolBuilder mealPoolBuilder = new MealPoolBuilder();
     private final IngredientExtractor ingredientExtractor = new IngredientExtractor();
     private final TasteProfiler tasteProfiler = new TasteProfiler();
@@ -149,6 +152,7 @@ public class MainActivity extends Activity {
         cookbook = cookbookStore.load();
         dataManager = new DataManager(preferenceStore, historyStore, cookbookStore);
         appSettings = new SharedPreferencesAppSettings(this);
+        secretStore = new SharedPreferencesSecretStore(this);
 
         ScrollView scrollView = new ScrollView(this);
         scrollView.setBackgroundColor(Color.rgb(255, 247, 237));
@@ -215,8 +219,15 @@ public class MainActivity extends Activity {
         showHint("Wybierz porę dnia, a podsunę kilka prostych pomysłów.");
         maybeAskServings();
 
-        if (!claudeClient.hasApiKey() && !encryptedApiKey().isEmpty()) {
-            promptForApiKeyPassword(false);
+        // Key sources, in order: build-time key, a key remembered from a previous
+        // unlock (so the password is asked only once), then the encrypted-in-repo
+        // key which still needs the password.
+        if (!claudeClient.hasApiKey()) {
+            if (secretStore.hasApiKey()) {
+                buildClaudeClients(secretStore.loadApiKey());
+            } else if (!encryptedApiKey().isEmpty()) {
+                promptForApiKeyPassword(false);
+            }
         }
     }
 
@@ -260,6 +271,8 @@ public class MainActivity extends Activity {
                 final String key = apiKeyCipher.decrypt(blob, password);
                 runOnUiThread(() -> {
                     buildClaudeClients(key);
+                    // Remember the unlocked key so the password is asked only once.
+                    secretStore.saveApiKey(key);
                     Toast.makeText(this, "Odblokowano AI — możesz generować dania.",
                             Toast.LENGTH_SHORT).show();
                 });
@@ -674,39 +687,51 @@ public class MainActivity extends Activity {
     }
 
     private void showManageDialog() {
-        final String[] options = {
-                "Pokaż i usuń dania z bazy",
-                "Wyczyść polubione dania",
-                "Wyczyść historię podpowiedzi",
-                "Wyczyść całą bazę dań"
-        };
+        final List<String> labels = new ArrayList<>();
+        final List<Runnable> actions = new ArrayList<>();
+
+        labels.add("Pokaż i usuń dania z bazy");
+        actions.add(this::showCookbookDialog);
+        labels.add("Wyczyść polubione dania");
+        actions.add(() -> {
+            dataManager.clearPreferences();
+            preferences = UserPreferences.empty();
+            toast("Wyczyszczono polubione dania.");
+        });
+        labels.add("Wyczyść historię podpowiedzi");
+        actions.add(() -> {
+            dataManager.clearHistory();
+            history = MealHistory.empty();
+            toast("Wyczyszczono historię.");
+        });
+        labels.add("Wyczyść całą bazę dań");
+        actions.add(() -> {
+            dataManager.clearCookbook();
+            cookbook = Cookbook.empty();
+            toast("Wyczyszczono bazę dań.");
+        });
+        // Only offer "forget" when AI was unlocked with the password (not when the
+        // key is baked in at build time, which clearing here would not undo).
+        if (secretStore.hasApiKey() && BuildConfig.ANTHROPIC_API_KEY.isEmpty()) {
+            labels.add("Zablokuj AI (zapomnij hasło)");
+            actions.add(this::forgetApiKey);
+        }
+
         new AlertDialog.Builder(this)
                 .setTitle("Moje dane")
-                .setItems(options, (dialog, which) -> {
-                    switch (which) {
-                        case 0:
-                            showCookbookDialog();
-                            break;
-                        case 1:
-                            dataManager.clearPreferences();
-                            preferences = UserPreferences.empty();
-                            toast("Wyczyszczono polubione dania.");
-                            break;
-                        case 2:
-                            dataManager.clearHistory();
-                            history = MealHistory.empty();
-                            toast("Wyczyszczono historię.");
-                            break;
-                        case 3:
-                            dataManager.clearCookbook();
-                            cookbook = Cookbook.empty();
-                            toast("Wyczyszczono bazę dań.");
-                            break;
-                        default:
-                            break;
-                    }
-                })
+                .setItems(labels.toArray(new String[0]),
+                        (dialog, which) -> actions.get(which).run())
                 .show();
+    }
+
+    private void forgetApiKey() {
+        secretStore.clear();
+        buildClaudeClients(BuildConfig.ANTHROPIC_API_KEY);
+        // Refresh the open recipe so the AI-only "Zmień przepis" button disappears.
+        if (currentRecipe != null) {
+            showFullRecipe(currentRecipe);
+        }
+        toast("Zablokowano AI — aplikacja działa offline. Hasło przy następnym starcie.");
     }
 
     private void showCookbookDialog() {
