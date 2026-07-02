@@ -109,6 +109,10 @@ public class MainActivity extends Activity {
     private List<Recipe> proposalRecipes = new ArrayList<>();
     // The full recipe currently open, or null while the proposal list is shown.
     private Recipe currentRecipe;
+    // Bumped whenever the user changes what the content area shows, so an async
+    // answer that comes back late (recipe fetch, proposals, modification) cannot
+    // stomp whatever the user is looking at now.
+    private int contentEpoch;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -222,6 +226,9 @@ public class MainActivity extends Activity {
         }
         int mealIndex = intent.getIntExtra(EXTRA_MEAL_INDEX, -1);
         if (mealIndex >= 0 && mealIndex < MEAL_TYPES.length) {
+            // Consume the extra so a later re-delivery of the same intent (e.g.
+            // activity recreation) doesn't force the meal selection again.
+            intent.removeExtra(EXTRA_MEAL_INDEX);
             selectMeal(mealIndex);
         }
     }
@@ -279,6 +286,10 @@ public class MainActivity extends Activity {
                     buildClaudeClients(key);
                     // Remember the unlocked key so the password is asked only once.
                     secretStore.saveApiKey(key);
+                    // Refresh the open recipe so the AI-only "Zmień przepis" button appears.
+                    if (currentRecipe != null) {
+                        showFullRecipe(currentRecipe);
+                    }
                     Toast.makeText(this, "Odblokowano AI — możesz generować dania.",
                             Toast.LENGTH_SHORT).show();
                 });
@@ -312,6 +323,7 @@ public class MainActivity extends Activity {
         if (currentMealIndex < 0) {
             return;
         }
+        contentEpoch++;
         if (claudeClient.hasApiKey() && personalizationReadiness.isReady(preferences)) {
             generateAiProposals();
         } else {
@@ -353,6 +365,7 @@ public class MainActivity extends Activity {
 
     private void generateAiProposals() {
         final RecipeRequest request = buildRequest();
+        final int epoch = contentEpoch;
         setMealButtonsEnabled(false);
         showHint("Szukam pomysłów…");
         new Thread(() -> {
@@ -361,6 +374,9 @@ public class MainActivity extends Activity {
                         recipeService.proposeDishes(request, PROPOSAL_COUNT);
                 runOnUiThread(() -> {
                     setMealButtonsEnabled(true);
+                    if (epoch != contentEpoch) {
+                        return; // the user moved on; don't stomp the new content
+                    }
                     if (result.isEmpty()) {
                         showHint("Nie udało się wymyślić dań. Spróbuj ponownie.");
                         return;
@@ -375,6 +391,9 @@ public class MainActivity extends Activity {
                 final String message = e.getMessage();
                 runOnUiThread(() -> {
                     setMealButtonsEnabled(true);
+                    if (epoch != contentEpoch) {
+                        return;
+                    }
                     showHint(message != null ? message : "Spróbuj ponownie za chwilę.");
                 });
             }
@@ -494,15 +513,33 @@ public class MainActivity extends Activity {
         }
         final String dishName = proposals.get(index).getName();
         final RecipeRequest request = buildRequest();
+        final int requestedIndex = index;
+        contentEpoch++;
+        final int epoch = contentEpoch;
         showHint("Przygotowuję przepis…");
         new Thread(() -> {
             try {
                 final Recipe recipe = recipeService.generateRecipeFor(dishName, request);
-                runOnUiThread(() -> showFullRecipe(recipe));
+                runOnUiThread(() -> {
+                    // Cache the recipe so going back and reopening is instant.
+                    if (requestedIndex < proposalRecipes.size()) {
+                        proposalRecipes.set(requestedIndex, recipe);
+                    }
+                    if (epoch != contentEpoch) {
+                        return;
+                    }
+                    showFullRecipe(recipe);
+                });
             } catch (IOException e) {
                 final String message = e.getMessage();
                 runOnUiThread(() -> {
-                    showHint(message != null ? message
+                    if (epoch != contentEpoch) {
+                        return;
+                    }
+                    // Bring the proposals back so the user isn't stranded on an
+                    // error message with no way to retry.
+                    renderProposals();
+                    toast(message != null ? message
                             : "Nie udało się pobrać przepisu. Spróbuj ponownie.");
                 });
             }
@@ -558,6 +595,7 @@ public class MainActivity extends Activity {
         back.setTextSize(16);
         back.setOnClickListener(v -> {
             currentRecipe = null;
+            contentEpoch++;
             renderProposals();
         });
         contentContainer.addView(back, marginTop(12));
@@ -603,14 +641,24 @@ public class MainActivity extends Activity {
             return;
         }
         final Recipe base = currentRecipe;
+        contentEpoch++;
+        final int epoch = contentEpoch;
         showHint("Zmieniam przepis…");
         new Thread(() -> {
             try {
                 final Recipe revised = recipeService.modifyRecipe(base, instruction);
-                runOnUiThread(() -> showFullRecipe(revised));
+                runOnUiThread(() -> {
+                    if (epoch != contentEpoch) {
+                        return;
+                    }
+                    showFullRecipe(revised);
+                });
             } catch (IOException e) {
                 final String message = e.getMessage();
                 runOnUiThread(() -> {
+                    if (epoch != contentEpoch) {
+                        return;
+                    }
                     showFullRecipe(base);
                     Toast.makeText(MainActivity.this, message != null ? message
                             : "Nie udało się zmienić przepisu.", Toast.LENGTH_LONG).show();
@@ -668,23 +716,33 @@ public class MainActivity extends Activity {
             Toast.makeText(this, "Wklej link albo opisz danie.", Toast.LENGTH_SHORT).show();
             return;
         }
+        contentEpoch++;
+        final int epoch = contentEpoch;
         showHint("Dodaję do bazy…");
         new Thread(() -> {
             try {
                 final CookbookEntry entry = dishImporter.importDish(input);
                 runOnUiThread(() -> {
+                    // Always persist the imported dish, even if the view moved on.
                     cookbook = cookbook.add(entry);
                     cookbookStore.save(cookbook);
                     preferences = preferences.withLike(entry.getTitle());
                     preferenceStore.save(preferences);
-                    showFullRecipe(entry.toRecipe());
                     Toast.makeText(MainActivity.this,
                             "Dodano do bazy: " + entry.getTitle(), Toast.LENGTH_SHORT).show();
+                    if (epoch != contentEpoch) {
+                        return;
+                    }
+                    showFullRecipe(entry.toRecipe());
                 });
             } catch (IOException e) {
                 final String message = e.getMessage();
-                runOnUiThread(() ->
-                        showHint(message != null ? message : "Nie udało się dodać dania."));
+                runOnUiThread(() -> {
+                    if (epoch != contentEpoch) {
+                        return;
+                    }
+                    showHint(message != null ? message : "Nie udało się dodać dania.");
+                });
             }
         }).start();
     }

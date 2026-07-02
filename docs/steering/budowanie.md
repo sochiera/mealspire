@@ -1,0 +1,49 @@
+# Steering: budowanie, testy, wydania
+
+## Standardowy build
+
+```bash
+./gradlew test assembleDebug
+```
+
+- Gradle wrapper: 8.9, AGP 8.7.3, JDK 17, compileSdk 35.
+- Testy: ~220 testów JVM/Robolectric, wszystkie muszą przechodzić przed pushem.
+- APK wyjściowy: `app/build/outputs/apk/debug/app-debug.apk` (~80 KB — appka
+  nie ma zależności runtime poza platformą).
+
+## Zbudowana appka w repo
+
+W `dist/mealspire-debug.apk` trzymamy **aktualny debug APK**. Po każdej
+zmianie kodu, która trafia do gałęzi/PR-a, odśwież go:
+
+```bash
+cp app/build/outputs/apk/debug/app-debug.apk dist/mealspire-debug.apk
+```
+
+CI (`.github/workflows/build.yml`) dodatkowo buduje APK i wystawia artefakt
+`mealspire-debug-apk` przy każdym pushu/PR.
+
+## Budowanie w środowiskach z proxy/sandboksem (np. Claude Code web)
+
+- Wrapper może nie pobrać dystrybucji Gradle: `services.gradle.org`
+  przekierowuje na `github.com`, a sesyjne proxy potrafi blokować GitHuba poza
+  repo projektu. Obejście: użyj lokalnego Gradle ≥ 8.9 (np. `/opt/gradle`).
+- Brak Android SDK: pobierz cmdline-tools z `dl.google.com` (zwykle dozwolone),
+  potem:
+
+  ```bash
+  yes | sdkmanager --sdk_root=/opt/android-sdk \
+      "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+  export ANDROID_HOME=/opt/android-sdk
+  /opt/gradle/bin/gradle test assembleDebug
+  ```
+
+- JVM za proxy: truststore i proxy są wstrzykiwane przez `JAVA_TOOL_OPTIONS` —
+  nie wyłączać weryfikacji TLS.
+
+## Konwencje commitów i PR
+
+- Commity po polsku, prefiksy typu `feat:`, `fix:`, `docs+build:`, autor
+  `Jan Sochiera <jan@sochiera.pl>`.
+- Nie commitować `local.properties` ani odszyfrowanego klucza API.
+- README opisuje funkcje użytkownika — aktualizować przy zmianach zachowania.
