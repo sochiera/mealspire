@@ -32,6 +32,7 @@ import com.mealspire.app.domain.KnownDishPromptBuilder;
 import com.mealspire.app.domain.BuiltInRecipes;
 import com.mealspire.app.domain.IngredientExtractor;
 import com.mealspire.app.domain.OfflineProposalGenerator;
+import com.mealspire.app.domain.PersonalizationReadiness;
 import com.mealspire.app.domain.PortionSize;
 import com.mealspire.app.domain.MealHistory;
 import com.mealspire.app.domain.MealHistoryStore;
@@ -99,6 +100,7 @@ public class MainActivity extends Activity {
     private final OfflineProposalGenerator offlineProposalGenerator = new OfflineProposalGenerator();
     private final IngredientExtractor ingredientExtractor = new IngredientExtractor();
     private final TasteProfiler tasteProfiler = new TasteProfiler();
+    private final PersonalizationReadiness personalizationReadiness = new PersonalizationReadiness();
     private final ApiKeyCipher apiKeyCipher = new ApiKeyCipher();
 
     private int currentMealIndex = -1;
@@ -300,12 +302,17 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** Offer a fresh set of proposals for the current meal (AI or offline). */
+    /**
+     * Offer a fresh set of proposals for the current meal. Even with AI available,
+     * a fresh install has nothing to draw conclusions from yet, so it sticks to the
+     * bundled catalogue until the user has liked enough dishes for the AI to have
+     * a real taste profile to work from.
+     */
     private void generateProposals() {
         if (currentMealIndex < 0) {
             return;
         }
-        if (claudeClient.hasApiKey()) {
+        if (claudeClient.hasApiKey() && personalizationReadiness.isReady(preferences)) {
             generateAiProposals();
         } else {
             generateOfflineProposals();
@@ -318,7 +325,7 @@ public class MainActivity extends Activity {
         // suggestion into chicken).
         List<Recipe> chosen = offlineProposalGenerator.generate(
                 BuiltInRecipes.forMeal(currentMealIndex), cookbook, preferences,
-                buildTasteProfile(), PROPOSAL_COUNT, random);
+                buildTasteProfile(), PROPOSAL_COUNT, random, history);
 
         List<DishProposal> newProposals = new ArrayList<>();
         List<Recipe> newRecipes = new ArrayList<>();

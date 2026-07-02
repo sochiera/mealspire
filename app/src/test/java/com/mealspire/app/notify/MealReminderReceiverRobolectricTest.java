@@ -11,7 +11,9 @@ import android.content.Intent;
 
 import androidx.test.core.app.ApplicationProvider;
 
+import com.mealspire.app.domain.MealHistory;
 import com.mealspire.app.domain.MealSlot;
+import com.mealspire.app.storage.SharedPreferencesMealHistoryStore;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -48,6 +50,22 @@ public class MealReminderReceiverRobolectricTest {
                 title != null && title.toString().contains("Obiad"));
         assertFalse("body should list proposals",
                 text == null || text.toString().trim().isEmpty());
+    }
+
+    @Test
+    public void firingRecordsShownDishesInHistory() {
+        Context context = ApplicationProvider.getApplicationContext();
+        Intent intent = new Intent(MealReminderReceiver.ACTION_FIRE)
+                .putExtra(MealReminderReceiver.EXTRA_MEAL_INDEX, MealSlot.BREAKFAST.mealIndex());
+
+        new MealReminderReceiver().onReceive(context, intent);
+
+        MealHistory history = new SharedPreferencesMealHistoryStore(context).load();
+        Notification posted = shadowNotificationManager().getAllNotifications().get(0);
+        CharSequence text = posted.extras.getCharSequence(Notification.EXTRA_TEXT);
+        String firstProposedDish = text.toString().split(" · ")[0];
+        assertTrue("the proposed dish should be recorded so tomorrow's set differs",
+                history.lastEatenAt(firstProposedDish) > 0L);
     }
 
     @Test
