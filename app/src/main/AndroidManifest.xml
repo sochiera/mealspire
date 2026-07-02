@@ -12,10 +12,14 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="Mealspire"
         android:theme="@style/AppTheme">
+        <!-- configChanges: UI jest budowane w kodzie i wygląda tak samo w obu
+             orientacjach, więc obrót ekranu nie odtwarza aktywności — bez tego
+             wyświetlone propozycje/przepis znikałyby przy każdym obrocie. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTop">
+            android:launchMode="singleTop"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

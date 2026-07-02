@@ -23,7 +23,9 @@ public final class HttpClaudeClient implements ClaudeClient {
     private static final String ENDPOINT = "https://api.anthropic.com/v1/messages";
     private static final String ANTHROPIC_VERSION = "2023-06-01";
     private static final String MODEL = "claude-sonnet-4-6";
-    private static final int MAX_TOKENS = 1024;
+    // Enough headroom for a full recipe or three proposals in Polish; 1024 could
+    // cut a longer answer off mid-sentence.
+    private static final int MAX_TOKENS = 2048;
     private static final int TIMEOUT_MS = 30000;
 
     private final String apiKey;
