@@ -32,6 +32,13 @@ public class ProposalPromptBuilderTest {
     }
 
     @Test
+    public void systemPromptTreatsExtrasAsOptionalNotTheBaseOfTheDish() {
+        String system = builder.systemPrompt().toLowerCase();
+        assertTrue(system.contains("dodatki"));
+        assertTrue(system.contains("opcjonaln"));
+    }
+
+    @Test
     public void userPromptIncludesMealTypeAndLikedDishes() {
         UserPreferences prefs = UserPreferences.empty().withLike("naleśniki");
         RecipeRequest request = new RecipeRequest("Obiad", prefs,

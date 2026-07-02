@@ -21,11 +21,17 @@ Przy każdej propozycji masz dwa przyciski:
 Pod propozycjami jest **„Inne propozycje”** — jeden dotyk podsuwa kolejny zestaw,
 więc nie musisz nic odrzucać po kolei.
 
-Gdy skonfigurowany jest klucz API, propozycje i przepisy tworzy model Claude
-(Anthropic Messages API) — może przy tym **sięgnąć po danie z Twojej bazy** albo
-**wymyślić zupełnie nowe**. Bez klucza API aplikacja działa offline: losuje dania
-z wbudowanej puli i z Twojej bazy. Dania są celowo proste, do zrobienia z tego,
-co zwykle jest w kuchni.
+Bez klucza API (albo zanim aplikacja zdąży się czegoś o Tobie nauczyć — patrz
+niżej) działa offline: losuje dania z **wbudowanej puli** (blisko 60 prostych,
+codziennych dań: śniadania, obiady, kolacje) i z Twojej bazy. Dania są celowo
+proste, do zrobienia z tego, co zwykle jest w kuchni — a tam, gdzie naturalnie
+pasują dodatki (owsianka, płatki, tosty…), są one opcją do dopisania, a nie
+osobnym, bardziej skomplikowanym daniem.
+
+Gdy skonfigurowany jest klucz API **i** aplikacja ma już wystarczająco dużo
+polubień, propozycje i przepisy zaczyna tworzyć model Claude (Anthropic
+Messages API) — może przy tym **sięgnąć po danie z Twojej bazy** albo
+**wymyślić zupełnie nowe**.
 
 ## Codzienne powiadomienia z propozycjami (8 / 12 / 18)
 
@@ -39,6 +45,17 @@ bazy, z uwzględnieniem polubień), więc działają zawsze — także bez inter
 klucza API. Przypomnienia korzystają z `AlarmManager` (lekko, bez dodatkowych
 bibliotek) i przeżywają restart telefonu. Na Androidzie 13+ aplikacja poprosi raz
 o zgodę na powiadomienia; bez zgody reszta działa normalnie, tylko bez przypomnień.
+
+## Najpierw wbudowana baza, AI dopiero gdy ma z czego wnioskować
+
+Świeża instalacja nie ma żadnych danych o Twoim guście, więc na start aplikacja
+**zawsze** proponuje z wbudowanej bazy prostych dań — nawet jeśli klucz API jest
+skonfigurowany. Dopiero gdy polubisz co najmniej **5 dań** (czyli `TasteProfiler`
+ma z czego realnie zbudować profil gustu), aplikacja przełącza się na
+personalizowane propozycje AI, które potrafią też wymyślać zupełnie nowe dania.
+Próg pilnuje `PersonalizationReadiness`. Inne funkcje AI (pełny przepis na
+żądanie, „Zmień przepis”, dodawanie dania z linku/opisu) działają niezależnie od
+tego progu — dotyczy on tylko automatycznych propozycji na start.
 
 ## Aplikacja uczy się Twojej kuchni (tylko pozytywnie)
 
@@ -112,12 +129,17 @@ Aby utrzymać główny ekran prostym, dodatkowe akcje są pod przyciskiem „Wi�
   wyczyść preferencje, historię podpowiedzi lub całą bazę. Masz pełną kontrolę
   nad tym, co aplikacja o Tobie pamięta.
 
-## Urozmaicenie — dania, których dawno nie było
+## Urozmaicenie — codziennie nowy zestaw, powroty po jakimś czasie
 
-Aplikacja zapamiętuje, które dania ostatnio pokazywała (historia przeżywa obrót
-ekranu i restart). Tryb offline podsuwa wtedy inne dania niż ostatnio, a
-generowanie z AI dostaje listę ostatnich dań z prośbą o coś innego — dzięki temu
-propozycje się nie powtarzają.
+Aplikacja zapamiętuje, które dania ostatnio pokazywała — na ekranie i w
+powiadomieniach (historia przeżywa obrót ekranu i restart). W trybie offline
+`RecentlyShownFilter` odkłada na bok dania pokazane w ciągu **ostatnich 3 dni**,
+więc każdy dzień przynosi inny zestaw zamiast tych samych kilku dań w kółko. Gdy
+te 3 dni miną, danie samo "wraca" do puli — nic nie znika na stałe. Jeśli
+świeżych dań zabrakłoby (bardzo mała baza albo bardzo częste odświeżanie),
+podpowie się najdawniej pokazane danie zamiast pustej listy — więc powtórka
+zdarza się od czasu do czasu, ale nie od razu. Generowanie z AI dostaje
+dodatkowo listę ostatnich dań z prośbą o coś innego.
 
 ## Uczenie się preferencji (tylko polubienia)
 

@@ -6,6 +6,7 @@ import android.content.Intent;
 
 import com.mealspire.app.domain.BuiltInRecipes;
 import com.mealspire.app.domain.Cookbook;
+import com.mealspire.app.domain.MealHistory;
 import com.mealspire.app.domain.MealNotificationContent;
 import com.mealspire.app.domain.MealSlot;
 import com.mealspire.app.domain.OfflineProposalGenerator;
@@ -14,6 +15,7 @@ import com.mealspire.app.domain.TasteProfile;
 import com.mealspire.app.domain.TasteProfiler;
 import com.mealspire.app.domain.UserPreferences;
 import com.mealspire.app.storage.SharedPreferencesCookbookStore;
+import com.mealspire.app.storage.SharedPreferencesMealHistoryStore;
 import com.mealspire.app.storage.SharedPreferencesPreferenceStore;
 
 import java.util.ArrayList;
@@ -45,17 +47,23 @@ public final class MealReminderReceiver extends BroadcastReceiver {
 
         UserPreferences preferences = new SharedPreferencesPreferenceStore(context).load();
         Cookbook cookbook = new SharedPreferencesCookbookStore(context).load();
+        SharedPreferencesMealHistoryStore historyStore =
+                new SharedPreferencesMealHistoryStore(context);
+        MealHistory history = historyStore.load();
         TasteProfile profile = tasteProfiler.build(
                 preferences.getLikes(), BuiltInRecipes.detailsByTitle(cookbook));
 
         List<Recipe> chosen = proposalGenerator.generate(
                 BuiltInRecipes.forMeal(mealIndex), cookbook, preferences,
-                profile, PROPOSAL_COUNT, new Random());
+                profile, PROPOSAL_COUNT, new Random(), history);
 
         List<String> names = new ArrayList<>();
+        long now = System.currentTimeMillis();
         for (Recipe recipe : chosen) {
             names.add(recipe.getTitle());
+            history = history.record(recipe.getTitle(), now);
         }
+        historyStore.save(history);
 
         MealNotifications.show(context, slot,
                 MealNotificationContent.forMeal(slot.label(), names));
