@@ -24,4 +24,13 @@ public interface AppSettings {
      * stops asking and just reuses {@link #loadDefaultServings()}.
      */
     boolean hasChosenServings();
+
+    /**
+     * Whether the first-launch onboarding quiz was finished or skipped. Once
+     * true, the quiz never shows again (independently of the saved profile).
+     */
+    boolean isOnboardingDone();
+
+    /** Marks the onboarding quiz as finished or skipped, permanently. */
+    void markOnboardingDone();
 }

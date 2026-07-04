@@ -14,6 +14,7 @@ public final class SharedPreferencesAppSettings implements AppSettings {
     private static final String PREFS_NAME = "mealspire_settings";
     private static final String KEY_DEFAULT_SERVINGS = "default_servings";
     private static final String KEY_SERVINGS_CHOSEN = "servings_chosen";
+    private static final String KEY_ONBOARDING_DONE = "onboarding_done";
     private static final int MAX_SERVINGS = 12;
 
     private final SharedPreferences sharedPreferences;
@@ -43,6 +44,18 @@ public final class SharedPreferencesAppSettings implements AppSettings {
     @Override
     public boolean hasChosenServings() {
         return sharedPreferences.getBoolean(KEY_SERVINGS_CHOSEN, false);
+    }
+
+    @Override
+    public boolean isOnboardingDone() {
+        return sharedPreferences.getBoolean(KEY_ONBOARDING_DONE, false);
+    }
+
+    @Override
+    public void markOnboardingDone() {
+        sharedPreferences.edit()
+                .putBoolean(KEY_ONBOARDING_DONE, true)
+                .apply();
     }
 
     private static boolean isValid(int servings) {
