@@ -13,6 +13,7 @@ public final class HouseholdProfileSerializer {
 
     private static final String KEY_AUDIENCE = "audience";
     private static final String KEY_SKILL = "skill";
+    private static final String KEY_TIME = "time";
     private static final String KEY_CUISINES = "cuisines";
     private static final String KEY_EXCLUSIONS = "exclusions";
 
@@ -21,6 +22,7 @@ public final class HouseholdProfileSerializer {
             JSONObject root = new JSONObject();
             root.put(KEY_AUDIENCE, profile.getAudience().name());
             root.put(KEY_SKILL, profile.getSkill().name());
+            root.put(KEY_TIME, profile.getTime().name());
             root.put(KEY_CUISINES, new JSONArray(profile.getCuisines()));
             JSONArray exclusions = new JSONArray();
             for (DietConstraints.Exclusion exclusion : profile.getDiet().getExclusions()) {
@@ -42,6 +44,7 @@ public final class HouseholdProfileSerializer {
             return HouseholdProfile.empty()
                     .withAudience(audienceOf(root.optString(KEY_AUDIENCE, "")))
                     .withSkill(skillOf(root.optString(KEY_SKILL, "")))
+                    .withTime(timeOf(root.optString(KEY_TIME, "")))
                     .withCuisines(PreferencesSerializer.readArray(
                             root.optJSONArray(KEY_CUISINES)))
                     .withDiet(dietOf(PreferencesSerializer.readArray(
@@ -76,6 +79,14 @@ public final class HouseholdProfileSerializer {
             return HouseholdProfile.CookingSkill.valueOf(name);
         } catch (IllegalArgumentException e) {
             return HouseholdProfile.CookingSkill.UNKNOWN;
+        }
+    }
+
+    private static HouseholdProfile.CookingTime timeOf(String name) {
+        try {
+            return HouseholdProfile.CookingTime.valueOf(name);
+        } catch (IllegalArgumentException e) {
+            return HouseholdProfile.CookingTime.UNKNOWN;
         }
     }
 }

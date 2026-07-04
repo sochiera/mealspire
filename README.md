@@ -12,18 +12,24 @@ się Twojej kuchni.
 przyciski, na każdym kroku widoczny przycisk **„Pomiń"**):
 
 1. **Dla kogo gotujesz?** — tylko dorośli / dorośli i dzieci.
-2. **Jak Ci idzie gotowanie?** — dopiero zaczynam / radzę sobie / gotuję dobrze
+2. **Czego nie jadacie?** — wielokrotny wybór twardych wykluczeń (wegetariańsko,
+   bez wieprzowiny, bez glutenu, bez laktozy, bez orzechów, bez ryb). Tego
+   aplikacja **nigdy nie zaproponuje** — ani offline, ani z AI.
+3. **Ile masz zwykle czasu na gotowanie w dzień powszedni?** — do 20 minut /
+   około pół godziny / godzina i więcej.
+4. **Jak Ci idzie gotowanie?** — dopiero zaczynam / radzę sobie / gotuję dobrze
    i lubię wyzwania.
-3. **Jakie kuchnie lubicie najbardziej?** — wielokrotny wybór (polska, włoska,
-   azjatycka, meksykańska, bliskowschodnia).
-4. Trzy rundy **„Które danie najbardziej Ci pasuje?"** — w każdej rundzie trzy
-   różnorodne dania z wbudowanej puli; wybór zapisuje się jako zwykłe polubienie
-   (to 3 z 5 polubień potrzebnych, by AI przejęło propozycje — resztę douczy
-   normalne używanie).
+5. Trzy **kontrastowe** rundy **„Które danie najbardziej Ci pasuje?"** — każda
+   runda rozstrzyga co innego (mięso/ryba/bezmięsne, zupa/zapiekane/świeże,
+   polskie/śródziemnomorskie/azjatyckie), więc każdy wybór uczy maksymalnie
+   dużo. Wybór zapisuje się jako zwykłe polubienie (to 3 z 5 polubień
+   potrzebnych, by AI przejęło propozycje — resztę douczy normalne używanie),
+   a **„Żadne z tych"** uczciwie nie zapisuje nic. Rundy respektują wykluczenia
+   z pytania 2.
 
-Odpowiedzi z pytań 1–3 trafiają do **profilu domowników** i realnie wpływają na
-zapytania do AI („Gotuję też dla dzieci…", „Dopiero uczę się gotować…",
-„Preferowane kuchnie: …") — także przy **„Zmień przepis"**. Quiz pokazuje się
+Odpowiedzi z pytań 1–4 trafiają do **profilu domowników** i realnie wpływają na
+zapytania do AI („Gotuję też dla dzieci…", „Bezwzględny wymóg diety…",
+„Dopiero uczę się gotować…") — także przy **„Zmień przepis"**. Quiz pokazuje się
 **tylko raz** — „Pomiń" na dowolnym kroku kończy go na zawsze, a już udzielone
 odpowiedzi zostają. Profil można później zmienić w menu **„Więcej…" → „Profil
 domowników"**. Systemowe „Cofnij" wraca w quizie do poprzedniego pytania
@@ -152,7 +158,9 @@ Aby utrzymać główny ekran prostym, dodatkowe akcje są pod przyciskiem „Wi�
 
 - **Zmień liczbę osób** — zmienia zapamiętaną liczbę osób, dla których gotujesz.
 - **Profil domowników** — zmienia odpowiedzi z quizu startowego (dla kogo
-  gotujesz, jak Ci idzie gotowanie, ulubione kuchnie).
+  gotujesz, czego nie jadacie, ile masz czasu, jak Ci idzie gotowanie) oraz
+  ulubione kuchnie (deklaracja opcjonalna — gustu kuchni aplikacja i tak uczy
+  się z wyborów).
 - **Zapisz danie do mojej bazy** — zapisuje aktualnie pokazane danie.
 - **Lista zakupów** — wyciąga składniki z aktualnego przepisu i pokazuje je jako
   odhaczaną listę.

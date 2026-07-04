@@ -27,40 +27,58 @@ public final class HouseholdProfile {
         CONFIDENT
     }
 
+    /** Ile czasu jest zwykle na gotowanie w dzień powszedni. */
+    public enum CookingTime {
+        UNKNOWN,
+        QUICK,
+        MEDIUM,
+        LONG
+    }
+
     private final Audience audience;
     private final CookingSkill skill;
+    private final CookingTime time;
     private final List<String> cuisines;
     private final DietConstraints diet;
 
-    private HouseholdProfile(Audience audience, CookingSkill skill, List<String> cuisines,
-                             DietConstraints diet) {
+    private HouseholdProfile(Audience audience, CookingSkill skill, CookingTime time,
+                             List<String> cuisines, DietConstraints diet) {
         this.audience = audience;
         this.skill = skill;
+        this.time = time;
         this.cuisines = cuisines;
         this.diet = diet;
     }
 
     public static HouseholdProfile empty() {
         return new HouseholdProfile(Audience.UNKNOWN, CookingSkill.UNKNOWN,
-                Collections.<String>emptyList(), DietConstraints.empty());
+                CookingTime.UNKNOWN, Collections.<String>emptyList(),
+                DietConstraints.empty());
     }
 
     public HouseholdProfile withAudience(Audience newAudience) {
         return new HouseholdProfile(
-                newAudience == null ? Audience.UNKNOWN : newAudience, skill, cuisines, diet);
+                newAudience == null ? Audience.UNKNOWN : newAudience, skill, time,
+                cuisines, diet);
     }
 
     public HouseholdProfile withSkill(CookingSkill newSkill) {
         return new HouseholdProfile(
-                audience, newSkill == null ? CookingSkill.UNKNOWN : newSkill, cuisines, diet);
+                audience, newSkill == null ? CookingSkill.UNKNOWN : newSkill, time,
+                cuisines, diet);
+    }
+
+    public HouseholdProfile withTime(CookingTime newTime) {
+        return new HouseholdProfile(audience, skill,
+                newTime == null ? CookingTime.UNKNOWN : newTime, cuisines, diet);
     }
 
     public HouseholdProfile withCuisines(List<String> newCuisines) {
-        return new HouseholdProfile(audience, skill, normalize(newCuisines), diet);
+        return new HouseholdProfile(audience, skill, time, normalize(newCuisines), diet);
     }
 
     public HouseholdProfile withDiet(DietConstraints newDiet) {
-        return new HouseholdProfile(audience, skill, cuisines,
+        return new HouseholdProfile(audience, skill, time, cuisines,
                 newDiet == null ? DietConstraints.empty() : newDiet);
     }
 
@@ -70,6 +88,10 @@ public final class HouseholdProfile {
 
     public CookingSkill getSkill() {
         return skill;
+    }
+
+    public CookingTime getTime() {
+        return time;
     }
 
     public List<String> getCuisines() {
@@ -84,6 +106,7 @@ public final class HouseholdProfile {
     public boolean isEmpty() {
         return audience == Audience.UNKNOWN
                 && skill == CookingSkill.UNKNOWN
+                && time == CookingTime.UNKNOWN
                 && cuisines.isEmpty()
                 && diet.isEmpty();
     }
@@ -109,6 +132,14 @@ public final class HouseholdProfile {
         } else if (skill == CookingSkill.CONFIDENT) {
             sentences.add("Gotuję dobrze i lubię wyzwania — możesz czasem "
                     + "zaproponować coś ambitniejszego.");
+        }
+        // MEDIUM (ok. pół godziny) to typowe założenie — nie dodaje nic.
+        if (time == CookingTime.QUICK) {
+            sentences.add("W dzień powszedni mam najwyżej ok. 20 minut na "
+                    + "gotowanie — proponuj szybkie dania.");
+        } else if (time == CookingTime.LONG) {
+            sentences.add("Zwykle mam godzinę lub więcej na gotowanie — "
+                    + "dłuższe przepisy też pasują.");
         }
         if (!cuisines.isEmpty()) {
             sentences.add("Preferowane kuchnie: " + PromptText.join(cuisines) + ".");

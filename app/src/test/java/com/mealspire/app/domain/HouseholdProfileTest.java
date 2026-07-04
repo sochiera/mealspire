@@ -82,6 +82,28 @@ public class HouseholdProfileTest {
     }
 
     @Test
+    public void maloCzasuDodajeZdanieOSzybkichDaniach() {
+        String joined = joined(HouseholdProfile.empty()
+                .withTime(HouseholdProfile.CookingTime.QUICK)
+                .promptSentences());
+        assertTrue(joined.contains("20 minut"));
+        assertTrue(joined.contains("szybkie"));
+    }
+
+    @Test
+    public void duzoCzasuDopuszczaDluzszePrzepisyASredniNieDodajeNic() {
+        assertTrue(joined(HouseholdProfile.empty()
+                .withTime(HouseholdProfile.CookingTime.LONG)
+                .promptSentences()).contains("dłuższe"));
+        // Około pół godziny to typowe założenie — bez osobnego zdania.
+        assertTrue(HouseholdProfile.empty()
+                .withTime(HouseholdProfile.CookingTime.MEDIUM)
+                .promptSentences().isEmpty());
+        assertFalse(HouseholdProfile.empty()
+                .withTime(HouseholdProfile.CookingTime.MEDIUM).isEmpty());
+    }
+
+    @Test
     public void wykluczeniaDietyDodajaBezwzgledneZdanieNaPoczatku() {
         HouseholdProfile profile = HouseholdProfile.empty()
                 .withSkill(HouseholdProfile.CookingSkill.BEGINNER)

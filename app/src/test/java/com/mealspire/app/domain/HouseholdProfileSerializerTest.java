@@ -20,6 +20,7 @@ public class HouseholdProfileSerializerTest {
         HouseholdProfile original = HouseholdProfile.empty()
                 .withAudience(HouseholdProfile.Audience.WITH_CHILDREN)
                 .withSkill(HouseholdProfile.CookingSkill.BEGINNER)
+                .withTime(HouseholdProfile.CookingTime.QUICK)
                 .withCuisines(Arrays.asList("polska", "azjatycka"))
                 .withDiet(DietConstraints.of(Arrays.asList(
                         DietConstraints.Exclusion.NO_PORK,
@@ -29,6 +30,7 @@ public class HouseholdProfileSerializerTest {
 
         assertEquals(HouseholdProfile.Audience.WITH_CHILDREN, restored.getAudience());
         assertEquals(HouseholdProfile.CookingSkill.BEGINNER, restored.getSkill());
+        assertEquals(HouseholdProfile.CookingTime.QUICK, restored.getTime());
         assertEquals(Arrays.asList("polska", "azjatycka"), restored.getCuisines());
         assertEquals(2, restored.getDiet().getExclusions().size());
         assertTrue(restored.getDiet().getExclusions()

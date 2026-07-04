@@ -77,11 +77,11 @@ public class TasteEventRecordingRobolectricTest {
     @Test
     public void wyborDaniaWQuizieZapisujeZdarzenieOnboardingPick() {
         MainActivity activity = Robolectric.buildActivity(MainActivity.class).setup().get();
-        // Cztery pytania profilu bez zaznaczeń, potem jedna runda dania.
+        // Cztery pytania profilu (dieta bez zaznaczeń), potem jedna runda dania.
         activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
         activity.<Button>findViewById(R.id.onboarding_next_button).performClick();
         activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
-        activity.<Button>findViewById(R.id.onboarding_next_button).performClick();
+        activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
         String dish = activity.<Button>findViewById(R.id.onboarding_option_1)
                 .getText().toString();
         activity.<Button>findViewById(R.id.onboarding_option_1).performClick();

@@ -35,9 +35,9 @@ import com.mealspire.app.domain.HouseholdProfileStore;
 import com.mealspire.app.domain.KnownDishImporter;
 import com.mealspire.app.domain.KnownDishPromptBuilder;
 import com.mealspire.app.domain.BuiltInRecipes;
+import com.mealspire.app.domain.ContrastiveDishSampler;
 import com.mealspire.app.domain.IngredientExtractor;
 import com.mealspire.app.domain.OfflineProposalGenerator;
-import com.mealspire.app.domain.OnboardingDishSampler;
 import com.mealspire.app.domain.PersonalizationReadiness;
 import com.mealspire.app.domain.PortionSize;
 import com.mealspire.app.domain.ProposalValidator;
@@ -106,8 +106,14 @@ public class MainActivity extends Activity {
             HouseholdProfile.CookingSkill.BEGINNER,
             HouseholdProfile.CookingSkill.COMFORTABLE,
             HouseholdProfile.CookingSkill.CONFIDENT};
+    private static final String[] TIME_LABELS =
+            {"Do 20 minut", "Około pół godziny", "Godzina i więcej"};
+    private static final HouseholdProfile.CookingTime[] TIME_VALUES = {
+            HouseholdProfile.CookingTime.QUICK,
+            HouseholdProfile.CookingTime.MEDIUM,
+            HouseholdProfile.CookingTime.LONG};
     private static final int ONBOARDING_QUESTIONS = 4;
-    private static final int ONBOARDING_DISH_ROUNDS = 3;
+    private static final int ONBOARDING_DISH_ROUNDS = ContrastiveDishSampler.rounds();
     private static final int ONBOARDING_STEPS = ONBOARDING_QUESTIONS + ONBOARDING_DISH_ROUNDS;
 
     /** Intent extra: which meal to open (0=breakfast, 1=lunch, 2=dinner). */
@@ -166,9 +172,11 @@ public class MainActivity extends Activity {
     // sampled dish rounds, and a meal tapped in a notification to open once the
     // quiz is finished or skipped. Held in fields (not saved state) because the
     // manifest's configChanges keeps the Activity alive across rotation.
-    private final OnboardingDishSampler onboardingDishSampler = new OnboardingDishSampler();
+    private final ContrastiveDishSampler onboardingDishSampler = new ContrastiveDishSampler();
     private int onboardingStep = -1;
     private List<List<Recipe>> onboardingRounds;
+    // Diet the rounds were sampled with; a change (via back navigation) resamples.
+    private String onboardingRoundsDietKey;
     // The dish picked in each quiz round. Persisted as likes only when the quiz
     // ends, so going back and re-picking replaces the choice instead of
     // accumulating extra likes.
@@ -450,21 +458,38 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * A short taste quiz on a fresh install: who the user cooks for, how
-     * cooking goes, favourite cuisines, then a few "which dish appeals most?"
-     * rounds saved as ordinary likes. Every step can be skipped; answers given
-     * so far are kept either way.
+     * A short taste quiz on a fresh install: who the user cooks for, diet
+     * exclusions, weekday cooking time, cooking skill, then three contrastive
+     * "which dish appeals most?" rounds saved as ordinary likes. Every step can
+     * be skipped; answers given so far are kept either way.
      */
     private void startOnboarding() {
-        Recipe[][] pools = new Recipe[BuiltInRecipes.mealCount()][];
-        for (int i = 0; i < pools.length; i++) {
-            pools[i] = BuiltInRecipes.forMeal(i);
-        }
-        onboardingRounds = onboardingDishSampler.sample(pools, ONBOARDING_DISH_ROUNDS, random);
+        onboardingRounds = null;
+        onboardingRoundsDietKey = null;
         onboardingStep = 0;
         setMealButtonsEnabled(false);
         moreButton.setEnabled(false);
         renderOnboardingStep();
+    }
+
+    /**
+     * Samples the contrastive dish rounds lazily — after the diet question, so
+     * exclusions ticked moments earlier already filter the rounds. Changing the
+     * diet (back navigation) resamples and drops picks that may now be invalid.
+     */
+    private void ensureOnboardingRounds() {
+        String dietKey = householdProfile.getDiet().getExclusions().toString();
+        if (onboardingRounds != null && dietKey.equals(onboardingRoundsDietKey)) {
+            return;
+        }
+        Recipe[][] pools = new Recipe[BuiltInRecipes.mealCount()][];
+        for (int i = 0; i < pools.length; i++) {
+            pools[i] = BuiltInRecipes.forMeal(i);
+        }
+        onboardingRounds = onboardingDishSampler.sample(
+                pools, householdProfile.getDiet(), random);
+        onboardingRoundsDietKey = dietKey;
+        java.util.Arrays.fill(onboardingPicks, null);
     }
 
     private void renderOnboardingStep() {
@@ -522,6 +547,16 @@ public class MainActivity extends Activity {
                 contentContainer.addView(dietNext, marginTop(16));
                 break;
             case 2:
+                question.setText("Ile masz zwykle czasu na gotowanie w dzień powszedni?");
+                for (int i = 0; i < TIME_LABELS.length; i++) {
+                    final HouseholdProfile.CookingTime value = TIME_VALUES[i];
+                    addOnboardingOption(i + 1, TIME_LABELS[i], () -> {
+                        saveProfile(householdProfile.withTime(value));
+                        advanceOnboarding();
+                    });
+                }
+                break;
+            case 3:
                 question.setText("Jak Ci idzie gotowanie?");
                 for (int i = 0; i < SKILL_LABELS.length; i++) {
                     final HouseholdProfile.CookingSkill value = SKILL_VALUES[i];
@@ -531,32 +566,9 @@ public class MainActivity extends Activity {
                     });
                 }
                 break;
-            case 3:
-                question.setText("Jakie kuchnie lubicie najbardziej?");
-                TextView note = new TextView(this);
-                note.setText("Możesz zaznaczyć kilka odpowiedzi.");
-                note.setTextSize(15);
-                note.setTextColor(Color.rgb(120, 104, 86));
-                contentContainer.addView(note, marginTop(6));
-                for (final String cuisine : CUISINE_OPTIONS) {
-                    CheckBox box = new CheckBox(this);
-                    box.setText(cuisine);
-                    box.setTextSize(18);
-                    box.setChecked(householdProfile.getCuisines().contains(cuisine));
-                    box.setOnCheckedChangeListener((view, checked) ->
-                            toggleCuisine(cuisine, checked));
-                    contentContainer.addView(box, marginTop(8));
-                }
-                Button next = new Button(this);
-                next.setId(R.id.onboarding_next_button);
-                next.setText("Dalej");
-                next.setAllCaps(false);
-                next.setTextSize(18);
-                next.setOnClickListener(v -> advanceOnboarding());
-                contentContainer.addView(next, marginTop(16));
-                break;
             default:
                 question.setText("Które danie najbardziej Ci pasuje?");
+                ensureOnboardingRounds();
                 final int roundIndex = onboardingStep - ONBOARDING_QUESTIONS;
                 List<Recipe> round = onboardingRounds.get(roundIndex);
                 for (int i = 0; i < round.size(); i++) {
@@ -569,6 +581,18 @@ public class MainActivity extends Activity {
                         advanceOnboarding();
                     });
                 }
+                // Wymuszony wybór to fałszywy sygnał — „Żadne z tych" po prostu
+                // nie zapisuje polubienia (uczenie pozostaje tylko pozytywne).
+                Button none = new Button(this);
+                none.setId(R.id.onboarding_option_none);
+                none.setText("Żadne z tych");
+                none.setAllCaps(false);
+                none.setTextSize(16);
+                none.setOnClickListener(v -> {
+                    onboardingPicks[roundIndex] = null;
+                    advanceOnboarding();
+                });
+                contentContainer.addView(none, marginTop(12));
                 break;
         }
 
@@ -615,19 +639,6 @@ public class MainActivity extends Activity {
             exclusions.remove(exclusion);
         }
         saveProfile(householdProfile.withDiet(DietConstraints.of(exclusions)));
-    }
-
-    /** Saves each (un)ticked cuisine immediately, so skipping keeps the answers. */
-    private void toggleCuisine(String cuisine, boolean liked) {
-        List<String> cuisines = new ArrayList<>(householdProfile.getCuisines());
-        if (liked) {
-            if (!cuisines.contains(cuisine)) {
-                cuisines.add(cuisine);
-            }
-        } else {
-            cuisines.remove(cuisine);
-        }
-        saveProfile(householdProfile.withCuisines(cuisines));
     }
 
     private void advanceOnboarding() {
@@ -1112,7 +1123,8 @@ public class MainActivity extends Activity {
     /** Lets the user change the quiz answers later, one simple dialog each. */
     private void showHouseholdProfileDialog() {
         final String[] items = {"Dla kogo gotujesz?", "Czego nie jadacie?",
-                "Jak Ci idzie gotowanie?", "Ulubione kuchnie"};
+                "Ile masz czasu na gotowanie?", "Jak Ci idzie gotowanie?",
+                "Ulubione kuchnie"};
         new AlertDialog.Builder(this)
                 .setTitle("Profil domowników")
                 .setItems(items, (dialog, which) -> {
@@ -1121,6 +1133,8 @@ public class MainActivity extends Activity {
                     } else if (which == 1) {
                         showDietDialog();
                     } else if (which == 2) {
+                        showTimeDialog();
+                    } else if (which == 3) {
                         showSkillDialog();
                     } else {
                         showCuisinesDialog();
@@ -1161,6 +1175,11 @@ public class MainActivity extends Activity {
     private void showSkillDialog() {
         showProfileChoiceDialog("Jak Ci idzie gotowanie?", SKILL_LABELS, SKILL_VALUES,
                 householdProfile.getSkill(), HouseholdProfile::withSkill);
+    }
+
+    private void showTimeDialog() {
+        showProfileChoiceDialog("Ile masz zwykle czasu na gotowanie?", TIME_LABELS,
+                TIME_VALUES, householdProfile.getTime(), HouseholdProfile::withTime);
     }
 
     /** Applies one picked value to the profile ({@code profile.withX(value)}). */
