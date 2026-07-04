@@ -1,0 +1,148 @@
+package com.mealspire.app;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+import android.content.Intent;
+import android.widget.Button;
+import android.widget.TextView;
+
+import androidx.test.core.app.ApplicationProvider;
+
+import com.mealspire.app.domain.HouseholdProfile;
+import com.mealspire.app.domain.UserPreferences;
+import com.mealspire.app.storage.SharedPreferencesAppSettings;
+import com.mealspire.app.storage.SharedPreferencesHouseholdProfileStore;
+import com.mealspire.app.storage.SharedPreferencesPreferenceStore;
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.Robolectric;
+import org.robolectric.RobolectricTestRunner;
+
+/**
+ * Świeża instalacja zaczyna od quizu gustu: pytania o domowników, poziom
+ * gotowania i kuchnie, potem trzy rundy wyboru dań zapisywane jako zwykłe
+ * polubienia. „Pomiń" i ukończenie ustawiają trwałą flagę — quiz pokazuje
+ * się tylko raz. Ścieżka wyłącznie offline.
+ */
+@RunWith(RobolectricTestRunner.class)
+public class OnboardingRobolectricTest {
+
+    private MainActivity launch() {
+        return Robolectric.buildActivity(MainActivity.class).setup().get();
+    }
+
+    private static String questionText(MainActivity activity) {
+        TextView question = activity.findViewById(R.id.onboarding_question);
+        return question == null ? null : question.getText().toString();
+    }
+
+    @Test
+    public void swiezaInstalacjaZaczynaOdQuizu() {
+        MainActivity activity = launch();
+
+        assertEquals("Dla kogo gotujesz?", questionText(activity));
+        assertNotNull(activity.findViewById(R.id.onboarding_skip_button));
+        assertNull(activity.findViewById(R.id.accept_button));
+        // Meal buttons wait until the quiz is finished or skipped.
+        assertFalse(activity.<Button>findViewById(R.id.meal_lunch_button).isEnabled());
+    }
+
+    @Test
+    public void pominKonczyQuizNaZawszeIPokazujeEkranStartowy() {
+        MainActivity activity = launch();
+        activity.<Button>findViewById(R.id.onboarding_skip_button).performClick();
+
+        assertNull(activity.findViewById(R.id.onboarding_question));
+        assertTrue(activity.<Button>findViewById(R.id.meal_lunch_button).isEnabled());
+        assertTrue(new SharedPreferencesAppSettings(
+                ApplicationProvider.getApplicationContext()).isOnboardingDone());
+
+        // A second launch goes straight to the normal start screen.
+        MainActivity second = launch();
+        assertNull(second.findViewById(R.id.onboarding_question));
+    }
+
+    @Test
+    public void odpowiedziZPytanTrafiajaDoProfiluDomownikow() {
+        MainActivity activity = launch();
+
+        // 1. „Dla kogo gotujesz?" → „Dorośli i dzieci"
+        activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
+        // 2. „Jak Ci idzie gotowanie?" → „Dopiero zaczynam"
+        assertEquals("Jak Ci idzie gotowanie?", questionText(activity));
+        activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
+        // 3. Kuchnie: bez zaznaczeń, „Dalej"
+        assertEquals("Jakie kuchnie lubicie najbardziej?", questionText(activity));
+        activity.<Button>findViewById(R.id.onboarding_next_button).performClick();
+
+        HouseholdProfile profile = new SharedPreferencesHouseholdProfileStore(
+                ApplicationProvider.getApplicationContext()).load();
+        assertEquals(HouseholdProfile.Audience.WITH_CHILDREN, profile.getAudience());
+        assertEquals(HouseholdProfile.CookingSkill.BEGINNER, profile.getSkill());
+        assertTrue(profile.getCuisines().isEmpty());
+    }
+
+    @Test
+    public void trzyRundyDanZapisujaTrzyPolubienia() {
+        MainActivity activity = launch();
+        activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
+        activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
+        activity.<Button>findViewById(R.id.onboarding_next_button).performClick();
+
+        for (int round = 0; round < 3; round++) {
+            assertEquals("Które danie najbardziej Ci pasuje?", questionText(activity));
+            activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
+        }
+
+        assertNull(activity.findViewById(R.id.onboarding_question));
+        UserPreferences saved = new SharedPreferencesPreferenceStore(
+                ApplicationProvider.getApplicationContext()).load();
+        assertEquals(3, saved.getLikes().size());
+        assertTrue(new SharedPreferencesAppSettings(
+                ApplicationProvider.getApplicationContext()).isOnboardingDone());
+    }
+
+    @Test
+    public void cofnijWQuizieWracaDoPoprzedniegoPytania() {
+        MainActivity activity = launch();
+        activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
+        assertEquals("Jak Ci idzie gotowanie?", questionText(activity));
+
+        activity.onBackPressed();
+
+        assertFalse(activity.isFinishing());
+        assertEquals("Dla kogo gotujesz?", questionText(activity));
+    }
+
+    @Test
+    public void cofnijNaPierwszymPytaniuDzialaJakPomin() {
+        MainActivity activity = launch();
+
+        activity.onBackPressed();
+
+        assertFalse(activity.isFinishing());
+        assertNull(activity.findViewById(R.id.onboarding_question));
+        assertTrue(new SharedPreferencesAppSettings(
+                ApplicationProvider.getApplicationContext()).isOnboardingDone());
+    }
+
+    @Test
+    public void startZPowiadomieniaCzekaZPosilkiemNaKoniecQuizu() {
+        Intent intent = new Intent(ApplicationProvider.getApplicationContext(),
+                MainActivity.class).putExtra(MainActivity.EXTRA_MEAL_INDEX, 1);
+        MainActivity activity = Robolectric.buildActivity(MainActivity.class, intent)
+                .setup().get();
+
+        // The quiz comes first, the meal intent is not lost.
+        assertEquals("Dla kogo gotujesz?", questionText(activity));
+        activity.<Button>findViewById(R.id.onboarding_skip_button).performClick();
+
+        // After skipping, the app continues straight to that meal's proposals.
+        assertNotNull(activity.findViewById(R.id.accept_button));
+    }
+}

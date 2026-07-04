@@ -11,6 +11,7 @@ import android.widget.TextView;
 import androidx.test.core.app.ApplicationProvider;
 
 import com.mealspire.app.domain.UserPreferences;
+import com.mealspire.app.storage.SharedPreferencesAppSettings;
 import com.mealspire.app.storage.SharedPreferencesPreferenceStore;
 
 import org.junit.Test;
@@ -26,6 +27,9 @@ import org.robolectric.RobolectricTestRunner;
 public class MainActivityRobolectricTest {
 
     private MainActivity launch() {
+        // These tests cover the everyday flow, after the one-time onboarding.
+        new SharedPreferencesAppSettings(ApplicationProvider.getApplicationContext())
+                .markOnboardingDone();
         return Robolectric.buildActivity(MainActivity.class).setup().get();
     }
 

@@ -7,6 +7,10 @@ import static org.junit.Assert.assertTrue;
 
 import android.widget.Button;
 
+import androidx.test.core.app.ApplicationProvider;
+
+import com.mealspire.app.storage.SharedPreferencesAppSettings;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
@@ -21,6 +25,9 @@ import org.robolectric.RobolectricTestRunner;
 public class BackNavigationRobolectricTest {
 
     private MainActivity launch() {
+        // Back within the quiz is covered by OnboardingRobolectricTest.
+        new SharedPreferencesAppSettings(ApplicationProvider.getApplicationContext())
+                .markOnboardingDone();
         return Robolectric.buildActivity(MainActivity.class).setup().get();
     }
 

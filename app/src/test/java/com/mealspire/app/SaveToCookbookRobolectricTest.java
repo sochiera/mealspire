@@ -10,6 +10,7 @@ import android.widget.TextView;
 import androidx.test.core.app.ApplicationProvider;
 
 import com.mealspire.app.domain.Cookbook;
+import com.mealspire.app.storage.SharedPreferencesAppSettings;
 import com.mealspire.app.storage.SharedPreferencesCookbookStore;
 
 import org.junit.Test;
@@ -27,6 +28,8 @@ public class SaveToCookbookRobolectricTest {
 
     @Test
     public void saveItemInMoreMenuAddsShownRecipeToCookbook() {
+        new SharedPreferencesAppSettings(ApplicationProvider.getApplicationContext())
+                .markOnboardingDone();
         MainActivity activity = Robolectric.buildActivity(MainActivity.class).setup().get();
         // Pick a meal, then open a proposal's full recipe so "Zapisz" is offered.
         activity.<Button>findViewById(R.id.meal_lunch_button).performClick();
