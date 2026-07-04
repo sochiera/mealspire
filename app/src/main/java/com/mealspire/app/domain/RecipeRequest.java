@@ -17,6 +17,7 @@ public final class RecipeRequest {
     private final List<String> choiceFragments;
     private final List<String> knownDishes;
     private final List<String> tasteAffinities;
+    private final HouseholdProfile householdProfile;
 
     public RecipeRequest(String mealType, UserPreferences preferences,
                          List<String> recentToAvoid, List<String> choiceFragments) {
@@ -32,12 +33,22 @@ public final class RecipeRequest {
     public RecipeRequest(String mealType, UserPreferences preferences,
                          List<String> recentToAvoid, List<String> choiceFragments,
                          List<String> knownDishes, List<String> tasteAffinities) {
+        this(mealType, preferences, recentToAvoid, choiceFragments, knownDishes,
+                tasteAffinities, null);
+    }
+
+    public RecipeRequest(String mealType, UserPreferences preferences,
+                         List<String> recentToAvoid, List<String> choiceFragments,
+                         List<String> knownDishes, List<String> tasteAffinities,
+                         HouseholdProfile householdProfile) {
         this.mealType = mealType;
         this.preferences = preferences != null ? preferences : UserPreferences.empty();
         this.recentToAvoid = copy(recentToAvoid);
         this.choiceFragments = copy(choiceFragments);
         this.knownDishes = copy(knownDishes);
         this.tasteAffinities = copy(tasteAffinities);
+        this.householdProfile = householdProfile != null
+                ? householdProfile : HouseholdProfile.empty();
     }
 
     public String getMealType() {
@@ -63,6 +74,11 @@ public final class RecipeRequest {
     /** Recurring features of the dishes the user likes, to suggest similar-in-spirit meals. */
     public List<String> getTasteAffinities() {
         return tasteAffinities;
+    }
+
+    /** The onboarding household profile; never null (empty when unanswered). */
+    public HouseholdProfile getHouseholdProfile() {
+        return householdProfile;
     }
 
     private static List<String> copy(List<String> values) {

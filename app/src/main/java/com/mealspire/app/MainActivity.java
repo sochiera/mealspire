@@ -28,6 +28,8 @@ import com.mealspire.app.domain.CookbookEntry;
 import com.mealspire.app.domain.CookbookStore;
 import com.mealspire.app.domain.DataManager;
 import com.mealspire.app.domain.DishProposal;
+import com.mealspire.app.domain.HouseholdProfile;
+import com.mealspire.app.domain.HouseholdProfileStore;
 import com.mealspire.app.domain.KnownDishImporter;
 import com.mealspire.app.domain.KnownDishPromptBuilder;
 import com.mealspire.app.domain.BuiltInRecipes;
@@ -53,6 +55,7 @@ import com.mealspire.app.notify.MealNotifications;
 import com.mealspire.app.notify.MealReminderScheduler;
 import com.mealspire.app.storage.SharedPreferencesAppSettings;
 import com.mealspire.app.storage.SharedPreferencesCookbookStore;
+import com.mealspire.app.storage.SharedPreferencesHouseholdProfileStore;
 import com.mealspire.app.storage.SharedPreferencesMealHistoryStore;
 import com.mealspire.app.storage.SharedPreferencesPreferenceStore;
 import com.mealspire.app.storage.SharedPreferencesSecretStore;
@@ -96,6 +99,8 @@ public class MainActivity extends Activity {
     private Cookbook cookbook;
     private KnownDishImporter dishImporter;
     private DataManager dataManager;
+    private HouseholdProfileStore householdProfileStore;
+    private HouseholdProfile householdProfile;
     private AppSettings appSettings;
     private SecretStore secretStore;
     private final OfflineProposalGenerator offlineProposalGenerator = new OfflineProposalGenerator();
@@ -129,6 +134,8 @@ public class MainActivity extends Activity {
         cookbookStore = new SharedPreferencesCookbookStore(this);
         cookbook = cookbookStore.load();
         dataManager = new DataManager(preferenceStore, historyStore, cookbookStore);
+        householdProfileStore = new SharedPreferencesHouseholdProfileStore(this);
+        householdProfile = householdProfileStore.load();
         appSettings = new SharedPreferencesAppSettings(this);
         secretStore = new SharedPreferencesSecretStore(this);
 
@@ -468,7 +475,8 @@ public class MainActivity extends Activity {
             knownDishes = knownDishes.subList(0, 10);
         }
         return new RecipeRequest(mealType, preferences, history.recentTitles(8),
-                fragments, knownDishes, buildTasteProfile().getAffinities());
+                fragments, knownDishes, buildTasteProfile().getAffinities(),
+                householdProfile);
     }
 
     private void showProposals(List<DishProposal> newProposals, List<Recipe> newRecipes) {

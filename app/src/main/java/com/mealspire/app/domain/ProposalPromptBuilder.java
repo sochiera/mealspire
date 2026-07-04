@@ -55,6 +55,9 @@ public final class ProposalPromptBuilder {
     }
 
     private void appendContext(StringBuilder sb, RecipeRequest request) {
+        for (String sentence : request.getHouseholdProfile().promptSentences()) {
+            sb.append(' ').append(sentence);
+        }
         UserPreferences preferences = request.getPreferences();
         if (!preferences.getLikes().isEmpty()) {
             sb.append(" Dania, które użytkownik lubi: ")

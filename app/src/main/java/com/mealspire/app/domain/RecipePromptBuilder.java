@@ -45,6 +45,7 @@ public final class RecipePromptBuilder {
                 .append(". ");
         sb.append("Wypisz listę składników i krok po kroku sposób przygotowania.");
         if (request != null) {
+            appendHousehold(sb, request);
             String choices = join(request.getChoiceFragments());
             if (!choices.isEmpty()) {
                 sb.append(" Uwzględnij wybory użytkownika: ").append(choices).append('.');
@@ -58,6 +59,7 @@ public final class RecipePromptBuilder {
         StringBuilder sb = new StringBuilder();
         sb.append("Zaproponuj jedno danie na: ").append(request.getMealType()).append(". ");
         sb.append("Podaj nazwę dania, listę składników i sposób przygotowania.");
+        appendHousehold(sb, request);
         if (!preferences.getLikes().isEmpty()) {
             sb.append(" Użytkownik lubi: ").append(join(preferences.getLikes())).append('.');
         }
@@ -80,6 +82,12 @@ public final class RecipePromptBuilder {
                     .append(recent).append('.');
         }
         return sb.toString();
+    }
+
+    private static void appendHousehold(StringBuilder sb, RecipeRequest request) {
+        for (String sentence : request.getHouseholdProfile().promptSentences()) {
+            sb.append(' ').append(sentence);
+        }
     }
 
     private static List<String> toList(Iterable<String> values) {
