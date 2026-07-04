@@ -50,6 +50,10 @@ import com.mealspire.app.domain.RecipeRequest;
 import com.mealspire.app.domain.RecipeService;
 import com.mealspire.app.domain.RecipeTextParser;
 import com.mealspire.app.domain.SecretStore;
+import com.mealspire.app.domain.TasteEvent;
+import com.mealspire.app.domain.TasteEventLog;
+import com.mealspire.app.domain.TasteEventMigration;
+import com.mealspire.app.domain.TasteEventStore;
 import com.mealspire.app.domain.TasteProfile;
 import com.mealspire.app.domain.TasteProfiler;
 import com.mealspire.app.domain.UserPreferences;
@@ -63,6 +67,7 @@ import com.mealspire.app.storage.SharedPreferencesHouseholdProfileStore;
 import com.mealspire.app.storage.SharedPreferencesMealHistoryStore;
 import com.mealspire.app.storage.SharedPreferencesPreferenceStore;
 import com.mealspire.app.storage.SharedPreferencesSecretStore;
+import com.mealspire.app.storage.SharedPreferencesTasteEventStore;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
@@ -124,6 +129,8 @@ public class MainActivity extends Activity {
     private HouseholdProfile householdProfile;
     private AppSettings appSettings;
     private SecretStore secretStore;
+    private TasteEventStore tasteEventStore;
+    private TasteEventLog tasteEvents;
     private final OfflineProposalGenerator offlineProposalGenerator = new OfflineProposalGenerator();
     private final ProposalValidator proposalValidator = new ProposalValidator();
     private final IngredientExtractor ingredientExtractor = new IngredientExtractor();
@@ -175,6 +182,15 @@ public class MainActivity extends Activity {
         householdProfile = householdProfileStore.load();
         appSettings = new SharedPreferencesAppSettings(this);
         secretStore = new SharedPreferencesSecretStore(this);
+        tasteEventStore = new SharedPreferencesTasteEventStore(this);
+        tasteEvents = tasteEventStore.load();
+        // Polubienia sprzed ery dziennika stają się zdarzeniami LIKED (raz).
+        TasteEventLog migrated = TasteEventMigration.migrate(
+                tasteEvents, preferences, System.currentTimeMillis());
+        if (migrated != tasteEvents) {
+            tasteEvents = migrated;
+            tasteEventStore.save(tasteEvents);
+        }
 
         ScrollView scrollView = new ScrollView(this);
         scrollView.setBackgroundColor(Color.rgb(255, 247, 237));
@@ -638,6 +654,8 @@ public class MainActivity extends Activity {
         for (String pick : onboardingPicks) {
             if (pick != null) {
                 preferences = preferences.withLike(pick);
+                recordTasteEvent(TasteEvent.Type.ONBOARDING_PICK, pick,
+                        TasteEvent.NO_MEAL);
             }
         }
         preferenceStore.save(preferences);
@@ -859,6 +877,9 @@ public class MainActivity extends Activity {
             return;
         }
         recipeFromProposals = true;
+        // Opening a recipe is an implicit "this one interests me" signal.
+        recordTasteEvent(TasteEvent.Type.RECIPE_VIEWED,
+                proposals.get(index).getName(), currentMealIndex);
         Recipe cached = index < proposalRecipes.size() ? proposalRecipes.get(index) : null;
         if (cached != null) {
             showFullRecipe(cached);
@@ -965,7 +986,15 @@ public class MainActivity extends Activity {
         }
         preferences = preferences.withLike(dish);
         preferenceStore.save(preferences);
+        recordTasteEvent(TasteEvent.Type.LIKED, dish, currentMealIndex);
         Toast.makeText(this, "Zapamiętane — lubisz: " + dish, Toast.LENGTH_SHORT).show();
+    }
+
+    /** The single place taste events are appended and persisted. */
+    private void recordTasteEvent(TasteEvent.Type type, String dish, int mealIndex) {
+        tasteEvents = tasteEvents.append(new TasteEvent(
+                type, dish, mealIndex, System.currentTimeMillis()));
+        tasteEventStore.save(tasteEvents);
     }
 
     // ----- Modify the shown recipe ----------------------------------------
@@ -1191,6 +1220,8 @@ public class MainActivity extends Activity {
                     cookbookStore.save(cookbook);
                     preferences = preferences.withLike(entry.getTitle());
                     preferenceStore.save(preferences);
+                    recordTasteEvent(TasteEvent.Type.IMPORTED, entry.getTitle(),
+                            TasteEvent.NO_MEAL);
                     Toast.makeText(MainActivity.this,
                             "Dodano do bazy: " + entry.getTitle(), Toast.LENGTH_SHORT).show();
                     if (epoch != contentEpoch) {
@@ -1222,6 +1253,10 @@ public class MainActivity extends Activity {
         actions.add(() -> {
             dataManager.clearPreferences();
             preferences = UserPreferences.empty();
+            // Dziennik gustu też — inaczej „zapomniane" polubienia wróciłyby
+            // do propozycji bocznymi drzwiami przez model gustu.
+            tasteEvents = TasteEventLog.empty();
+            tasteEventStore.save(tasteEvents);
             toast("Wyczyszczono polubione dania.");
         });
         labels.add("Wyczyść historię podpowiedzi");
