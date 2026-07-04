@@ -51,6 +51,11 @@ public final class ProposalPromptBuilder {
                 + "składnikiem, a przynajmniej jedna zupełnie nowa, inna niż zwykle. ");
         sb.append("Oddziel każdą propozycję osobną linią z trzema myślnikami: ---.");
         appendContext(sb, request);
+        // Reguła 2+1: cel eksploracji wybrała appka — model tylko go realizuje.
+        String exploration = request.getTasteContext().getExplorationSentence();
+        if (!exploration.isEmpty()) {
+            sb.append(' ').append(exploration);
+        }
         return sb.toString();
     }
 
@@ -93,6 +98,10 @@ public final class ProposalPromptBuilder {
         if (!recent.isEmpty()) {
             sb.append(" Ostatnio proponowane dania (zaproponuj coś innego dla urozmaicenia): ")
                     .append(recent).append('.');
+        }
+        String antiMonotony = request.getTasteContext().getAntiMonotonySentence();
+        if (!antiMonotony.isEmpty()) {
+            sb.append(' ').append(antiMonotony);
         }
     }
 

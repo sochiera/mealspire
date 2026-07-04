@@ -51,7 +51,9 @@ import com.mealspire.app.domain.RecipeService;
 import com.mealspire.app.domain.RecipeTextParser;
 import com.mealspire.app.domain.SecretStore;
 import com.mealspire.app.domain.DishTagger;
+import com.mealspire.app.domain.ExplorationPlanner;
 import com.mealspire.app.domain.FrozenTasteAggregate;
+import com.mealspire.app.domain.MonotonyDetector;
 import com.mealspire.app.domain.TasteContextBuilder;
 import com.mealspire.app.domain.TasteEvent;
 import com.mealspire.app.domain.TasteEventCompactor;
@@ -146,6 +148,8 @@ public class MainActivity extends Activity {
     private final DishTagger dishTagger = new DishTagger();
     private final TasteContextBuilder tasteContextBuilder = new TasteContextBuilder();
     private final TasteEventCompactor tasteEventCompactor = new TasteEventCompactor();
+    private final ExplorationPlanner explorationPlanner = new ExplorationPlanner();
+    private final MonotonyDetector monotonyDetector = new MonotonyDetector();
     private final OfflineProposalGenerator offlineProposalGenerator = new OfflineProposalGenerator();
     private final ProposalValidator proposalValidator = new ProposalValidator();
     private final IngredientExtractor ingredientExtractor = new IngredientExtractor();
@@ -800,14 +804,22 @@ public class MainActivity extends Activity {
         if (knownDishes.size() > 10) {
             knownDishes = knownDishes.subList(0, 10);
         }
+        java.util.Map<String, String> detailsByTitle =
+                BuiltInRecipes.detailsByTitle(cookbook);
         TasteModel tasteModel = TasteModel.build(tasteEvents, tasteAggregate,
-                dishTagger, BuiltInRecipes.detailsByTitle(cookbook),
-                System.currentTimeMillis());
+                dishTagger, detailsByTitle, System.currentTimeMillis());
+        ExplorationPlanner.ExplorationGoal exploration = explorationPlanner.plan(
+                tasteModel, householdProfile.getDiet(), currentMealIndex, random);
         return new RecipeRequest(mealType, preferences, history.recentTitles(8),
                 fragments, knownDishes, buildTasteProfile().getAffinities(),
                 householdProfile)
                 .withTasteContext(tasteContextBuilder.build(tasteModel, tasteEvents,
-                        householdProfile.getDiet(), currentMealIndex));
+                        householdProfile.getDiet(), currentMealIndex)
+                        .withExploration(exploration == null
+                                ? "" : exploration.promptSentence())
+                        .withAntiMonotony(monotonyDetector.detect(
+                                history.recentTitles(MonotonyDetector.WINDOW),
+                                detailsByTitle)));
     }
 
     private void showProposals(List<DishProposal> newProposals, List<Recipe> newRecipes) {

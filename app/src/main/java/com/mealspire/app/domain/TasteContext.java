@@ -14,14 +14,44 @@ public final class TasteContext {
 
     private final List<String> profileSentences;
     private final List<String> exampleDishes;
+    private final String explorationSentence;
+    private final String antiMonotonySentence;
 
     public TasteContext(List<String> profileSentences, List<String> exampleDishes) {
+        this(profileSentences, exampleDishes, "", "");
+    }
+
+    private TasteContext(List<String> profileSentences, List<String> exampleDishes,
+                         String explorationSentence, String antiMonotonySentence) {
         this.profileSentences = copy(profileSentences);
         this.exampleDishes = copy(exampleDishes);
+        this.explorationSentence = explorationSentence == null ? "" : explorationSentence;
+        this.antiMonotonySentence = antiMonotonySentence == null
+                ? "" : antiMonotonySentence;
     }
 
     public static TasteContext empty() {
         return new TasteContext(null, null);
+    }
+
+    /** Kopia z instrukcją eksploracji 2+1 (cel wybiera appka, nie model). */
+    public TasteContext withExploration(String sentence) {
+        return new TasteContext(profileSentences, exampleDishes, sentence,
+                antiMonotonySentence);
+    }
+
+    /** Kopia ze zdaniem anty-monotonii („ostatnio dużo X — unikaj"). */
+    public TasteContext withAntiMonotony(String sentence) {
+        return new TasteContext(profileSentences, exampleDishes, explorationSentence,
+                sentence);
+    }
+
+    public String getExplorationSentence() {
+        return explorationSentence;
+    }
+
+    public String getAntiMonotonySentence() {
+        return antiMonotonySentence;
     }
 
     /** Zdania profilu („Najchętniej wybiera dania z bazą: …"). */

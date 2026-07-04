@@ -115,6 +115,25 @@ public class ProposalPromptBuilderTest {
     }
 
     @Test
+    public void instrukcjaEksploracjiIAntyMonotoniiTrafiaDoPromptu() {
+        TasteContext context = TasteContext.empty()
+                .withExploration("Pierwsze dwie propozycje dopasuj do profilu "
+                        + "użytkownika. Trzecią zaproponuj celowo spoza jego utartych "
+                        + "wyborów: danie, którego bazą jest ryba.")
+                .withAntiMonotony("Ostatnio proponowane dania często miały bazę "
+                        + "„kurczak” — w pierwszych dwóch propozycjach unikaj tej bazy.");
+        RecipeRequest request = new RecipeRequest("Obiad", UserPreferences.empty(),
+                Collections.<String>emptyList(), Collections.<String>emptyList())
+                .withTasteContext(context);
+
+        String user = builder.userPrompt(request, 3);
+
+        assertTrue(user.contains("Trzecią zaproponuj celowo spoza"));
+        assertTrue(user.contains("bazą jest ryba"));
+        assertTrue(user.contains("unikaj tej bazy"));
+    }
+
+    @Test
     public void bezKontekstuGustuZostajeStaraListaPolubien() {
         UserPreferences prefs = UserPreferences.empty().withLike("naleśniki");
         RecipeRequest request = new RecipeRequest("Obiad", prefs,
