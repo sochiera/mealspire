@@ -59,4 +59,15 @@ public class AppSettingsRobolectricTest {
         newStore().saveDefaultServings(99);
         assertFalse(newStore().hasChosenServings());
     }
+
+    @Test
+    public void onboardingIsNotDoneOnFreshInstall() {
+        assertFalse(newStore().isOnboardingDone());
+    }
+
+    @Test
+    public void markingOnboardingDonePersistsAcrossInstances() {
+        newStore().markOnboardingDone();
+        assertTrue(newStore().isOnboardingDone());
+    }
 }

@@ -14,6 +14,7 @@ import android.view.ViewGroup;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -22,16 +23,20 @@ import android.widget.Toast;
 
 import com.mealspire.app.domain.ApiKeyCipher;
 import com.mealspire.app.domain.AppSettings;
+import com.mealspire.app.domain.BackNavigation;
 import com.mealspire.app.domain.Cookbook;
 import com.mealspire.app.domain.CookbookEntry;
 import com.mealspire.app.domain.CookbookStore;
 import com.mealspire.app.domain.DataManager;
 import com.mealspire.app.domain.DishProposal;
+import com.mealspire.app.domain.HouseholdProfile;
+import com.mealspire.app.domain.HouseholdProfileStore;
 import com.mealspire.app.domain.KnownDishImporter;
 import com.mealspire.app.domain.KnownDishPromptBuilder;
 import com.mealspire.app.domain.BuiltInRecipes;
 import com.mealspire.app.domain.IngredientExtractor;
 import com.mealspire.app.domain.OfflineProposalGenerator;
+import com.mealspire.app.domain.OnboardingDishSampler;
 import com.mealspire.app.domain.PersonalizationReadiness;
 import com.mealspire.app.domain.PortionSize;
 import com.mealspire.app.domain.MealHistory;
@@ -52,6 +57,7 @@ import com.mealspire.app.notify.MealNotifications;
 import com.mealspire.app.notify.MealReminderScheduler;
 import com.mealspire.app.storage.SharedPreferencesAppSettings;
 import com.mealspire.app.storage.SharedPreferencesCookbookStore;
+import com.mealspire.app.storage.SharedPreferencesHouseholdProfileStore;
 import com.mealspire.app.storage.SharedPreferencesMealHistoryStore;
 import com.mealspire.app.storage.SharedPreferencesPreferenceStore;
 import com.mealspire.app.storage.SharedPreferencesSecretStore;
@@ -74,6 +80,23 @@ public class MainActivity extends Activity {
     private static final String[] MEAL_TYPES = {"Śniadanie", "Obiad", "Kolacja"};
     private static final int PROPOSAL_COUNT = 3;
     private static final int MAX_SERVINGS = 12;
+    // Odpowiedzi profilu domowników — wspólne dla quizu startowego i dialogów
+    // „Profil domowników", żeby oba miejsca zawsze pokazywały to samo.
+    private static final String[] CUISINE_OPTIONS =
+            {"polska", "włoska", "azjatycka", "meksykańska", "bliskowschodnia"};
+    private static final String[] AUDIENCE_LABELS = {"Tylko dorośli", "Dorośli i dzieci"};
+    private static final HouseholdProfile.Audience[] AUDIENCE_VALUES = {
+            HouseholdProfile.Audience.ADULTS_ONLY,
+            HouseholdProfile.Audience.WITH_CHILDREN};
+    private static final String[] SKILL_LABELS =
+            {"Dopiero zaczynam", "Radzę sobie", "Gotuję dobrze i lubię wyzwania"};
+    private static final HouseholdProfile.CookingSkill[] SKILL_VALUES = {
+            HouseholdProfile.CookingSkill.BEGINNER,
+            HouseholdProfile.CookingSkill.COMFORTABLE,
+            HouseholdProfile.CookingSkill.CONFIDENT};
+    private static final int ONBOARDING_QUESTIONS = 3;
+    private static final int ONBOARDING_DISH_ROUNDS = 3;
+    private static final int ONBOARDING_STEPS = ONBOARDING_QUESTIONS + ONBOARDING_DISH_ROUNDS;
 
     /** Intent extra: which meal to open (0=breakfast, 1=lunch, 2=dinner). */
     public static final String EXTRA_MEAL_INDEX = "meal_index";
@@ -95,6 +118,8 @@ public class MainActivity extends Activity {
     private Cookbook cookbook;
     private KnownDishImporter dishImporter;
     private DataManager dataManager;
+    private HouseholdProfileStore householdProfileStore;
+    private HouseholdProfile householdProfile;
     private AppSettings appSettings;
     private SecretStore secretStore;
     private final OfflineProposalGenerator offlineProposalGenerator = new OfflineProposalGenerator();
@@ -109,10 +134,27 @@ public class MainActivity extends Activity {
     private List<Recipe> proposalRecipes = new ArrayList<>();
     // The full recipe currently open, or null while the proposal list is shown.
     private Recipe currentRecipe;
+    // Whether the open recipe was reached from the proposal list; a recipe from
+    // elsewhere (e.g. "Dodaj danie" import) has no proposals to go back to.
+    private boolean recipeFromProposals;
     // Bumped whenever the user changes what the content area shows, so an async
     // answer that comes back late (recipe fetch, proposals, modification) cannot
     // stomp whatever the user is looking at now.
     private int contentEpoch;
+    // Which screen the content area currently shows; drives the system back button.
+    private BackNavigation.Screen currentScreen = BackNavigation.Screen.START;
+    // First-launch taste quiz: current question (-1 = quiz not running), the
+    // sampled dish rounds, and a meal tapped in a notification to open once the
+    // quiz is finished or skipped. Held in fields (not saved state) because the
+    // manifest's configChanges keeps the Activity alive across rotation.
+    private final OnboardingDishSampler onboardingDishSampler = new OnboardingDishSampler();
+    private int onboardingStep = -1;
+    private List<List<Recipe>> onboardingRounds;
+    // The dish picked in each quiz round. Persisted as likes only when the quiz
+    // ends, so going back and re-picking replaces the choice instead of
+    // accumulating extra likes.
+    private final String[] onboardingPicks = new String[ONBOARDING_DISH_ROUNDS];
+    private int pendingMealIndex = -1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -126,6 +168,8 @@ public class MainActivity extends Activity {
         cookbookStore = new SharedPreferencesCookbookStore(this);
         cookbook = cookbookStore.load();
         dataManager = new DataManager(preferenceStore, historyStore, cookbookStore);
+        householdProfileStore = new SharedPreferencesHouseholdProfileStore(this);
+        householdProfile = householdProfileStore.load();
         appSettings = new SharedPreferencesAppSettings(this);
         secretStore = new SharedPreferencesSecretStore(this);
 
@@ -191,25 +235,42 @@ public class MainActivity extends Activity {
 
         setContentView(scrollView);
         updateServingsLabel();
-        showHint("Wybierz porę dnia, a podsunę kilka prostych pomysłów.");
-        maybeAskServings();
 
-        // Key sources, in order: build-time key, a key remembered from a previous
-        // unlock (so the password is asked only once), then the encrypted-in-repo
-        // key which still needs the password.
-        if (!claudeClient.hasApiKey()) {
-            if (secretStore.hasApiKey()) {
-                buildClaudeClients(secretStore.loadApiKey());
-            } else if (!encryptedApiKey().isEmpty()) {
-                promptForApiKeyPassword(false);
-            }
+        // A key remembered from a previous unlock loads silently (the password
+        // is asked only once); the password *dialog* waits for the quiz below.
+        if (!claudeClient.hasApiKey() && secretStore.hasApiKey()) {
+            buildClaudeClients(secretStore.loadApiKey());
+        }
+
+        if (appSettings.isOnboardingDone()) {
+            showStartScreen();
+            showStartupPrompts();
+        } else {
+            // Fresh install: a short taste quiz first; every one-time dialog
+            // (servings, API-key password, notification permission) waits until
+            // it is finished or skipped.
+            startOnboarding();
         }
 
         // Daily meal reminders (8/12/18). Scheduling is idempotent.
         MealNotifications.ensureChannel(this);
         new MealReminderScheduler().scheduleAll(this);
-        maybeRequestNotificationPermission();
         handleMealIntent(getIntent());
+    }
+
+    /**
+     * One-time prompts asked outside the quiz, so nothing covers the first
+     * question: the servings dialog, the API-key password (only when the
+     * encrypted-in-repo key still needs unlocking) and the Android 13+
+     * notification permission.
+     */
+    private void showStartupPrompts() {
+        maybeAskServings();
+        if (!claudeClient.hasApiKey() && !secretStore.hasApiKey()
+                && !encryptedApiKey().isEmpty()) {
+            promptForApiKeyPassword(false);
+        }
+        maybeRequestNotificationPermission();
     }
 
     @Override
@@ -217,6 +278,55 @@ public class MainActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         handleMealIntent(intent);
+    }
+
+    /**
+     * The system back button walks one view back — recipe → proposals → start
+     * screen — instead of closing the app. The decision itself lives in the
+     * domain ({@link BackNavigation}); here we only track the screen and apply
+     * the transition, bumping the epoch so an in-flight async answer cannot
+     * stomp the view the user went back to.
+     */
+    @Override
+    public void onBackPressed() {
+        // The quiz-active state has a single source of truth (onboardingStep);
+        // the ONBOARDING screen is derived from it, never stored.
+        BackNavigation.Screen screen = isOnboardingActive()
+                ? BackNavigation.Screen.ONBOARDING : currentScreen;
+        switch (BackNavigation.onBack(screen, onboardingStep,
+                recipeFromProposals && !proposals.isEmpty())) {
+            case SHOW_PROPOSALS:
+                currentRecipe = null;
+                contentEpoch++;
+                setMealButtonsEnabled(true);
+                renderProposals();
+                break;
+            case SHOW_START:
+                showStartScreen();
+                break;
+            case ONBOARDING_PREVIOUS:
+                onboardingStep--;
+                renderOnboardingStep();
+                break;
+            case ONBOARDING_SKIP:
+                endOnboarding();
+                break;
+            case EXIT:
+            default:
+                super.onBackPressed();
+                break;
+        }
+    }
+
+    /** Resets the content area to the initial "pick a meal" hint. */
+    private void showStartScreen() {
+        contentEpoch++;
+        currentRecipe = null;
+        currentMealIndex = -1;
+        highlightSelectedMeal();
+        setMealButtonsEnabled(true);
+        currentScreen = BackNavigation.Screen.START;
+        showHint("Wybierz porę dnia, a podsunę kilka prostych pomysłów.");
     }
 
     /** Opens the meal carried by a tapped reminder notification, if any. */
@@ -229,7 +339,12 @@ public class MainActivity extends Activity {
             // Consume the extra so a later re-delivery of the same intent (e.g.
             // activity recreation) doesn't force the meal selection again.
             intent.removeExtra(EXTRA_MEAL_INDEX);
-            selectMeal(mealIndex);
+            if (isOnboardingActive()) {
+                // The quiz comes first; the tapped meal opens right after it.
+                pendingMealIndex = mealIndex;
+            } else {
+                selectMeal(mealIndex);
+            }
         }
     }
 
@@ -299,6 +414,191 @@ public class MainActivity extends Activity {
         }).start();
     }
 
+    // ----- First-launch onboarding quiz ------------------------------------
+
+    private boolean isOnboardingActive() {
+        return onboardingStep >= 0;
+    }
+
+    /**
+     * A short taste quiz on a fresh install: who the user cooks for, how
+     * cooking goes, favourite cuisines, then a few "which dish appeals most?"
+     * rounds saved as ordinary likes. Every step can be skipped; answers given
+     * so far are kept either way.
+     */
+    private void startOnboarding() {
+        Recipe[][] pools = new Recipe[BuiltInRecipes.mealCount()][];
+        for (int i = 0; i < pools.length; i++) {
+            pools[i] = BuiltInRecipes.forMeal(i);
+        }
+        onboardingRounds = onboardingDishSampler.sample(pools, ONBOARDING_DISH_ROUNDS, random);
+        onboardingStep = 0;
+        setMealButtonsEnabled(false);
+        moreButton.setEnabled(false);
+        renderOnboardingStep();
+    }
+
+    private void renderOnboardingStep() {
+        contentContainer.removeAllViews();
+
+        TextView progress = new TextView(this);
+        progress.setText("Pytanie " + (onboardingStep + 1) + " z " + ONBOARDING_STEPS);
+        progress.setTextSize(15);
+        progress.setTextColor(Color.rgb(120, 104, 86));
+        contentContainer.addView(progress, matchWrap());
+
+        TextView question = new TextView(this);
+        question.setId(R.id.onboarding_question);
+        question.setTextSize(22);
+        question.setTextColor(Color.rgb(67, 56, 45));
+        question.setTypeface(null, Typeface.BOLD);
+        contentContainer.addView(question, marginTop(8));
+
+        switch (onboardingStep) {
+            case 0:
+                question.setText("Dla kogo gotujesz?");
+                for (int i = 0; i < AUDIENCE_LABELS.length; i++) {
+                    final HouseholdProfile.Audience value = AUDIENCE_VALUES[i];
+                    addOnboardingOption(i + 1, AUDIENCE_LABELS[i], () -> {
+                        saveProfile(householdProfile.withAudience(value));
+                        advanceOnboarding();
+                    });
+                }
+                break;
+            case 1:
+                question.setText("Jak Ci idzie gotowanie?");
+                for (int i = 0; i < SKILL_LABELS.length; i++) {
+                    final HouseholdProfile.CookingSkill value = SKILL_VALUES[i];
+                    addOnboardingOption(i + 1, SKILL_LABELS[i], () -> {
+                        saveProfile(householdProfile.withSkill(value));
+                        advanceOnboarding();
+                    });
+                }
+                break;
+            case 2:
+                question.setText("Jakie kuchnie lubicie najbardziej?");
+                TextView note = new TextView(this);
+                note.setText("Możesz zaznaczyć kilka odpowiedzi.");
+                note.setTextSize(15);
+                note.setTextColor(Color.rgb(120, 104, 86));
+                contentContainer.addView(note, marginTop(6));
+                for (final String cuisine : CUISINE_OPTIONS) {
+                    CheckBox box = new CheckBox(this);
+                    box.setText(cuisine);
+                    box.setTextSize(18);
+                    box.setChecked(householdProfile.getCuisines().contains(cuisine));
+                    box.setOnCheckedChangeListener((view, checked) ->
+                            toggleCuisine(cuisine, checked));
+                    contentContainer.addView(box, marginTop(8));
+                }
+                Button next = new Button(this);
+                next.setId(R.id.onboarding_next_button);
+                next.setText("Dalej");
+                next.setAllCaps(false);
+                next.setTextSize(18);
+                next.setOnClickListener(v -> advanceOnboarding());
+                contentContainer.addView(next, marginTop(16));
+                break;
+            default:
+                question.setText("Które danie najbardziej Ci pasuje?");
+                final int roundIndex = onboardingStep - ONBOARDING_QUESTIONS;
+                List<Recipe> round = onboardingRounds.get(roundIndex);
+                for (int i = 0; i < round.size(); i++) {
+                    final String dish = round.get(i).getTitle();
+                    addOnboardingOption(i + 1, dish, () -> {
+                        // Remembered per round and persisted at the end, so
+                        // going back and re-picking replaces the choice.
+                        onboardingPicks[roundIndex] = dish;
+                        toast("Zapamiętane — lubisz: " + dish);
+                        advanceOnboarding();
+                    });
+                }
+                break;
+        }
+
+        Button skip = new Button(this);
+        skip.setId(R.id.onboarding_skip_button);
+        skip.setText("Pomiń");
+        skip.setAllCaps(false);
+        skip.setTextSize(16);
+        skip.setOnClickListener(v -> endOnboarding());
+        contentContainer.addView(skip, marginTop(24));
+    }
+
+    /** One big, readable answer button; index picks the stable test id. */
+    private void addOnboardingOption(int index, String label, final Runnable action) {
+        Button option = new Button(this);
+        int[] optionIds = {R.id.onboarding_option_1, R.id.onboarding_option_2,
+                R.id.onboarding_option_3};
+        if (index >= 1 && index <= optionIds.length) {
+            option.setId(optionIds[index - 1]);
+        }
+        option.setText(label);
+        option.setAllCaps(false);
+        option.setTextSize(18);
+        option.setPadding(dp(16), dp(14), dp(16), dp(14));
+        option.setOnClickListener(v -> action.run());
+        contentContainer.addView(option, marginTop(12));
+    }
+
+    /** The single place a profile change is kept and persisted. */
+    private void saveProfile(HouseholdProfile updated) {
+        householdProfile = updated;
+        householdProfileStore.save(updated);
+    }
+
+    /** Saves each (un)ticked cuisine immediately, so skipping keeps the answers. */
+    private void toggleCuisine(String cuisine, boolean liked) {
+        List<String> cuisines = new ArrayList<>(householdProfile.getCuisines());
+        if (liked) {
+            if (!cuisines.contains(cuisine)) {
+                cuisines.add(cuisine);
+            }
+        } else {
+            cuisines.remove(cuisine);
+        }
+        saveProfile(householdProfile.withCuisines(cuisines));
+    }
+
+    private void advanceOnboarding() {
+        onboardingStep++;
+        if (onboardingStep >= ONBOARDING_STEPS) {
+            endOnboarding();
+        } else {
+            renderOnboardingStep();
+        }
+    }
+
+    /**
+     * Finishes or skips the quiz for good: the flag is permanent, answers given
+     * so far stay saved, and a meal tapped in a notification opens now.
+     */
+    private void endOnboarding() {
+        appSettings.markOnboardingDone();
+        onboardingStep = -1;
+        saveOnboardingPicks();
+        moreButton.setEnabled(true);
+        showStartupPrompts();
+        if (pendingMealIndex >= 0) {
+            int meal = pendingMealIndex;
+            pendingMealIndex = -1;
+            setMealButtonsEnabled(true);
+            selectMeal(meal);
+        } else {
+            showStartScreen();
+        }
+    }
+
+    /** Persists the quiz dish picks as ordinary likes, one per answered round. */
+    private void saveOnboardingPicks() {
+        for (String pick : onboardingPicks) {
+            if (pick != null) {
+                preferences = preferences.withLike(pick);
+            }
+        }
+        preferenceStore.save(preferences);
+    }
+
     // ----- Meal selection + proposals -------------------------------------
 
     private void selectMeal(int index) {
@@ -324,6 +624,9 @@ public class MainActivity extends Activity {
             return;
         }
         contentEpoch++;
+        // From now on the content area belongs to the proposal flow, so back
+        // (even while the AI is still thinking) returns to the start screen.
+        currentScreen = BackNavigation.Screen.PROPOSALS;
         if (claudeClient.hasApiKey() && personalizationReadiness.isReady(preferences)) {
             generateAiProposals();
         } else {
@@ -412,7 +715,8 @@ public class MainActivity extends Activity {
             knownDishes = knownDishes.subList(0, 10);
         }
         return new RecipeRequest(mealType, preferences, history.recentTitles(8),
-                fragments, knownDishes, buildTasteProfile().getAffinities());
+                fragments, knownDishes, buildTasteProfile().getAffinities(),
+                householdProfile);
     }
 
     private void showProposals(List<DishProposal> newProposals, List<Recipe> newRecipes) {
@@ -426,6 +730,7 @@ public class MainActivity extends Activity {
     }
 
     private void renderProposals() {
+        currentScreen = BackNavigation.Screen.PROPOSALS;
         contentContainer.removeAllViews();
         for (int i = 0; i < proposals.size(); i++) {
             contentContainer.addView(buildProposalCard(i), marginTop(i == 0 ? 0 : 12));
@@ -506,6 +811,7 @@ public class MainActivity extends Activity {
         if (index < 0 || index >= proposals.size()) {
             return;
         }
+        recipeFromProposals = true;
         Recipe cached = index < proposalRecipes.size() ? proposalRecipes.get(index) : null;
         if (cached != null) {
             showFullRecipe(cached);
@@ -515,6 +821,9 @@ public class MainActivity extends Activity {
         final RecipeRequest request = buildRequest();
         final int requestedIndex = index;
         contentEpoch++;
+        // Already "on" the recipe while it is being fetched, so back during the
+        // fetch returns to the proposals (and the bumped epoch drops the answer).
+        currentScreen = BackNavigation.Screen.RECIPE;
         final int epoch = contentEpoch;
         showHint("Przygotowuję przepis…");
         new Thread(() -> {
@@ -548,6 +857,7 @@ public class MainActivity extends Activity {
 
     private void showFullRecipe(Recipe recipe) {
         currentRecipe = recipe;
+        currentScreen = BackNavigation.Screen.RECIPE;
         contentContainer.removeAllViews();
 
         TextView name = new TextView(this);
@@ -588,16 +898,15 @@ public class MainActivity extends Activity {
             actions.addView(change, equalWidthRowItem());
         }
 
+        // The button mirrors the system back button exactly (one shared path),
+        // so a recipe that has no proposals to return to goes to the start screen.
         Button back = new Button(this);
         back.setId(R.id.back_button);
-        back.setText("Wróć do propozycji");
+        back.setText(recipeFromProposals && !proposals.isEmpty()
+                ? "Wróć do propozycji" : "Wróć");
         back.setAllCaps(false);
         back.setTextSize(16);
-        back.setOnClickListener(v -> {
-            currentRecipe = null;
-            contentEpoch++;
-            renderProposals();
-        });
+        back.setOnClickListener(v -> onBackPressed());
         contentContainer.addView(back, marginTop(12));
     }
 
@@ -646,7 +955,8 @@ public class MainActivity extends Activity {
         showHint("Zmieniam przepis…");
         new Thread(() -> {
             try {
-                final Recipe revised = recipeService.modifyRecipe(base, instruction);
+                final Recipe revised = recipeService.modifyRecipe(base, instruction,
+                        householdProfile);
                 runOnUiThread(() -> {
                     if (epoch != contentEpoch) {
                         return;
@@ -681,6 +991,8 @@ public class MainActivity extends Activity {
         }
         labels.add("Zmień liczbę osób");
         actions.add(() -> showServingsDialog(true));
+        labels.add("Profil domowników");
+        actions.add(this::showHouseholdProfileDialog);
         labels.add("Dodaj danie, które znasz i lubisz");
         actions.add(this::showAddKnownDishDialog);
         labels.add("Zarządzaj moimi danymi");
@@ -691,6 +1003,84 @@ public class MainActivity extends Activity {
                 .setItems(labels.toArray(new String[0]),
                         (dialog, which) -> actions.get(which).run())
                 .show();
+    }
+
+    // ----- Household profile (answers from the onboarding quiz) ------------
+
+    /** Lets the user change the quiz answers later, one simple dialog each. */
+    private void showHouseholdProfileDialog() {
+        final String[] items = {"Dla kogo gotujesz?", "Jak Ci idzie gotowanie?",
+                "Ulubione kuchnie"};
+        new AlertDialog.Builder(this)
+                .setTitle("Profil domowników")
+                .setItems(items, (dialog, which) -> {
+                    if (which == 0) {
+                        showAudienceDialog();
+                    } else if (which == 1) {
+                        showSkillDialog();
+                    } else {
+                        showCuisinesDialog();
+                    }
+                })
+                .show();
+    }
+
+    private void showAudienceDialog() {
+        showProfileChoiceDialog("Dla kogo gotujesz?", AUDIENCE_LABELS, AUDIENCE_VALUES,
+                householdProfile.getAudience(), HouseholdProfile::withAudience);
+    }
+
+    private void showSkillDialog() {
+        showProfileChoiceDialog("Jak Ci idzie gotowanie?", SKILL_LABELS, SKILL_VALUES,
+                householdProfile.getSkill(), HouseholdProfile::withSkill);
+    }
+
+    /** Applies one picked value to the profile ({@code profile.withX(value)}). */
+    private interface ProfileUpdate<T> {
+        HouseholdProfile apply(HouseholdProfile profile, T value);
+    }
+
+    /** One single-choice dialog shape for every profile question. */
+    private <T> void showProfileChoiceDialog(String title, String[] labels,
+                                             final T[] values, T current,
+                                             final ProfileUpdate<T> update) {
+        new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setSingleChoiceItems(labels, indexOf(values, current), (dialog, which) -> {
+                    saveProfile(update.apply(householdProfile, values[which]));
+                    dialog.dismiss();
+                })
+                .show();
+    }
+
+    private void showCuisinesDialog() {
+        final boolean[] checked = new boolean[CUISINE_OPTIONS.length];
+        for (int i = 0; i < CUISINE_OPTIONS.length; i++) {
+            checked[i] = householdProfile.getCuisines().contains(CUISINE_OPTIONS[i]);
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Ulubione kuchnie")
+                .setMultiChoiceItems(CUISINE_OPTIONS, checked, (dialog, which, isChecked) ->
+                        checked[which] = isChecked)
+                .setPositiveButton("Gotowe", (dialog, which) -> {
+                    List<String> cuisines = new ArrayList<>();
+                    for (int i = 0; i < CUISINE_OPTIONS.length; i++) {
+                        if (checked[i]) {
+                            cuisines.add(CUISINE_OPTIONS[i]);
+                        }
+                    }
+                    saveProfile(householdProfile.withCuisines(cuisines));
+                })
+                .show();
+    }
+
+    private static <T> int indexOf(T[] values, T value) {
+        for (int i = 0; i < values.length; i++) {
+            if (values[i] == value) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private void showAddKnownDishDialog() {
@@ -733,6 +1123,8 @@ public class MainActivity extends Activity {
                     if (epoch != contentEpoch) {
                         return;
                     }
+                    // Not part of the proposal flow — back goes to the start screen.
+                    recipeFromProposals = false;
                     showFullRecipe(entry.toRecipe());
                 });
             } catch (IOException e) {

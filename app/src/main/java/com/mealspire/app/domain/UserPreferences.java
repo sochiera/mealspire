@@ -63,7 +63,8 @@ public final class UserPreferences {
         return new UserPreferences(newLikes, newDislikes);
     }
 
-    private static Set<String> normalize(Collection<String> values) {
+    /** Trim, drop blanks, de-duplicate case-insensitively (first spelling wins). */
+    static Set<String> normalize(Collection<String> values) {
         Set<String> result = new LinkedHashSet<>();
         if (values != null) {
             for (String value : values) {

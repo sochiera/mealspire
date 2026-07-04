@@ -69,13 +69,6 @@ public final class DishProposal {
     }
 
     private static String join(List<String> items) {
-        StringBuilder sb = new StringBuilder();
-        for (String item : items) {
-            if (sb.length() > 0) {
-                sb.append(", ");
-            }
-            sb.append(item);
-        }
-        return sb.toString();
+        return PromptText.join(items);
     }
 }

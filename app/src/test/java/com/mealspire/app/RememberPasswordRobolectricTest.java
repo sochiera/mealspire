@@ -8,6 +8,7 @@ import android.app.Dialog;
 
 import androidx.test.core.app.ApplicationProvider;
 
+import com.mealspire.app.storage.SharedPreferencesAppSettings;
 import com.mealspire.app.storage.SharedPreferencesSecretStore;
 
 import org.junit.Test;
@@ -29,6 +30,8 @@ public class RememberPasswordRobolectricTest {
 
     @Test
     public void rememberedKeySkipsPasswordPrompt() {
+        new SharedPreferencesAppSettings(ApplicationProvider.getApplicationContext())
+                .markOnboardingDone();
         new SharedPreferencesSecretStore(ApplicationProvider.getApplicationContext())
                 .saveApiKey("sk-ant-remembered");
 
@@ -41,6 +44,10 @@ public class RememberPasswordRobolectricTest {
     @Test
     public void noRememberedKeyShowsPasswordPrompt() {
         // No remembered key, but resources ship an encrypted key -> ask once.
+        // (The fresh-install case, where the prompt waits for the onboarding
+        // quiz, is covered by OnboardingRobolectricTest.)
+        new SharedPreferencesAppSettings(ApplicationProvider.getApplicationContext())
+                .markOnboardingDone();
         Robolectric.buildActivity(MainActivity.class).setup().get();
 
         assertTrue("expected the one-time password prompt on first launch",

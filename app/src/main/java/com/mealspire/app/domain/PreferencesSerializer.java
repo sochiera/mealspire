@@ -41,7 +41,8 @@ public final class PreferencesSerializer {
         }
     }
 
-    private static List<String> readArray(JSONArray array) {
+    /** Reads a JSON array of strings, skipping non-strings; shared with other serializers. */
+    static List<String> readArray(JSONArray array) {
         List<String> values = new ArrayList<>();
         if (array != null) {
             for (int i = 0; i < array.length(); i++) {

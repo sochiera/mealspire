@@ -45,6 +45,7 @@ public final class RecipePromptBuilder {
                 .append(". ");
         sb.append("Wypisz listę składników i krok po kroku sposób przygotowania.");
         if (request != null) {
+            appendHousehold(sb, request);
             String choices = join(request.getChoiceFragments());
             if (!choices.isEmpty()) {
                 sb.append(" Uwzględnij wybory użytkownika: ").append(choices).append('.');
@@ -58,6 +59,7 @@ public final class RecipePromptBuilder {
         StringBuilder sb = new StringBuilder();
         sb.append("Zaproponuj jedno danie na: ").append(request.getMealType()).append(". ");
         sb.append("Podaj nazwę dania, listę składników i sposób przygotowania.");
+        appendHousehold(sb, request);
         if (!preferences.getLikes().isEmpty()) {
             sb.append(" Użytkownik lubi: ").append(join(preferences.getLikes())).append('.');
         }
@@ -82,6 +84,10 @@ public final class RecipePromptBuilder {
         return sb.toString();
     }
 
+    private static void appendHousehold(StringBuilder sb, RecipeRequest request) {
+        request.getHouseholdProfile().appendPromptSentences(sb);
+    }
+
     private static List<String> toList(Iterable<String> values) {
         List<String> list = new java.util.ArrayList<>();
         if (values != null) {
@@ -93,13 +99,6 @@ public final class RecipePromptBuilder {
     }
 
     private static String join(Iterable<String> items) {
-        StringBuilder sb = new StringBuilder();
-        for (String item : items) {
-            if (sb.length() > 0) {
-                sb.append(", ");
-            }
-            sb.append(item);
-        }
-        return sb.toString();
+        return PromptText.join(items);
     }
 }

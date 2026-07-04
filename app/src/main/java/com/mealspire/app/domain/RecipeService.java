@@ -87,9 +87,15 @@ public final class RecipeService {
 
     /** Revise an already-shown recipe with a free-text instruction from the user. */
     public Recipe modifyRecipe(Recipe current, String instruction) throws IOException {
+        return modifyRecipe(current, instruction, null);
+    }
+
+    /** Revision that also honours the household profile (children, skill, cuisines). */
+    public Recipe modifyRecipe(Recipe current, String instruction,
+                               HouseholdProfile profile) throws IOException {
         String answer = client.complete(
                 modifyPromptBuilder.systemPrompt(),
-                modifyPromptBuilder.userPrompt(current, instruction));
+                modifyPromptBuilder.userPrompt(current, instruction, profile));
         return textParser.parse(answer);
     }
 }

@@ -40,8 +40,18 @@ public class RememberServingsRobolectricTest {
 
     @Test
     public void asksForServingsOnFirstLaunchWhenNotYetChosen() {
+        // The servings question waits until the one-time onboarding is behind us.
+        new SharedPreferencesAppSettings(ApplicationProvider.getApplicationContext())
+                .markOnboardingDone();
         Robolectric.buildActivity(MainActivity.class).setup().get();
         assertTrue("expected the one-time servings dialog on first launch",
+                dialogShownWithTitle(SERVINGS_DIALOG_TITLE));
+    }
+
+    @Test
+    public void doesNotAskForServingsWhileOnboardingIsShowing() {
+        Robolectric.buildActivity(MainActivity.class).setup().get();
+        assertFalse("the servings dialog must not cover the onboarding quiz",
                 dialogShownWithTitle(SERVINGS_DIALOG_TITLE));
     }
 

@@ -11,6 +11,8 @@ import android.widget.TextView;
 
 import androidx.test.core.app.ApplicationProvider;
 
+import com.mealspire.app.storage.SharedPreferencesAppSettings;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
@@ -37,6 +39,10 @@ public class NotificationLaunchRobolectricTest {
 
     @Test
     public void notificationIntentOpensThatMeal() {
+        // After onboarding a reminder tap goes straight to that meal; the fresh
+        // install case is covered by OnboardingRobolectricTest.
+        new SharedPreferencesAppSettings(ApplicationProvider.getApplicationContext())
+                .markOnboardingDone();
         Intent intent = new Intent(ApplicationProvider.getApplicationContext(), MainActivity.class)
                 .putExtra(MainActivity.EXTRA_MEAL_INDEX, 1);
 
