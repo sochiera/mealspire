@@ -22,6 +22,7 @@ import android.widget.Toast;
 
 import com.mealspire.app.domain.ApiKeyCipher;
 import com.mealspire.app.domain.AppSettings;
+import com.mealspire.app.domain.BackNavigation;
 import com.mealspire.app.domain.Cookbook;
 import com.mealspire.app.domain.CookbookEntry;
 import com.mealspire.app.domain.CookbookStore;
@@ -113,6 +114,8 @@ public class MainActivity extends Activity {
     // answer that comes back late (recipe fetch, proposals, modification) cannot
     // stomp whatever the user is looking at now.
     private int contentEpoch;
+    // Which screen the content area currently shows; drives the system back button.
+    private BackNavigation.Screen currentScreen = BackNavigation.Screen.START;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -191,7 +194,7 @@ public class MainActivity extends Activity {
 
         setContentView(scrollView);
         updateServingsLabel();
-        showHint("Wybierz porę dnia, a podsunę kilka prostych pomysłów.");
+        showStartScreen();
         maybeAskServings();
 
         // Key sources, in order: build-time key, a key remembered from a previous
@@ -217,6 +220,56 @@ public class MainActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         handleMealIntent(intent);
+    }
+
+    /**
+     * The system back button walks one view back — recipe → proposals → start
+     * screen — instead of closing the app. The decision itself lives in the
+     * domain ({@link BackNavigation}); here we only track the screen and apply
+     * the transition, bumping the epoch so an in-flight async answer cannot
+     * stomp the view the user went back to.
+     */
+    @Override
+    public void onBackPressed() {
+        switch (BackNavigation.onBack(currentScreen, onboardingStep())) {
+            case SHOW_PROPOSALS:
+                currentRecipe = null;
+                contentEpoch++;
+                setMealButtonsEnabled(true);
+                renderProposals();
+                break;
+            case SHOW_RECIPE:
+                if (currentRecipe != null) {
+                    contentEpoch++;
+                    showFullRecipe(currentRecipe);
+                    break;
+                }
+                showStartScreen();
+                break;
+            case SHOW_START:
+                showStartScreen();
+                break;
+            case EXIT:
+            default:
+                super.onBackPressed();
+                break;
+        }
+    }
+
+    /** Index of the current onboarding question; no quiz yet, so always 0. */
+    private int onboardingStep() {
+        return 0;
+    }
+
+    /** Resets the content area to the initial "pick a meal" hint. */
+    private void showStartScreen() {
+        contentEpoch++;
+        currentRecipe = null;
+        currentMealIndex = -1;
+        highlightSelectedMeal();
+        setMealButtonsEnabled(true);
+        currentScreen = BackNavigation.Screen.START;
+        showHint("Wybierz porę dnia, a podsunę kilka prostych pomysłów.");
     }
 
     /** Opens the meal carried by a tapped reminder notification, if any. */
@@ -324,6 +377,9 @@ public class MainActivity extends Activity {
             return;
         }
         contentEpoch++;
+        // From now on the content area belongs to the proposal flow, so back
+        // (even while the AI is still thinking) returns to the start screen.
+        currentScreen = BackNavigation.Screen.PROPOSALS;
         if (claudeClient.hasApiKey() && personalizationReadiness.isReady(preferences)) {
             generateAiProposals();
         } else {
@@ -426,6 +482,7 @@ public class MainActivity extends Activity {
     }
 
     private void renderProposals() {
+        currentScreen = BackNavigation.Screen.PROPOSALS;
         contentContainer.removeAllViews();
         for (int i = 0; i < proposals.size(); i++) {
             contentContainer.addView(buildProposalCard(i), marginTop(i == 0 ? 0 : 12));
@@ -515,6 +572,9 @@ public class MainActivity extends Activity {
         final RecipeRequest request = buildRequest();
         final int requestedIndex = index;
         contentEpoch++;
+        // Already "on" the recipe while it is being fetched, so back during the
+        // fetch returns to the proposals (and the bumped epoch drops the answer).
+        currentScreen = BackNavigation.Screen.RECIPE;
         final int epoch = contentEpoch;
         showHint("Przygotowuję przepis…");
         new Thread(() -> {
@@ -548,6 +608,7 @@ public class MainActivity extends Activity {
 
     private void showFullRecipe(Recipe recipe) {
         currentRecipe = recipe;
+        currentScreen = BackNavigation.Screen.RECIPE;
         contentContainer.removeAllViews();
 
         TextView name = new TextView(this);
