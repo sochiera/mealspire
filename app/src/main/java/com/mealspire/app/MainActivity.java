@@ -28,6 +28,7 @@ import com.mealspire.app.domain.Cookbook;
 import com.mealspire.app.domain.CookbookEntry;
 import com.mealspire.app.domain.CookbookStore;
 import com.mealspire.app.domain.DataManager;
+import com.mealspire.app.domain.DietConstraints;
 import com.mealspire.app.domain.DishProposal;
 import com.mealspire.app.domain.HouseholdProfile;
 import com.mealspire.app.domain.HouseholdProfileStore;
@@ -39,6 +40,7 @@ import com.mealspire.app.domain.OfflineProposalGenerator;
 import com.mealspire.app.domain.OnboardingDishSampler;
 import com.mealspire.app.domain.PersonalizationReadiness;
 import com.mealspire.app.domain.PortionSize;
+import com.mealspire.app.domain.ProposalValidator;
 import com.mealspire.app.domain.MealHistory;
 import com.mealspire.app.domain.MealHistoryStore;
 import com.mealspire.app.domain.PreferenceStore;
@@ -94,7 +96,7 @@ public class MainActivity extends Activity {
             HouseholdProfile.CookingSkill.BEGINNER,
             HouseholdProfile.CookingSkill.COMFORTABLE,
             HouseholdProfile.CookingSkill.CONFIDENT};
-    private static final int ONBOARDING_QUESTIONS = 3;
+    private static final int ONBOARDING_QUESTIONS = 4;
     private static final int ONBOARDING_DISH_ROUNDS = 3;
     private static final int ONBOARDING_STEPS = ONBOARDING_QUESTIONS + ONBOARDING_DISH_ROUNDS;
 
@@ -123,6 +125,7 @@ public class MainActivity extends Activity {
     private AppSettings appSettings;
     private SecretStore secretStore;
     private final OfflineProposalGenerator offlineProposalGenerator = new OfflineProposalGenerator();
+    private final ProposalValidator proposalValidator = new ProposalValidator();
     private final IngredientExtractor ingredientExtractor = new IngredientExtractor();
     private final TasteProfiler tasteProfiler = new TasteProfiler();
     private final PersonalizationReadiness personalizationReadiness = new PersonalizationReadiness();
@@ -466,6 +469,33 @@ public class MainActivity extends Activity {
                 }
                 break;
             case 1:
+                question.setText("Czego nie jadacie?");
+                TextView dietNote = new TextView(this);
+                dietNote.setText("Tego nigdy nie zaproponuję. Możesz zaznaczyć kilka "
+                        + "odpowiedzi albo nic.");
+                dietNote.setTextSize(15);
+                dietNote.setTextColor(Color.rgb(120, 104, 86));
+                contentContainer.addView(dietNote, marginTop(6));
+                for (final DietConstraints.Exclusion exclusion
+                        : DietConstraints.Exclusion.values()) {
+                    CheckBox dietBox = new CheckBox(this);
+                    dietBox.setText(exclusion.label());
+                    dietBox.setTextSize(18);
+                    dietBox.setChecked(householdProfile.getDiet().getExclusions()
+                            .contains(exclusion));
+                    dietBox.setOnCheckedChangeListener((view, checked) ->
+                            toggleExclusion(exclusion, checked));
+                    contentContainer.addView(dietBox, marginTop(8));
+                }
+                Button dietNext = new Button(this);
+                dietNext.setId(R.id.onboarding_next_button);
+                dietNext.setText("Dalej");
+                dietNext.setAllCaps(false);
+                dietNext.setTextSize(18);
+                dietNext.setOnClickListener(v -> advanceOnboarding());
+                contentContainer.addView(dietNext, marginTop(16));
+                break;
+            case 2:
                 question.setText("Jak Ci idzie gotowanie?");
                 for (int i = 0; i < SKILL_LABELS.length; i++) {
                     final HouseholdProfile.CookingSkill value = SKILL_VALUES[i];
@@ -475,7 +505,7 @@ public class MainActivity extends Activity {
                     });
                 }
                 break;
-            case 2:
+            case 3:
                 question.setText("Jakie kuchnie lubicie najbardziej?");
                 TextView note = new TextView(this);
                 note.setText("Możesz zaznaczyć kilka odpowiedzi.");
@@ -545,6 +575,20 @@ public class MainActivity extends Activity {
     private void saveProfile(HouseholdProfile updated) {
         householdProfile = updated;
         householdProfileStore.save(updated);
+    }
+
+    /** Saves each (un)ticked exclusion immediately, so skipping keeps the answers. */
+    private void toggleExclusion(DietConstraints.Exclusion exclusion, boolean excluded) {
+        List<DietConstraints.Exclusion> exclusions =
+                new ArrayList<>(householdProfile.getDiet().getExclusions());
+        if (excluded) {
+            if (!exclusions.contains(exclusion)) {
+                exclusions.add(exclusion);
+            }
+        } else {
+            exclusions.remove(exclusion);
+        }
+        saveProfile(householdProfile.withDiet(DietConstraints.of(exclusions)));
     }
 
     /** Saves each (un)ticked cuisine immediately, so skipping keeps the answers. */
@@ -638,9 +682,7 @@ public class MainActivity extends Activity {
         // Shared offline pipeline: pool -> shuffle -> at most one taste-led pick,
         // the rest kept varied (so liking three chicken dishes does not turn every
         // suggestion into chicken).
-        List<Recipe> chosen = offlineProposalGenerator.generate(
-                BuiltInRecipes.forMeal(currentMealIndex), cookbook, preferences,
-                buildTasteProfile(), PROPOSAL_COUNT, random, history);
+        List<Recipe> chosen = generateOfflineRecipes();
 
         List<DishProposal> newProposals = new ArrayList<>();
         List<Recipe> newRecipes = new ArrayList<>();
@@ -651,6 +693,14 @@ public class MainActivity extends Activity {
         showProposals(newProposals, newRecipes);
     }
 
+    /** The shared offline pipeline for the current meal, diet-filtered. */
+    private List<Recipe> generateOfflineRecipes() {
+        return offlineProposalGenerator.generate(
+                BuiltInRecipes.forMeal(currentMealIndex), cookbook, preferences,
+                buildTasteProfile(), PROPOSAL_COUNT, random, history,
+                System.currentTimeMillis(), householdProfile.getDiet());
+    }
+
     /** Distils the user's likes into recurring "taste" terms (with known recipe details). */
     private TasteProfile buildTasteProfile() {
         return tasteProfiler.build(preferences.getLikes(),
@@ -658,12 +708,7 @@ public class MainActivity extends Activity {
     }
 
     private DishProposal proposalFromRecipe(Recipe recipe) {
-        List<String> ingredients = ingredientExtractor.extract(recipe.getDetails());
-        if (ingredients.size() > 5) {
-            ingredients = new ArrayList<>(ingredients.subList(0, 5));
-        }
-        return new DishProposal(recipe.getTitle(),
-                "Proste danie z Twojej puli.", "", ingredients);
+        return proposalValidator.proposalFromRecipe(recipe);
     }
 
     private void generateAiProposals() {
@@ -680,15 +725,17 @@ public class MainActivity extends Activity {
                     if (epoch != contentEpoch) {
                         return; // the user moved on; don't stomp the new content
                     }
-                    if (result.isEmpty()) {
+                    // Distrust-by-default: drop proposals that break the diet
+                    // (or duplicate each other) and top the set back up from
+                    // the diet-filtered offline pool.
+                    ProposalValidator.Result vetted = proposalValidator.validate(
+                            result, householdProfile.getDiet(),
+                            generateOfflineRecipes(), PROPOSAL_COUNT);
+                    if (vetted.getProposals().isEmpty()) {
                         showHint("Nie udało się wymyślić dań. Spróbuj ponownie.");
                         return;
                     }
-                    List<Recipe> noRecipes = new ArrayList<>();
-                    for (int i = 0; i < result.size(); i++) {
-                        noRecipes.add(null); // full recipe is fetched on demand
-                    }
-                    showProposals(result, noRecipes);
+                    showProposals(vetted.getProposals(), vetted.getRecipes());
                 });
             } catch (IOException e) {
                 final String message = e.getMessage();
@@ -1009,18 +1056,44 @@ public class MainActivity extends Activity {
 
     /** Lets the user change the quiz answers later, one simple dialog each. */
     private void showHouseholdProfileDialog() {
-        final String[] items = {"Dla kogo gotujesz?", "Jak Ci idzie gotowanie?",
-                "Ulubione kuchnie"};
+        final String[] items = {"Dla kogo gotujesz?", "Czego nie jadacie?",
+                "Jak Ci idzie gotowanie?", "Ulubione kuchnie"};
         new AlertDialog.Builder(this)
                 .setTitle("Profil domowników")
                 .setItems(items, (dialog, which) -> {
                     if (which == 0) {
                         showAudienceDialog();
                     } else if (which == 1) {
+                        showDietDialog();
+                    } else if (which == 2) {
                         showSkillDialog();
                     } else {
                         showCuisinesDialog();
                     }
+                })
+                .show();
+    }
+
+    private void showDietDialog() {
+        final DietConstraints.Exclusion[] values = DietConstraints.Exclusion.values();
+        final String[] labels = new String[values.length];
+        final boolean[] checked = new boolean[values.length];
+        for (int i = 0; i < values.length; i++) {
+            labels[i] = values[i].label();
+            checked[i] = householdProfile.getDiet().getExclusions().contains(values[i]);
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Czego nie jadacie?")
+                .setMultiChoiceItems(labels, checked, (dialog, which, isChecked) ->
+                        checked[which] = isChecked)
+                .setPositiveButton("Gotowe", (dialog, which) -> {
+                    List<DietConstraints.Exclusion> exclusions = new ArrayList<>();
+                    for (int i = 0; i < values.length; i++) {
+                        if (checked[i]) {
+                            exclusions.add(values[i]);
+                        }
+                    }
+                    saveProfile(householdProfile.withDiet(DietConstraints.of(exclusions)));
                 })
                 .show();
     }

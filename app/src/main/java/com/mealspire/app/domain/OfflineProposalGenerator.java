@@ -44,7 +44,16 @@ public final class OfflineProposalGenerator {
     public List<Recipe> generate(Recipe[] builtIns, Cookbook cookbook,
                                  UserPreferences preferences, TasteProfile profile,
                                  int count, Random random, MealHistory history, long now) {
-        List<Recipe> pool = mealPoolBuilder.build(builtIns, cookbook, preferences);
+        return generate(builtIns, cookbook, preferences, profile, count, random, history,
+                now, DietConstraints.empty());
+    }
+
+    /** Pełny wariant: pula jest dodatkowo twardo filtrowana wykluczeniami diety. */
+    public List<Recipe> generate(Recipe[] builtIns, Cookbook cookbook,
+                                 UserPreferences preferences, TasteProfile profile,
+                                 int count, Random random, MealHistory history, long now,
+                                 DietConstraints diet) {
+        List<Recipe> pool = mealPoolBuilder.build(builtIns, cookbook, preferences, diet);
         Collections.shuffle(pool, random);
         List<Recipe> fresh = recentlyShownFilter.apply(pool, history, RECENCY_WINDOW_MILLIS,
                 now, count);

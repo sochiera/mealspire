@@ -16,6 +16,32 @@ public final class MealPoolBuilder {
     private final DishFilter dishFilter = new DishFilter();
 
     public List<Recipe> build(Recipe[] builtIns, Cookbook cookbook, UserPreferences preferences) {
+        return build(builtIns, cookbook, preferences, DietConstraints.empty());
+    }
+
+    /**
+     * Jak {@link #build(Recipe[], Cookbook, UserPreferences)}, ale dodatkowo
+     * bezwzględnie odfiltrowuje dania naruszające wykluczenia diety. W
+     * odróżnieniu od niechcianych dań ten filtr nie ma fallbacku — lepsza
+     * krótsza lista niż wieprzowina u wegetarianina.
+     */
+    public List<Recipe> build(Recipe[] builtIns, Cookbook cookbook, UserPreferences preferences,
+                              DietConstraints diet) {
+        List<Recipe> pool = buildWithoutDiet(builtIns, cookbook, preferences);
+        if (diet == null || diet.isEmpty()) {
+            return pool;
+        }
+        List<Recipe> allowed = new ArrayList<>();
+        for (Recipe recipe : pool) {
+            if (diet.allows(recipe.getTitle() + "\n" + recipe.getDetails())) {
+                allowed.add(recipe);
+            }
+        }
+        return allowed;
+    }
+
+    private List<Recipe> buildWithoutDiet(Recipe[] builtIns, Cookbook cookbook,
+                                          UserPreferences preferences) {
         Map<String, Recipe> byTitle = new LinkedHashMap<>();
         if (builtIns != null) {
             for (Recipe recipe : builtIns) {

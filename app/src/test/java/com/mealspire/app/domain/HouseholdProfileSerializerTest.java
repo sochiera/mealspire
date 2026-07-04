@@ -20,13 +20,19 @@ public class HouseholdProfileSerializerTest {
         HouseholdProfile original = HouseholdProfile.empty()
                 .withAudience(HouseholdProfile.Audience.WITH_CHILDREN)
                 .withSkill(HouseholdProfile.CookingSkill.BEGINNER)
-                .withCuisines(Arrays.asList("polska", "azjatycka"));
+                .withCuisines(Arrays.asList("polska", "azjatycka"))
+                .withDiet(DietConstraints.of(Arrays.asList(
+                        DietConstraints.Exclusion.NO_PORK,
+                        DietConstraints.Exclusion.NO_NUTS)));
 
         HouseholdProfile restored = serializer.fromJson(serializer.toJson(original));
 
         assertEquals(HouseholdProfile.Audience.WITH_CHILDREN, restored.getAudience());
         assertEquals(HouseholdProfile.CookingSkill.BEGINNER, restored.getSkill());
         assertEquals(Arrays.asList("polska", "azjatycka"), restored.getCuisines());
+        assertEquals(2, restored.getDiet().getExclusions().size());
+        assertTrue(restored.getDiet().getExclusions()
+                .contains(DietConstraints.Exclusion.NO_PORK));
     }
 
     @Test
@@ -46,9 +52,22 @@ public class HouseholdProfileSerializerTest {
     @Test
     public void nieznaneWartosciEnumowSaTolerowane() {
         HouseholdProfile restored = serializer.fromJson(
-                "{\"audience\":\"KOSMICI\",\"skill\":\"MISTRZ\",\"cuisines\":[\"polska\"]}");
+                "{\"audience\":\"KOSMICI\",\"skill\":\"MISTRZ\",\"cuisines\":[\"polska\"],"
+                        + "\"exclusions\":[\"NO_PORK\",\"BEZ_KOSMITOW\"]}");
         assertEquals(HouseholdProfile.Audience.UNKNOWN, restored.getAudience());
         assertEquals(HouseholdProfile.CookingSkill.UNKNOWN, restored.getSkill());
         assertEquals(Arrays.asList("polska"), restored.getCuisines());
+        // Znane wykluczenie zostaje, nieznane (z nowszej wersji) jest pomijane.
+        assertEquals(1, restored.getDiet().getExclusions().size());
+        assertTrue(restored.getDiet().getExclusions()
+                .contains(DietConstraints.Exclusion.NO_PORK));
+    }
+
+    @Test
+    public void staryJsonBezWykluczenDajePusteWykluczenia() {
+        HouseholdProfile restored = serializer.fromJson(
+                "{\"audience\":\"ADULTS_ONLY\",\"skill\":\"COMFORTABLE\","
+                        + "\"cuisines\":[]}");
+        assertTrue(restored.getDiet().isEmpty());
     }
 }

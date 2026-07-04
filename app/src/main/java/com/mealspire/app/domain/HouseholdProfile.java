@@ -30,30 +30,38 @@ public final class HouseholdProfile {
     private final Audience audience;
     private final CookingSkill skill;
     private final List<String> cuisines;
+    private final DietConstraints diet;
 
-    private HouseholdProfile(Audience audience, CookingSkill skill, List<String> cuisines) {
+    private HouseholdProfile(Audience audience, CookingSkill skill, List<String> cuisines,
+                             DietConstraints diet) {
         this.audience = audience;
         this.skill = skill;
         this.cuisines = cuisines;
+        this.diet = diet;
     }
 
     public static HouseholdProfile empty() {
         return new HouseholdProfile(Audience.UNKNOWN, CookingSkill.UNKNOWN,
-                Collections.<String>emptyList());
+                Collections.<String>emptyList(), DietConstraints.empty());
     }
 
     public HouseholdProfile withAudience(Audience newAudience) {
         return new HouseholdProfile(
-                newAudience == null ? Audience.UNKNOWN : newAudience, skill, cuisines);
+                newAudience == null ? Audience.UNKNOWN : newAudience, skill, cuisines, diet);
     }
 
     public HouseholdProfile withSkill(CookingSkill newSkill) {
         return new HouseholdProfile(
-                audience, newSkill == null ? CookingSkill.UNKNOWN : newSkill, cuisines);
+                audience, newSkill == null ? CookingSkill.UNKNOWN : newSkill, cuisines, diet);
     }
 
     public HouseholdProfile withCuisines(List<String> newCuisines) {
-        return new HouseholdProfile(audience, skill, normalize(newCuisines));
+        return new HouseholdProfile(audience, skill, normalize(newCuisines), diet);
+    }
+
+    public HouseholdProfile withDiet(DietConstraints newDiet) {
+        return new HouseholdProfile(audience, skill, cuisines,
+                newDiet == null ? DietConstraints.empty() : newDiet);
     }
 
     public Audience getAudience() {
@@ -68,10 +76,16 @@ public final class HouseholdProfile {
         return cuisines;
     }
 
+    /** Twarde wykluczenia diety; nigdy null (puste = brak wykluczeń). */
+    public DietConstraints getDiet() {
+        return diet;
+    }
+
     public boolean isEmpty() {
         return audience == Audience.UNKNOWN
                 && skill == CookingSkill.UNKNOWN
-                && cuisines.isEmpty();
+                && cuisines.isEmpty()
+                && diet.isEmpty();
     }
 
     /**
@@ -81,6 +95,10 @@ public final class HouseholdProfile {
      */
     public List<String> promptSentences() {
         List<String> sentences = new ArrayList<>();
+        // Wymóg diety zawsze pierwszy — to najważniejsza informacja w prompcie.
+        if (!diet.isEmpty()) {
+            sentences.add(diet.promptSentence());
+        }
         if (audience == Audience.WITH_CHILDREN) {
             sentences.add("Gotuję też dla dzieci — proponuj dania, "
                     + "które dzieci chętnie jedzą.");

@@ -65,4 +65,36 @@ public class MealPoolBuilderTest {
         List<Recipe> pool = builder.build(builtIns, Cookbook.empty(), prefs);
         assertFalse(pool.isEmpty());
     }
+
+    @Test
+    public void dietFiltersPoolByTitleAndDetails() {
+        Recipe[] mixed = {
+                new Recipe("Kotlet schabowy", "Składniki: schab, bułka tarta."),
+                new Recipe("Zapiekanka", "Składniki: ziemniaki, mięso mielone."),
+                new Recipe("Ryż z warzywami", "Składniki: ryż, marchew, papryka.")
+        };
+        DietConstraints veg = DietConstraints.of(java.util.Arrays.asList(
+                DietConstraints.Exclusion.VEGETARIAN));
+
+        List<Recipe> pool = builder.build(mixed, Cookbook.empty(),
+                UserPreferences.empty(), veg);
+
+        assertTrue(has(pool, "Ryż z warzywami"));
+        assertFalse(has(pool, "Kotlet schabowy"));
+        assertFalse("mięso w składnikach też wyklucza", has(pool, "Zapiekanka"));
+    }
+
+    @Test
+    public void dietFilterIsAbsoluteEvenWhenItEmptiesThePool() {
+        // W odróżnieniu od niechcianych dań dieta nie ma fallbacku — pusta
+        // lista jest lepsza niż wieprzowina u wegetarianina.
+        Recipe[] meatOnly = {new Recipe("Schabowy", "Składniki: schab.")};
+        DietConstraints veg = DietConstraints.of(java.util.Arrays.asList(
+                DietConstraints.Exclusion.VEGETARIAN));
+
+        List<Recipe> pool = builder.build(meatOnly, Cookbook.empty(),
+                UserPreferences.empty(), veg);
+
+        assertTrue(pool.isEmpty());
+    }
 }

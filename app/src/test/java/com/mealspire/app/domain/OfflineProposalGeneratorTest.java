@@ -113,6 +113,23 @@ public class OfflineProposalGeneratorTest {
     }
 
     @Test
+    public void wykluczeniaDietyObowiazujaWCalymPipelinie() {
+        DietConstraints veg = DietConstraints.of(Collections.singletonList(
+                DietConstraints.Exclusion.VEGETARIAN));
+        // Cała pula obiadowa przez wiele losowań — mięso nie ma prawa się pojawić.
+        for (int seed = 0; seed < 10; seed++) {
+            List<Recipe> chosen = generator.generate(BuiltInRecipes.forMeal(1),
+                    Cookbook.empty(), UserPreferences.empty(),
+                    new TasteProfile(Collections.emptyList()), 3, new Random(seed),
+                    MealHistory.empty(), seed * DAY, veg);
+            for (Recipe recipe : chosen) {
+                assertTrue("dieta wegetariańska: " + recipe.getTitle(),
+                        veg.allows(recipe.getTitle() + "\n" + recipe.getDetails()));
+            }
+        }
+    }
+
+    @Test
     public void dailyUseRotatesThroughMostOfTheCatalogueInsteadOfRepeatingTheSameFew() {
         Recipe[] builtIns = BuiltInRecipes.forMeal(0); // 20 bundled breakfast dishes
         MealHistory history = MealHistory.empty();

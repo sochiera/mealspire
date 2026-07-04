@@ -31,7 +31,9 @@ public class HouseholdAwarePromptTest {
         return HouseholdProfile.empty()
                 .withAudience(HouseholdProfile.Audience.WITH_CHILDREN)
                 .withSkill(HouseholdProfile.CookingSkill.BEGINNER)
-                .withCuisines(Arrays.asList("polska", "azjatycka"));
+                .withCuisines(Arrays.asList("polska", "azjatycka"))
+                .withDiet(DietConstraints.of(Arrays.asList(
+                        DietConstraints.Exclusion.NO_PORK)));
     }
 
     @Test
@@ -41,6 +43,22 @@ public class HouseholdAwarePromptTest {
         assertTrue(prompt.contains("dzieci chętnie jedzą"));
         assertTrue(prompt.contains("uczę się gotować"));
         assertTrue(prompt.contains("Preferowane kuchnie: polska, azjatycka"));
+        assertTrue(prompt.contains("Bezwzględny wymóg diety"));
+        assertTrue(prompt.contains("wieprzowiny"));
+    }
+
+    @Test
+    public void wymogDietyObowiazujeWKazdymPrompcie() {
+        Recipe base = new Recipe("Kopytka", "Składniki: ziemniaki.\n\nUgotuj.");
+        List<String> prompts = Arrays.asList(
+                proposalBuilder.userPrompt(requestWith(fullProfile()), 3),
+                proposalBuilder.userPrompt(requestWith(fullProfile())),
+                recipeBuilder.fullRecipePrompt("Kopytka", requestWith(fullProfile())),
+                recipeBuilder.userPrompt(requestWith(fullProfile())),
+                modifyBuilder.userPrompt(base, "mniej soli", fullProfile()));
+        for (String prompt : prompts) {
+            assertTrue(prompt.contains("Bezwzględny wymóg diety"));
+        }
     }
 
     @Test
@@ -98,6 +116,7 @@ public class HouseholdAwarePromptTest {
             assertFalse(prompt.contains("Preferowane kuchnie"));
             assertFalse(prompt.contains("uczę się gotować"));
             assertFalse(prompt.contains("wyzwania"));
+            assertFalse(prompt.contains("Bezwzględny wymóg diety"));
         }
     }
 }

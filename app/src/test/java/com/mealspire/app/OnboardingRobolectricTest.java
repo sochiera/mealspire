@@ -12,6 +12,7 @@ import android.widget.TextView;
 
 import androidx.test.core.app.ApplicationProvider;
 
+import com.mealspire.app.domain.DietConstraints;
 import com.mealspire.app.domain.HouseholdProfile;
 import com.mealspire.app.domain.UserPreferences;
 import com.mealspire.app.storage.SharedPreferencesAppSettings;
@@ -73,10 +74,13 @@ public class OnboardingRobolectricTest {
 
         // 1. „Dla kogo gotujesz?" → „Dorośli i dzieci"
         activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
-        // 2. „Jak Ci idzie gotowanie?" → „Dopiero zaczynam"
+        // 2. „Czego nie jadacie?": bez zaznaczeń, „Dalej"
+        assertEquals("Czego nie jadacie?", questionText(activity));
+        activity.<Button>findViewById(R.id.onboarding_next_button).performClick();
+        // 3. „Jak Ci idzie gotowanie?" → „Dopiero zaczynam"
         assertEquals("Jak Ci idzie gotowanie?", questionText(activity));
         activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
-        // 3. Kuchnie: bez zaznaczeń, „Dalej"
+        // 4. Kuchnie: bez zaznaczeń, „Dalej"
         assertEquals("Jakie kuchnie lubicie najbardziej?", questionText(activity));
         activity.<Button>findViewById(R.id.onboarding_next_button).performClick();
 
@@ -85,14 +89,60 @@ public class OnboardingRobolectricTest {
         assertEquals(HouseholdProfile.Audience.WITH_CHILDREN, profile.getAudience());
         assertEquals(HouseholdProfile.CookingSkill.BEGINNER, profile.getSkill());
         assertTrue(profile.getCuisines().isEmpty());
+        assertTrue(profile.getDiet().isEmpty());
+    }
+
+    @Test
+    public void zaznaczoneWykluczeniaTrafiajaDoProfilu() {
+        MainActivity activity = launch();
+        activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
+
+        assertEquals("Czego nie jadacie?", questionText(activity));
+        // Pierwszy checkbox to „Wegetariańsko…" (kolejność enuma).
+        firstCheckBox(activity).performClick();
+        activity.<Button>findViewById(R.id.onboarding_next_button).performClick();
+
+        HouseholdProfile profile = new SharedPreferencesHouseholdProfileStore(
+                ApplicationProvider.getApplicationContext()).load();
+        assertTrue(profile.getDiet().getExclusions()
+                .contains(DietConstraints.Exclusion.VEGETARIAN));
+    }
+
+    private static android.widget.CheckBox firstCheckBox(MainActivity activity) {
+        android.view.ViewGroup content = activity.findViewById(android.R.id.content);
+        android.widget.CheckBox box = findCheckBox(content);
+        assertNotNull("na pytaniu o dietę musi być checkbox", box);
+        return box;
+    }
+
+    private static android.widget.CheckBox findCheckBox(android.view.View view) {
+        if (view instanceof android.widget.CheckBox) {
+            return (android.widget.CheckBox) view;
+        }
+        if (view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                android.widget.CheckBox found = findCheckBox(group.getChildAt(i));
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Przechodzi cztery pytania profilu (bez zaznaczeń), do pierwszej rundy dań. */
+    private static void answerProfileQuestions(MainActivity activity) {
+        activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
+        activity.<Button>findViewById(R.id.onboarding_next_button).performClick();
+        activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
+        activity.<Button>findViewById(R.id.onboarding_next_button).performClick();
     }
 
     @Test
     public void trzyRundyDanZapisujaTrzyPolubienia() {
         MainActivity activity = launch();
-        activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
-        activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
-        activity.<Button>findViewById(R.id.onboarding_next_button).performClick();
+        answerProfileQuestions(activity);
 
         for (int round = 0; round < 3; round++) {
             assertEquals("Które danie najbardziej Ci pasuje?", questionText(activity));
@@ -110,9 +160,7 @@ public class OnboardingRobolectricTest {
     @Test
     public void cofnieciePozwalaZmienicWyborDaniaBezKumulowaniaPolubien() {
         MainActivity activity = launch();
-        activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
-        activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
-        activity.<Button>findViewById(R.id.onboarding_next_button).performClick();
+        answerProfileQuestions(activity);
 
         // Runda 1: wybierz danie A, cofnij się, wybierz jednak danie B.
         String dishA = activity.<Button>findViewById(R.id.onboarding_option_1)
@@ -175,9 +223,7 @@ public class OnboardingRobolectricTest {
     @Test
     public void wybraneDaniaZRundZapisujaSieTezPrzyPominieciu() {
         MainActivity activity = launch();
-        activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
-        activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
-        activity.<Button>findViewById(R.id.onboarding_next_button).performClick();
+        answerProfileQuestions(activity);
 
         String dish = activity.<Button>findViewById(R.id.onboarding_option_1)
                 .getText().toString();
@@ -195,7 +241,7 @@ public class OnboardingRobolectricTest {
     public void cofnijWQuizieWracaDoPoprzedniegoPytania() {
         MainActivity activity = launch();
         activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
-        assertEquals("Jak Ci idzie gotowanie?", questionText(activity));
+        assertEquals("Czego nie jadacie?", questionText(activity));
 
         activity.onBackPressed();
 
