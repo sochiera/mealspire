@@ -56,10 +56,20 @@ public final class ProposalPromptBuilder {
 
     private void appendContext(StringBuilder sb, RecipeRequest request) {
         request.getHouseholdProfile().appendPromptSentences(sb);
-        UserPreferences preferences = request.getPreferences();
-        if (!preferences.getLikes().isEmpty()) {
+        TasteContext taste = request.getTasteContext();
+        if (!taste.isEmpty()) {
+            // Skompresowany profil zamiast surowej listy wszystkich polubień —
+            // przy 50+ polubieniach pełna lista szumi i rozmywa sygnał.
+            for (String sentence : taste.getProfileSentences()) {
+                sb.append(' ').append(sentence);
+            }
+            if (!taste.getExampleDishes().isEmpty()) {
+                sb.append(" Przykłady dań, które ostatnio polubił: ")
+                        .append(join(taste.getExampleDishes())).append('.');
+            }
+        } else if (!request.getPreferences().getLikes().isEmpty()) {
             sb.append(" Dania, które użytkownik lubi: ")
-                    .append(join(preferences.getLikes())).append('.');
+                    .append(join(request.getPreferences().getLikes())).append('.');
         }
         String affinities = join(request.getTasteAffinities());
         if (!affinities.isEmpty()) {

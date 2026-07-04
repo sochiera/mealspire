@@ -18,6 +18,7 @@ public final class RecipeRequest {
     private final List<String> knownDishes;
     private final List<String> tasteAffinities;
     private final HouseholdProfile householdProfile;
+    private final TasteContext tasteContext;
 
     public RecipeRequest(String mealType, UserPreferences preferences,
                          List<String> recentToAvoid, List<String> choiceFragments) {
@@ -41,6 +42,14 @@ public final class RecipeRequest {
                          List<String> recentToAvoid, List<String> choiceFragments,
                          List<String> knownDishes, List<String> tasteAffinities,
                          HouseholdProfile householdProfile) {
+        this(mealType, preferences, recentToAvoid, choiceFragments, knownDishes,
+                tasteAffinities, householdProfile, null);
+    }
+
+    private RecipeRequest(String mealType, UserPreferences preferences,
+                          List<String> recentToAvoid, List<String> choiceFragments,
+                          List<String> knownDishes, List<String> tasteAffinities,
+                          HouseholdProfile householdProfile, TasteContext tasteContext) {
         this.mealType = mealType;
         this.preferences = preferences != null ? preferences : UserPreferences.empty();
         this.recentToAvoid = copy(recentToAvoid);
@@ -49,6 +58,13 @@ public final class RecipeRequest {
         this.tasteAffinities = copy(tasteAffinities);
         this.householdProfile = householdProfile != null
                 ? householdProfile : HouseholdProfile.empty();
+        this.tasteContext = tasteContext != null ? tasteContext : TasteContext.empty();
+    }
+
+    /** Kopia żądania ze skompresowanym kontekstem gustu (§5.1 designu). */
+    public RecipeRequest withTasteContext(TasteContext context) {
+        return new RecipeRequest(mealType, preferences, recentToAvoid, choiceFragments,
+                knownDishes, tasteAffinities, householdProfile, context);
     }
 
     public String getMealType() {
@@ -79,6 +95,11 @@ public final class RecipeRequest {
     /** The onboarding household profile; never null (empty when unanswered). */
     public HouseholdProfile getHouseholdProfile() {
         return householdProfile;
+    }
+
+    /** Skompresowany profil gustu do promptu; nigdy null (pusty = brak danych). */
+    public TasteContext getTasteContext() {
+        return tasteContext;
     }
 
     private static List<String> copy(List<String> values) {

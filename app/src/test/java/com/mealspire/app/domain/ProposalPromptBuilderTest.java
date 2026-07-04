@@ -94,6 +94,37 @@ public class ProposalPromptBuilderTest {
     }
 
     @Test
+    public void skompresowanyProfilZastepujePelnaListePolubien() {
+        UserPreferences prefs = UserPreferences.empty()
+                .withLike("naleśniki").withLike("bigos").withLike("owsianka");
+        TasteContext context = new TasteContext(
+                Arrays.asList("Najchętniej wybiera dania z bazą: kurczak, warzywa."),
+                Arrays.asList("Kurczak w curry", "Leczo"));
+        RecipeRequest request = new RecipeRequest("Obiad", prefs,
+                Collections.<String>emptyList(), Collections.<String>emptyList())
+                .withTasteContext(context);
+
+        String user = builder.userPrompt(request, 3);
+
+        assertTrue(user.contains("Najchętniej wybiera dania z bazą: kurczak, warzywa."));
+        assertTrue(user.contains("Przykłady dań, które ostatnio polubił: "
+                + "Kurczak w curry, Leczo."));
+        // Surowa lista wszystkich polubień znika — kompresja zamiast wyliczanki.
+        assertFalse(user.contains("Dania, które użytkownik lubi"));
+        assertFalse(user.contains("bigos"));
+    }
+
+    @Test
+    public void bezKontekstuGustuZostajeStaraListaPolubien() {
+        UserPreferences prefs = UserPreferences.empty().withLike("naleśniki");
+        RecipeRequest request = new RecipeRequest("Obiad", prefs,
+                Collections.<String>emptyList(), Collections.<String>emptyList());
+        String user = builder.userPrompt(request, 3);
+        assertTrue(user.contains("Dania, które użytkownik lubi"));
+        assertTrue(user.contains("naleśniki"));
+    }
+
+    @Test
     public void userPromptIncludesChoiceFragmentsAndRecentDishes() {
         RecipeRequest request = new RecipeRequest("Kolacja", UserPreferences.empty(),
                 Arrays.asList("Pierogi"), Arrays.asList("dla 4 osób, coś szybkiego"));

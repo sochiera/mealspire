@@ -50,10 +50,15 @@ import com.mealspire.app.domain.RecipeRequest;
 import com.mealspire.app.domain.RecipeService;
 import com.mealspire.app.domain.RecipeTextParser;
 import com.mealspire.app.domain.SecretStore;
+import com.mealspire.app.domain.DishTagger;
+import com.mealspire.app.domain.FrozenTasteAggregate;
+import com.mealspire.app.domain.TasteContextBuilder;
 import com.mealspire.app.domain.TasteEvent;
+import com.mealspire.app.domain.TasteEventCompactor;
 import com.mealspire.app.domain.TasteEventLog;
 import com.mealspire.app.domain.TasteEventMigration;
 import com.mealspire.app.domain.TasteEventStore;
+import com.mealspire.app.domain.TasteModel;
 import com.mealspire.app.domain.TasteProfile;
 import com.mealspire.app.domain.TasteProfiler;
 import com.mealspire.app.domain.UserPreferences;
@@ -131,6 +136,10 @@ public class MainActivity extends Activity {
     private SecretStore secretStore;
     private TasteEventStore tasteEventStore;
     private TasteEventLog tasteEvents;
+    private FrozenTasteAggregate tasteAggregate;
+    private final DishTagger dishTagger = new DishTagger();
+    private final TasteContextBuilder tasteContextBuilder = new TasteContextBuilder();
+    private final TasteEventCompactor tasteEventCompactor = new TasteEventCompactor();
     private final OfflineProposalGenerator offlineProposalGenerator = new OfflineProposalGenerator();
     private final ProposalValidator proposalValidator = new ProposalValidator();
     private final IngredientExtractor ingredientExtractor = new IngredientExtractor();
@@ -184,6 +193,7 @@ public class MainActivity extends Activity {
         secretStore = new SharedPreferencesSecretStore(this);
         tasteEventStore = new SharedPreferencesTasteEventStore(this);
         tasteEvents = tasteEventStore.load();
+        tasteAggregate = tasteEventStore.loadAggregate();
         // Polubienia sprzed ery dziennika stają się zdarzeniami LIKED (raz).
         TasteEventLog migrated = TasteEventMigration.migrate(
                 tasteEvents, preferences, System.currentTimeMillis());
@@ -779,9 +789,14 @@ public class MainActivity extends Activity {
         if (knownDishes.size() > 10) {
             knownDishes = knownDishes.subList(0, 10);
         }
+        TasteModel tasteModel = TasteModel.build(tasteEvents, tasteAggregate,
+                dishTagger, BuiltInRecipes.detailsByTitle(cookbook),
+                System.currentTimeMillis());
         return new RecipeRequest(mealType, preferences, history.recentTitles(8),
                 fragments, knownDishes, buildTasteProfile().getAffinities(),
-                householdProfile);
+                householdProfile)
+                .withTasteContext(tasteContextBuilder.build(tasteModel, tasteEvents,
+                        householdProfile.getDiet(), currentMealIndex));
     }
 
     private void showProposals(List<DishProposal> newProposals, List<Recipe> newRecipes) {
@@ -990,10 +1005,21 @@ public class MainActivity extends Activity {
         Toast.makeText(this, "Zapamiętane — lubisz: " + dish, Toast.LENGTH_SHORT).show();
     }
 
-    /** The single place taste events are appended and persisted. */
+    /** The single place taste events are appended, compacted and persisted. */
     private void recordTasteEvent(TasteEvent.Type type, String dish, int mealIndex) {
         tasteEvents = tasteEvents.append(new TasteEvent(
                 type, dish, mealIndex, System.currentTimeMillis()));
+        if (tasteEvents.size() > TasteEventLog.MAX_EVENTS) {
+            // Najstarsze zdarzenia zwijają się do zamrożonego agregatu —
+            // model liczony dalej wychodzi ten sam, dziennik nie puchnie.
+            TasteEventCompactor.Result compacted = tasteEventCompactor.compact(
+                    tasteEvents, tasteAggregate, dishTagger,
+                    BuiltInRecipes.detailsByTitle(cookbook),
+                    System.currentTimeMillis(), TasteEventLog.MAX_EVENTS);
+            tasteEvents = compacted.getLog();
+            tasteAggregate = compacted.getAggregate();
+            tasteEventStore.saveAggregate(tasteAggregate);
+        }
         tasteEventStore.save(tasteEvents);
     }
 
@@ -1257,6 +1283,8 @@ public class MainActivity extends Activity {
             // do propozycji bocznymi drzwiami przez model gustu.
             tasteEvents = TasteEventLog.empty();
             tasteEventStore.save(tasteEvents);
+            tasteAggregate = FrozenTasteAggregate.empty();
+            tasteEventStore.saveAggregate(tasteAggregate);
             toast("Wyczyszczono polubione dania.");
         });
         labels.add("Wyczyść historię podpowiedzi");
