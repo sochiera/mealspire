@@ -6,6 +6,15 @@ generować nowe przepisy. Dokument opisuje stan docelowy i etapy dojścia —
 każdy etap jest samodzielnie wartościowy i zgodny z zasadami projektu
 (Java, zero third-party, logika w `domain/`, TDD).
 
+> **Stan wdrożenia:** etapy 1–7 (§8) są zaimplementowane. Świadome
+> odstępstwa od pierwotnego tekstu: wykluczenia mieszkają w
+> `HouseholdProfile` (jeden store i jedna ścieżka do promptów zamiast
+> czwartego magazynu), wbudowane dania taguje ten sam słownikowy
+> `DishTagger` co dania AI (test pilnuje ≥80% pokrycia bazy zamiast
+> ręcznej tabeli), a wymiar „wysiłek" nie jest uczony — pochodzi wprost
+> z deklaracji czasu w quizie. Sygnał `COOKED` nie istnieje, bo appka
+> nie wie, że coś ugotowano; `MealHistory` rejestruje pokazania.
+
 ## 1. Zasada naczelna: model niczego nie pamięta — appka pamięta wszystko
 
 LLM nie jest bazą wiedzy o użytkowniku. Cała wiedza o guście mieszka

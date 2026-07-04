@@ -27,21 +27,46 @@ Wszystkie teksty w UI i promptach są po polsku.
 ## Kluczowe decyzje produktowe
 
 - **Onboarding tylko raz**: świeża instalacja zaczyna od quizu (dla kogo
-  gotujesz / jak idzie gotowanie / ulubione kuchnie + 3 rundy wyboru dań).
-  Odpowiedzi 1–3 → `HouseholdProfile` (wpływa na prompty przez
+  gotujesz / czego nie jadacie / ile czasu na gotowanie / jak idzie gotowanie
+  + 3 **kontrastowe** rundy wyboru dań z `ContrastiveDishSampler` — każda
+  rozstrzyga jeden wymiar gustu; opcja „Żadne z tych" nie zapisuje nic).
+  Odpowiedzi 1–4 → `HouseholdProfile` (wpływa na prompty przez
   `RecipeRequest.getHouseholdProfile()`, także na „Zmień przepis"), wybory dań
   → zwykłe polubienia (celowo 3, nie 5 — AI nie ma przejmować propozycji po
-  samym quizie). Wybory rund trzymane są w `onboardingPicks` i zapisywane
-  dopiero na końcu quizu, żeby „Cofnij" + inny wybór **podmieniał** polubienie,
-  a nie dokładał kolejne. Flaga ukończenia w `AppSettings.isOnboardingDone()`
-  jest niezależna od profilu; „Pomiń" też ją ustawia, a udzielone odpowiedzi
-  zostają. Jednorazowe dialogi startowe (liczba osób, hasło do klucza API,
-  uprawnienie do powiadomień) przechodzą przez `showStartupPrompts()` i czekają
-  do końca quizu. Zmiana odpowiedzi później: „Więcej…" → „Profil domowników"
-  (etykiety odpowiedzi współdzielone z quizem przez stałe `*_LABELS`/`*_VALUES`).
+  samym quizie). Rundy losowane są **po** pytaniu o dietę i ją respektują;
+  zmiana diety przez „Cofnij" przelosowuje rundy (`ensureOnboardingRounds`).
+  Wybory rund trzymane są w `onboardingPicks` i zapisywane dopiero na końcu
+  quizu, żeby „Cofnij" + inny wybór **podmieniał** polubienie, a nie dokładał
+  kolejne. Flaga ukończenia w `AppSettings.isOnboardingDone()` jest niezależna
+  od profilu; „Pomiń" też ją ustawia, a udzielone odpowiedzi zostają.
+  Jednorazowe dialogi startowe (liczba osób, hasło do klucza API, uprawnienie
+  do powiadomień) przechodzą przez `showStartupPrompts()` i czekają do końca
+  quizu. Zmiana odpowiedzi później: „Więcej…" → „Profil domowników" (etykiety
+  odpowiedzi współdzielone z quizem przez stałe `*_LABELS`/`*_VALUES`;
+  ulubione kuchnie zostały tylko w tym dialogu, wypadły z quizu).
 
-- **Uczenie tylko pozytywne**: zapamiętujemy wyłącznie polubienia
-  („Lubię to"). Odrzucenie = po prostu „Inne propozycje".
+- **Wykluczenia diety to wymóg, nie preferencja** (`DietConstraints`
+  w `HouseholdProfile`): bezwzględne zdanie w każdym prompcie, twardy filtr
+  puli offline (`MealPoolBuilder`, bez fallbacku!) i walidacja odpowiedzi AI
+  (`ProposalValidator` — łamiące dietę propozycje zastępuje pula offline).
+  Nie podlegają wygaszaniu; maskują też wyuczony profil w `TasteContextBuilder`.
+
+- **Uczenie gustu** (pełny design: `docs/design/agent-gustu.md`): w UI nadal
+  tylko pozytywnie — nie pytamy, czego użytkownik nie lubi. Pod spodem
+  append-only dziennik `TasteEvent` (lajk/import/pokaż przepis/wybór z quizu
+  + ciche, słabe negatywy: reroll, widziane-niewybrane), z którego liczony
+  jest `TasteModel`: wymiary baza/kuchnia/charakter (`DishTagger`, słownikowo,
+  bez AI), wygaszanie z półokresem 60 dni, profile per slot posiłku, sufit
+  ujemny −1. Nadmiar dziennika (>400) zwija `TasteEventCompactor` do
+  zamrożonego agregatu (model wychodzi identyczny — pilnuje test
+  równoważności). Do promptu idzie skompresowany `TasteContext` (top wartości
+  wymiarów + max 8 przykładów), nie surowa lista polubień. **Reguła 2+1**:
+  `ExplorationPlanner` wybiera cel eksploracji (trzecia propozycja celowo poza
+  gustem), `MonotonyDetector` dokłada „unikaj dominującej bazy". Propozycja
+  eksploracyjna **nigdy** nie dostaje sygnałów ujemnych — nie karzemy własnych
+  eksperymentów. Liczniki lokalne (`LearningStats`, acceptance/reroll rate,
+  odsetek nieotagowanych dań AI) w „Zarządzaj moimi danymi → Statystyki
+  uczenia"; zero telemetrii.
 - **AI dopiero po nauce**: świeża instalacja proponuje z wbudowanej puli
   (`BuiltInRecipes`, ~60 dań). AI przejmuje propozycje dopiero po ≥5
   polubieniach (`PersonalizationReadiness.MIN_LIKED_DISHES`). Inne funkcje AI
