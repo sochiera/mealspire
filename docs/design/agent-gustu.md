@@ -64,6 +64,12 @@ Reguły bezpieczeństwa uczenia:
   nigdy „nie proponuj". Twardy zakaz to wyłącznie **wykluczenie** (§2.3).
 - Nie uczymy się z propozycji, których użytkownik nie widział (np.
   odpowiedź AI przyszła po zmianie widoku — `contentEpoch` już to wykrywa).
+- Propozycja **eksploracyjna** (§4) nie generuje sygnałów ujemnych: nie
+  dostaje `SHOWN_NOT_CHOSEN` ani udziału w `REROLLED`. Z definicji zwykle
+  przegrywa z faworytami — gdyby za to płaciła, system karałby własne
+  eksperymenty i po kilku tygodniach „nauczyłby się", że eksplorowane
+  wymiary są złe, czyli bańka wróciłaby tylnymi drzwiami. Zdarzenie niesie
+  flagę pochodzenia; z eksploracji liczy się wyłącznie sukces (wybór, lajk).
 - Prior z onboardingu ma słabnąć: realne zachowania (świeższe zdarzenia)
   naturalnie go przykrywają dzięki wygaszaniu (§3.2).
 
@@ -83,9 +89,19 @@ każde danie opisujemy w kilku **wymiarach** i uczymy się per wymiar:
 
 Skąd cechy dania: dla `BuiltInRecipes` — otagowane ręcznie przy daniach
 (stała, mała pula ~60 pozycji, tagowanie jednorazowe). Dla dań od AI —
-prosta klasyfikacja słownikowa po stronie appki (`DishTagger`: dopasowanie
-składników/nazw do słowników wymiarów). Świadomie **bez** wołania AI do
-tagowania — ma działać offline i deterministycznie w testach.
+prosta klasyfikacja słownikowa po stronie appki (`DishTagger`), pracująca
+na nazwie **i linii „Składniki:" z propozycji** (parser już ją wyodrębnia
+— to znacznie mocniejszy materiał niż sam tytuł). Świadomie **bez**
+wołania AI do tagowania — ma działać offline i deterministycznie w testach.
+
+Słowniki nie zawsze trafią, więc zachowanie przy braku dopasowania jest
+częścią kontraktu: **nierozpoznany wymiar = brak obserwacji** dla tego
+wymiaru (nie zapisujemy fałszywego „neutralne", które rozwadniałoby
+średnią), a polubienie takiego dania nadal pracuje przez tytuł
+i tokenowy `TasteProfile`. Odsetek dań bez rozpoznanej bazy/kuchni jest
+licznikiem diagnostycznym (§7) — gdy rośnie, słowniki wymagają
+uzupełnienia; to jedyny element systemu, który się „starzeje" i wymaga
+ręcznej pielęgnacji przy wydaniach.
 
 Obecny `TasteProfile` (tokeny) zostaje jako sygnał uzupełniający —
 wyłapuje niuanse, których słowniki nie znają (np. „kurkuma", „feta").
@@ -99,6 +115,12 @@ wegetariańsko / bez wieprzowiny / bez glutenu / bez laktozy / bez orzechów
 - do promptu idą jako **wymóg** („Nigdy nie proponuj…"), nie wskazówka,
 - filtrują też pulę offline (`BuiltInRecipes`) i walidują odpowiedzi AI
   (§5.4) — AI może się mylić, filtr appki nie,
+- **maskują wyuczony profil**: `TasteContextBuilder` (§5.1) pomija
+  wartości wymiarów, przykładowe dania i termy `TasteProfile` kolidujące
+  z aktualnymi wykluczeniami. Kto przechodzi na wegetarianizm, nie może
+  dostawać do promptu „najchętniej: wieprzowina" z własnej historii —
+  a czyszczenie dziennika nie wchodzi w grę, bo wykluczenie bywa czasowe
+  (dieta) i po jego zdjęciu stary gust ma wrócić,
 - nie podlegają wygaszaniu ani wagom; zmienia się je tylko ręcznie
   w „Profilu domowników".
 
@@ -110,12 +132,23 @@ Dwa poziomy, oba w `SharedPreferences` (wolumen jest mały — nie ma powodu
 łamać zasady „zero third-party" dla SQLite/Room):
 
 1. **`TasteEvent` — dziennik append-only** (nowy `TasteEventStore`):
-   `typ zdarzenia | tytuł dania | slot posiłku | timestamp`.
-   Surowa prawda; z niego zawsze można odtworzyć model od zera (także po
-   zmianie algorytmu — to główny powód, by trzymać zdarzenia, nie tylko
-   agregat). Limit ~400 najnowszych zdarzeń; starsze są **kompaktowane**:
-   ich wkład dopisuje się do zapisanych agregatów wymiarowych i znikają
-   z dziennika.
+   `typ zdarzenia | tytuł dania | slot posiłku | timestamp | pochodzenie
+   (zwykłe/eksploracyjne)`. Surowa prawda; model można przeliczyć od zera
+   ze zdarzeń — to główny powód, by trzymać zdarzenia, nie tylko agregat.
+   Limit ~400 najnowszych zdarzeń; starsze są **kompaktowane** do
+   zamrożonego agregatu: sum wag per (wymiar, wartość, slot),
+   zdyskontowanych na moment kompakcji `T` i opatrzonych tym znacznikiem.
+   Przy odczycie całość mnoży się przez `0.5^((now − T) / 60 dni)` —
+   wygaszanie wykładnicze składa się poprawnie, więc wspólny mnożnik dla
+   całego kompaktatu jest matematycznie dokładny.
+
+   Uczciwe ograniczenie: „przeliczenie od zera" (np. po zmianie słowników
+   tagów) działa wstecz tylko na zdarzenia wciąż obecne w dzienniku;
+   kompaktat pozostaje w starej interpretacji i po prostu wygasa (po
+   jednym półokresie waży połowę, po dwóch ćwierć). Limit 400 jest dobrany
+   tak, by przy typowym użyciu (kilka zdarzeń dziennie) dziennik pokrywał
+   co najmniej jeden półokres — czyli zdecydowaną większość efektywnej
+   masy modelu.
 
 2. **`TasteModel` — agregat pochodny**: wynik per (wymiar, wartość, slot)
    + licznik obserwacji per wymiar (pewność). Przeliczany przy zapisie
@@ -174,7 +207,9 @@ zaradcze, w kolejności ważności:
 4. **Wybory uczą relatywnie**: `SHOWN_NOT_CHOSEN` odejmuje odrobinę tylko
    temu, co przegrało z czymś wybranym w tej samej trójce — uczy się
    z porównania, nie z absolutnej oceny (to samo podejście co pairwise
-   preference elicitation w literaturze rekomendacji).
+   preference elicitation w literaturze rekomendacji). Propozycja
+   eksploracyjna jest z tego wyłączona (§2.1) — nie wolno karać własnych
+   eksperymentów.
 
 ## 5. Sterowanie agentem AI
 
@@ -189,7 +224,13 @@ ważności:
 3. **Skompresowany profil gustu** — zamiast surowej listy wszystkich
    polubień: „Najchętniej: [top 3 bazy], kuchnie: [top 2], charakter:
    [top 2]. Zwykle ma ok. X min." — dane z `TasteModel` dla bieżącego
-   slotu posiłku.
+   slotu posiłku. **Fallback cienkiego slotu**: próg gotowości (§3.3)
+   jest globalny, więc 5 lajków obiadowych włącza AI także dla śniadań,
+   o których model nie wie nic. Slot z mniej niż ~8 obserwacjami dostaje
+   profil ogólny (suma wszystkich slotów) zamiast pustej sekcji, a jego
+   trójka propozycji przesuwa się w stronę eksploracji (2 eksploracyjne
+   + 1 wg profilu ogólnego) — cienki slot ma się szybko douczać, nie
+   udawać, że coś wie.
 4. **Przykładowe ulubione dania** — max 8 tytułów, ważone świeżością
    (nie alfabetycznie ani „wszystko"). Konkrety kotwiczą model lepiej niż
    abstrakcje, ale ogon ucinamy.
@@ -309,7 +350,9 @@ Ale możemy mierzyć lokalnie i pokazać w ukrytym widoku diagnostycznym:
   („Pokaż przepis" / lajk) — powinien rosnąć w czasie,
 - **reroll rate**: odsetek „Inne propozycje" — powinien spadać,
 - rozkład propozycji per wymiar — sanity check, że eksploracja działa
-  (żaden wymiar nie dominuje >60%).
+  (żaden wymiar nie dominuje >60%),
+- **odsetek dań AI bez rozpoznanych tagów** — wskaźnik starzenia się
+  słowników `DishTaggera` (§2.2); rosnący = słowniki do uzupełnienia.
 
 Te same liczniki służą do ręcznej oceny zmian algorytmu między wydaniami.
 
