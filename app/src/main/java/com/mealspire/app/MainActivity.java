@@ -34,6 +34,8 @@ import com.mealspire.app.domain.HouseholdProfile;
 import com.mealspire.app.domain.HouseholdProfileStore;
 import com.mealspire.app.domain.KnownDishImporter;
 import com.mealspire.app.domain.KnownDishPromptBuilder;
+import com.mealspire.app.domain.LearningStats;
+import com.mealspire.app.domain.LearningStatsStore;
 import com.mealspire.app.domain.BuiltInRecipes;
 import com.mealspire.app.domain.ContrastiveDishSampler;
 import com.mealspire.app.domain.IngredientExtractor;
@@ -55,6 +57,7 @@ import com.mealspire.app.domain.ExplorationPlanner;
 import com.mealspire.app.domain.FrozenTasteAggregate;
 import com.mealspire.app.domain.MonotonyDetector;
 import com.mealspire.app.domain.TasteContextBuilder;
+import com.mealspire.app.domain.TasteDimension;
 import com.mealspire.app.domain.TasteEvent;
 import com.mealspire.app.domain.TasteEventCompactor;
 import com.mealspire.app.domain.TasteEventLog;
@@ -73,6 +76,7 @@ import com.mealspire.app.storage.SharedPreferencesCookbookStore;
 import com.mealspire.app.storage.SharedPreferencesHouseholdProfileStore;
 import com.mealspire.app.storage.SharedPreferencesMealHistoryStore;
 import com.mealspire.app.storage.SharedPreferencesPreferenceStore;
+import com.mealspire.app.storage.SharedPreferencesLearningStatsStore;
 import com.mealspire.app.storage.SharedPreferencesSecretStore;
 import com.mealspire.app.storage.SharedPreferencesTasteEventStore;
 
@@ -145,6 +149,16 @@ public class MainActivity extends Activity {
     private TasteEventStore tasteEventStore;
     private TasteEventLog tasteEvents;
     private FrozenTasteAggregate tasteAggregate;
+    private LearningStatsStore learningStatsStore;
+    private LearningStats learningStats;
+    // Index of the deliberately-exploratory AI proposal in the current trio
+    // (-1 = none). Exploratory proposals never carry negative signals — the
+    // system must not punish its own experiments.
+    private int explorationIndex = -1;
+    // Implicit signals fire once per trio: the first opened recipe decides the
+    // SHOWN_NOT_CHOSEN losers, the first engagement bumps the stats.
+    private boolean trioChoiceRecorded;
+    private boolean trioEngagementCounted;
     private final DishTagger dishTagger = new DishTagger();
     private final TasteContextBuilder tasteContextBuilder = new TasteContextBuilder();
     private final TasteEventCompactor tasteEventCompactor = new TasteEventCompactor();
@@ -206,6 +220,8 @@ public class MainActivity extends Activity {
         tasteEventStore = new SharedPreferencesTasteEventStore(this);
         tasteEvents = tasteEventStore.load();
         tasteAggregate = tasteEventStore.loadAggregate();
+        learningStatsStore = new SharedPreferencesLearningStatsStore(this);
+        learningStats = learningStatsStore.load();
         // Polubienia sprzed ery dziennika stają się zdarzeniami LIKED (raz).
         TasteEventLog migrated = TasteEventMigration.migrate(
                 tasteEvents, preferences, System.currentTimeMillis());
@@ -725,6 +741,7 @@ public class MainActivity extends Activity {
         // Shared offline pipeline: pool -> shuffle -> at most one taste-led pick,
         // the rest kept varied (so liking three chicken dishes does not turn every
         // suggestion into chicken).
+        explorationIndex = -1;
         List<Recipe> chosen = generateOfflineRecipes();
 
         List<DishProposal> newProposals = new ArrayList<>();
@@ -778,6 +795,14 @@ public class MainActivity extends Activity {
                         showHint("Nie udało się wymyślić dań. Spróbuj ponownie.");
                         return;
                     }
+                    // The third slot is the deliberate exploration — but only
+                    // if it really came from the AI (not an offline substitute).
+                    boolean explored = !request.getTasteContext()
+                            .getExplorationSentence().isEmpty();
+                    explorationIndex = explored
+                            && vetted.getProposals().size() == PROPOSAL_COUNT
+                            && vetted.getRecipes().get(PROPOSAL_COUNT - 1) == null
+                            ? PROPOSAL_COUNT - 1 : -1;
                     showProposals(vetted.getProposals(), vetted.getRecipes());
                 });
             } catch (IOException e) {
@@ -826,10 +851,41 @@ public class MainActivity extends Activity {
         proposals = newProposals;
         proposalRecipes = newRecipes;
         currentRecipe = null;
+        trioChoiceRecorded = false;
+        trioEngagementCounted = false;
         for (DishProposal proposal : newProposals) {
             recordChosen(proposal.getName());
         }
+        countShownTrio(newProposals, newRecipes);
         renderProposals();
+    }
+
+    /** Liczniki diagnostyczne: pokazany zestaw + jakość tagowania propozycji AI. */
+    private void countShownTrio(List<DishProposal> newProposals, List<Recipe> newRecipes) {
+        int aiCount = 0;
+        int aiUntagged = 0;
+        for (int i = 0; i < newProposals.size(); i++) {
+            boolean fromAi = i >= newRecipes.size() || newRecipes.get(i) == null;
+            if (fromAi) {
+                aiCount++;
+                if (dishTagger.tag(newProposals.get(i)).get(TasteDimension.BASE) == null) {
+                    aiUntagged++;
+                }
+            }
+        }
+        learningStats = learningStats.withTrioShown()
+                .withAiProposals(aiCount, aiUntagged);
+        learningStatsStore.save(learningStats);
+    }
+
+    /** Pierwsze zaangażowanie w zestaw (przepis/lajk) liczy się do acceptance. */
+    private void markTrioEngaged() {
+        if (trioEngagementCounted) {
+            return;
+        }
+        trioEngagementCounted = true;
+        learningStats = learningStats.withTrioEngaged();
+        learningStatsStore.save(learningStats);
     }
 
     private void renderProposals() {
@@ -844,7 +900,10 @@ public class MainActivity extends Activity {
         refresh.setText("Inne propozycje");
         refresh.setAllCaps(false);
         refresh.setTextSize(16);
-        refresh.setOnClickListener(v -> generateProposals());
+        refresh.setOnClickListener(v -> {
+            recordTrioRerolled();
+            generateProposals();
+        });
         contentContainer.addView(refresh, marginTop(16));
     }
 
@@ -902,11 +961,25 @@ public class MainActivity extends Activity {
         return card;
     }
 
+    /** „Inne propozycje" = słaby negatyw dla trójki; eksperyment systemu nie płaci. */
+    private void recordTrioRerolled() {
+        for (int i = 0; i < proposals.size(); i++) {
+            if (i == explorationIndex) {
+                continue;
+            }
+            recordTasteEvent(TasteEvent.Type.REROLLED, proposals.get(i).getName(),
+                    currentMealIndex, false);
+        }
+        learningStats = learningStats.withReroll();
+        learningStatsStore.save(learningStats);
+    }
+
     private void likeProposal(int index) {
         if (index < 0 || index >= proposals.size()) {
             return;
         }
-        rememberLike(proposals.get(index).getName());
+        markTrioEngaged();
+        rememberLike(proposals.get(index).getName(), index == explorationIndex);
     }
 
     /** Reveal the full recipe for a proposal: instant offline, fetched for AI. */
@@ -915,9 +988,23 @@ public class MainActivity extends Activity {
             return;
         }
         recipeFromProposals = true;
-        // Opening a recipe is an implicit "this one interests me" signal.
+        markTrioEngaged();
+        // Opening a recipe is an implicit "this one interests me" signal...
         recordTasteEvent(TasteEvent.Type.RECIPE_VIEWED,
-                proposals.get(index).getName(), currentMealIndex);
+                proposals.get(index).getName(), currentMealIndex,
+                index == explorationIndex);
+        // ...and the first choice in a trio marks the other dishes as "lost the
+        // comparison" — relative learning, the exploratory experiment exempted.
+        if (!trioChoiceRecorded) {
+            trioChoiceRecorded = true;
+            for (int i = 0; i < proposals.size(); i++) {
+                if (i == index || i == explorationIndex) {
+                    continue;
+                }
+                recordTasteEvent(TasteEvent.Type.SHOWN_NOT_CHOSEN,
+                        proposals.get(i).getName(), currentMealIndex, false);
+            }
+        }
         Recipe cached = index < proposalRecipes.size() ? proposalRecipes.get(index) : null;
         if (cached != null) {
             showFullRecipe(cached);
@@ -1019,19 +1106,28 @@ public class MainActivity extends Activity {
     // ----- Likes-only learning --------------------------------------------
 
     private void rememberLike(String dish) {
+        rememberLike(dish, false);
+    }
+
+    private void rememberLike(String dish, boolean exploratory) {
         if (dish == null || dish.trim().isEmpty()) {
             return;
         }
         preferences = preferences.withLike(dish);
         preferenceStore.save(preferences);
-        recordTasteEvent(TasteEvent.Type.LIKED, dish, currentMealIndex);
+        recordTasteEvent(TasteEvent.Type.LIKED, dish, currentMealIndex, exploratory);
         Toast.makeText(this, "Zapamiętane — lubisz: " + dish, Toast.LENGTH_SHORT).show();
     }
 
-    /** The single place taste events are appended, compacted and persisted. */
     private void recordTasteEvent(TasteEvent.Type type, String dish, int mealIndex) {
+        recordTasteEvent(type, dish, mealIndex, false);
+    }
+
+    /** The single place taste events are appended, compacted and persisted. */
+    private void recordTasteEvent(TasteEvent.Type type, String dish, int mealIndex,
+                                  boolean exploratory) {
         tasteEvents = tasteEvents.append(new TasteEvent(
-                type, dish, mealIndex, System.currentTimeMillis()));
+                type, dish, mealIndex, System.currentTimeMillis(), exploratory));
         if (tasteEvents.size() > TasteEventLog.MAX_EVENTS) {
             // Najstarsze zdarzenia zwijają się do zamrożonego agregatu —
             // model liczony dalej wychodzi ten sam, dziennik nie puchnie.
@@ -1330,6 +1426,8 @@ public class MainActivity extends Activity {
             cookbook = Cookbook.empty();
             toast("Wyczyszczono bazę dań.");
         });
+        labels.add("Statystyki uczenia (diagnostyka)");
+        actions.add(this::showLearningStatsDialog);
         // Only offer "forget" when AI was unlocked with the password (not when the
         // key is baked in at build time, which clearing here would not undo).
         if (secretStore.hasApiKey() && BuildConfig.ANTHROPIC_API_KEY.isEmpty()) {
@@ -1341,6 +1439,15 @@ public class MainActivity extends Activity {
                 .setTitle("Moje dane")
                 .setItems(labels.toArray(new String[0]),
                         (dialog, which) -> actions.get(which).run())
+                .show();
+    }
+
+    /** Lokalne liczniki jakości uczenia — nic nie wychodzi z telefonu. */
+    private void showLearningStatsDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("Statystyki uczenia")
+                .setMessage(learningStats.summaryText(tasteEvents.size()))
+                .setPositiveButton("OK", null)
                 .show();
     }
 

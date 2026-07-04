@@ -96,12 +96,21 @@ Próg pilnuje `PersonalizationReadiness`. Inne funkcje AI (pełny przepis na
 żądanie, „Zmień przepis”, dodawanie dania z linku/opisu) działają niezależnie od
 tego progu — dotyczy on tylko automatycznych propozycji na start.
 
-## Aplikacja uczy się Twojej kuchni (tylko pozytywnie)
+## Aplikacja uczy się Twojej kuchni (przede wszystkim pozytywnie)
 
-Aplikacja **zapamiętuje wyłącznie to, co lubisz** — dotknięcie „Lubię to” dodaje
-danie do Twoich ulubionych. Nic nie jest zapamiętywane negatywnie: jeśli pomysł
-Ci nie pasuje, po prostu poproś o **„Inne propozycje”**. Twoje polubienia trafiają
-do kolejnych zapytań do AI, żeby podpowiadało dania w podobnym duchu.
+Aplikacja **nigdy nie pyta, czego nie lubisz** — dotknięcie „Lubię to” dodaje
+danie do ulubionych i to jest główny sygnał gustu. Oprócz tego cicho obserwuje
+zachowanie: „Pokaż przepis” liczy się jako zainteresowanie, dodanie własnego
+dania jak mocne polubienie, a „Inne propozycje” i pominięte dania to tylko
+**delikatna** korekta (kilka odrzuceń niczego nie „banuje" — twarde zakazy to
+wyłącznie wykluczenia diety z profilu). Z tych sygnałów aplikacja buduje
+lokalny **profil gustu w wymiarach** (główny składnik, styl kuchni, charakter
+dania, osobno per pora posiłku), w którym świeże wybory ważą więcej niż stare —
+gust może płynąć. Do AI trafia krótki, skompresowany profil i garść ostatnio
+polubionych dań, a nie cała historia. Przy trzech propozycjach obowiązuje
+reguła **2+1**: dwie w Twój gust, jedna celowo inna — żeby propozycje nie
+zwęziły się do trzech dań w kółko. Wszystko liczy się wyłącznie na telefonie;
+podgląd: **„Więcej…” → „Zarządzaj moimi danymi” → „Statystyki uczenia”**.
 
 ## Zmiana przepisu (zamienniki przez AI)
 

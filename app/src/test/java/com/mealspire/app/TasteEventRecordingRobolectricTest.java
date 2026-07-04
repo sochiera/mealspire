@@ -62,16 +62,61 @@ public class TasteEventRecordingRobolectricTest {
     }
 
     @Test
-    public void pokazPrzepisZapisujeZdarzenieRecipeViewed() {
+    public void pokazPrzepisZapisujeRecipeViewedIPrzegranychWTrojce() {
         MainActivity activity = launchPastOnboarding();
         activity.<Button>findViewById(R.id.meal_breakfast_button).performClick();
 
         activity.<Button>findViewById(R.id.accept_button).performClick();
 
         TasteEventLog events = loadEvents();
-        assertEquals(1, events.size());
-        assertEquals(TasteEvent.Type.RECIPE_VIEWED, events.events().get(0).getType());
-        assertEquals(0, events.events().get(0).getMealIndex());
+        int viewed = 0;
+        int notChosen = 0;
+        for (TasteEvent event : events.events()) {
+            if (event.getType() == TasteEvent.Type.RECIPE_VIEWED) {
+                viewed++;
+                assertEquals(0, event.getMealIndex());
+            } else if (event.getType() == TasteEvent.Type.SHOWN_NOT_CHOSEN) {
+                notChosen++;
+            }
+        }
+        assertEquals(1, viewed);
+        assertEquals("dwie pozostałe propozycje przegrały porównanie", 2, notChosen);
+    }
+
+    @Test
+    public void przegraniZapisujaSieTylkoPrzyPierwszymWyborzeWTrojce() {
+        MainActivity activity = launchPastOnboarding();
+        activity.<Button>findViewById(R.id.meal_breakfast_button).performClick();
+
+        // Otwórz przepis, wróć do propozycji, otwórz ponownie.
+        activity.<Button>findViewById(R.id.accept_button).performClick();
+        activity.onBackPressed();
+        activity.<Button>findViewById(R.id.accept_button).performClick();
+
+        int notChosen = 0;
+        for (TasteEvent event : loadEvents().events()) {
+            if (event.getType() == TasteEvent.Type.SHOWN_NOT_CHOSEN) {
+                notChosen++;
+            }
+        }
+        assertEquals("porównanie liczy się raz na trójkę", 2, notChosen);
+    }
+
+    @Test
+    public void innePropozycjeZapisujaRerolledDlaCalejTrojki() {
+        MainActivity activity = launchPastOnboarding();
+        activity.<Button>findViewById(R.id.meal_lunch_button).performClick();
+
+        activity.<Button>findViewById(R.id.refresh_button).performClick();
+
+        int rerolled = 0;
+        for (TasteEvent event : loadEvents().events()) {
+            if (event.getType() == TasteEvent.Type.REROLLED) {
+                rerolled++;
+                assertEquals(1, event.getMealIndex());
+            }
+        }
+        assertEquals(3, rerolled);
     }
 
     @Test
