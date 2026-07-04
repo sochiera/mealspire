@@ -19,6 +19,7 @@ public class HouseholdAwarePromptTest {
 
     private final ProposalPromptBuilder proposalBuilder = new ProposalPromptBuilder();
     private final RecipePromptBuilder recipeBuilder = new RecipePromptBuilder();
+    private final ModifyRecipePromptBuilder modifyBuilder = new ModifyRecipePromptBuilder();
 
     private static RecipeRequest requestWith(HouseholdProfile profile) {
         return new RecipeRequest("Obiad", UserPreferences.empty(),
@@ -73,10 +74,24 @@ public class HouseholdAwarePromptTest {
     }
 
     @Test
+    public void zmianaPrzepisuUwzgledniaCalyProfil() {
+        Recipe base = new Recipe("Kopytka", "Składniki: ziemniaki.\n\nUgotuj.");
+        String prompt = modifyBuilder.userPrompt(base, "bez glutenu", fullProfile());
+
+        assertTrue(prompt.contains("bez glutenu"));
+        assertTrue(prompt.contains("dzieci chętnie jedzą"));
+        assertTrue(prompt.contains("uczę się gotować"));
+        assertTrue(prompt.contains("Preferowane kuchnie: polska, azjatycka"));
+    }
+
+    @Test
     public void pustyProfilNieDodajeNic() {
+        Recipe base = new Recipe("Kopytka", "Składniki: ziemniaki.\n\nUgotuj.");
         List<String> prompts = Arrays.asList(
                 proposalBuilder.userPrompt(requestWith(HouseholdProfile.empty()), 3),
                 recipeBuilder.fullRecipePrompt("Kopytka", requestWith(HouseholdProfile.empty())),
+                modifyBuilder.userPrompt(base, "bez glutenu", HouseholdProfile.empty()),
+                modifyBuilder.userPrompt(base, "bez glutenu", null),
                 proposalBuilder.userPrompt(requestWith(null), 3));
         for (String prompt : prompts) {
             assertFalse(prompt.contains("dzieci"));

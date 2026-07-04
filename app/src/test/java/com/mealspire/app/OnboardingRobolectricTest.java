@@ -108,6 +108,90 @@ public class OnboardingRobolectricTest {
     }
 
     @Test
+    public void cofnieciePozwalaZmienicWyborDaniaBezKumulowaniaPolubien() {
+        MainActivity activity = launch();
+        activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
+        activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
+        activity.<Button>findViewById(R.id.onboarding_next_button).performClick();
+
+        // Runda 1: wybierz danie A, cofnij się, wybierz jednak danie B.
+        String dishA = activity.<Button>findViewById(R.id.onboarding_option_1)
+                .getText().toString();
+        activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
+        activity.onBackPressed();
+        String dishB = activity.<Button>findViewById(R.id.onboarding_option_2)
+                .getText().toString();
+        activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
+        // Rundy 2 i 3 normalnie.
+        activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
+        activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
+
+        UserPreferences saved = new SharedPreferencesPreferenceStore(
+                ApplicationProvider.getApplicationContext()).load();
+        assertEquals(3, saved.getLikes().size());
+        assertTrue(saved.getLikes().contains(dishB));
+        assertFalse("wycofany wybór nie może zostać polubieniem",
+                saved.getLikes().contains(dishA));
+    }
+
+    @Test
+    public void pominBezRundNieZapisujeZadnychPolubien() {
+        MainActivity activity = launch();
+        activity.<Button>findViewById(R.id.onboarding_skip_button).performClick();
+
+        UserPreferences saved = new SharedPreferencesPreferenceStore(
+                ApplicationProvider.getApplicationContext()).load();
+        assertEquals(0, saved.getLikes().size());
+    }
+
+    @Test
+    public void dialogHaslaNieZaslaniaQuizuIPojawiaSieDopieroPoNim() {
+        MainActivity activity = launch();
+
+        // Zasoby zawierają zaszyfrowany klucz, ale pytanie o hasło czeka na
+        // koniec quizu — quiz ma być pierwszym, co widzi użytkownik.
+        assertFalse("dialog hasła nie może zasłaniać quizu",
+                dialogShownWithTitle("Podaj hasło, aby odblokować AI"));
+
+        activity.<Button>findViewById(R.id.onboarding_skip_button).performClick();
+
+        assertTrue("po quizie jednorazowe pytanie o hasło ma się pojawić",
+                dialogShownWithTitle("Podaj hasło, aby odblokować AI"));
+    }
+
+    private static boolean dialogShownWithTitle(String title) {
+        for (android.app.Dialog dialog : org.robolectric.shadows.ShadowDialog.getShownDialogs()) {
+            if (dialog instanceof android.app.AlertDialog) {
+                CharSequence shown = org.robolectric.Shadows
+                        .shadowOf((android.app.AlertDialog) dialog).getTitle();
+                if (shown != null && title.contentEquals(shown)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    @Test
+    public void wybraneDaniaZRundZapisujaSieTezPrzyPominieciu() {
+        MainActivity activity = launch();
+        activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
+        activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
+        activity.<Button>findViewById(R.id.onboarding_next_button).performClick();
+
+        String dish = activity.<Button>findViewById(R.id.onboarding_option_1)
+                .getText().toString();
+        activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
+        activity.<Button>findViewById(R.id.onboarding_skip_button).performClick();
+
+        UserPreferences saved = new SharedPreferencesPreferenceStore(
+                ApplicationProvider.getApplicationContext()).load();
+        assertTrue("odpowiedź z ukończonej rundy ma zostać",
+                saved.getLikes().contains(dish));
+        assertEquals(1, saved.getLikes().size());
+    }
+
+    @Test
     public void cofnijWQuizieWracaDoPoprzedniegoPytania() {
         MainActivity activity = launch();
         activity.<Button>findViewById(R.id.onboarding_option_1).performClick();

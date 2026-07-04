@@ -4,9 +4,6 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * Serializuje {@link HouseholdProfile} do i z JSON-a na potrzeby
  * SharedPreferences. Odporny na null/puste/zepsute dane — zwraca wtedy pusty
@@ -39,7 +36,8 @@ public final class HouseholdProfileSerializer {
             return HouseholdProfile.empty()
                     .withAudience(audienceOf(root.optString(KEY_AUDIENCE, "")))
                     .withSkill(skillOf(root.optString(KEY_SKILL, "")))
-                    .withCuisines(readArray(root.optJSONArray(KEY_CUISINES)));
+                    .withCuisines(PreferencesSerializer.readArray(
+                            root.optJSONArray(KEY_CUISINES)));
         } catch (JSONException e) {
             return HouseholdProfile.empty();
         }
@@ -59,18 +57,5 @@ public final class HouseholdProfileSerializer {
         } catch (IllegalArgumentException e) {
             return HouseholdProfile.CookingSkill.UNKNOWN;
         }
-    }
-
-    private static List<String> readArray(JSONArray array) {
-        List<String> values = new ArrayList<>();
-        if (array != null) {
-            for (int i = 0; i < array.length(); i++) {
-                String value = array.optString(i, null);
-                if (value != null) {
-                    values.add(value);
-                }
-            }
-        }
-        return values;
     }
 }

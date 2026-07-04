@@ -23,11 +23,15 @@ przyciski, na każdym kroku widoczny przycisk **„Pomiń"**):
 
 Odpowiedzi z pytań 1–3 trafiają do **profilu domowników** i realnie wpływają na
 zapytania do AI („Gotuję też dla dzieci…", „Dopiero uczę się gotować…",
-„Preferowane kuchnie: …"). Quiz pokazuje się **tylko raz** — „Pomiń" na
-dowolnym kroku kończy go na zawsze, a już udzielone odpowiedzi zostają.
-Profil można później zmienić w menu **„Więcej…" → „Profil domowników"**.
-Systemowe „Cofnij" wraca w quizie do poprzedniego pytania (z pierwszego
-pytania działa jak „Pomiń").
+„Preferowane kuchnie: …") — także przy **„Zmień przepis"**. Quiz pokazuje się
+**tylko raz** — „Pomiń" na dowolnym kroku kończy go na zawsze, a już udzielone
+odpowiedzi zostają. Profil można później zmienić w menu **„Więcej…" → „Profil
+domowników"**. Systemowe „Cofnij" wraca w quizie do poprzedniego pytania
+(z pierwszego pytania działa jak „Pomiń") i pozwala **zmienić wybór dania** —
+liczy się ostatni wybór w rundzie, polubienia zapisują się dopiero na końcu
+quizu. Jednorazowe pytania startowe (liczba osób, hasło do AI, zgoda na
+powiadomienia) pojawiają się dopiero po zakończeniu lub pominięciu quizu —
+nic nie zasłania pierwszego pytania.
 
 ## Jeden dotyk: pora dnia → kilka propozycji
 
@@ -46,7 +50,9 @@ więc nie musisz nic odrzucać po kolei.
 
 Systemowy przycisk **„Cofnij"** cofa o jeden widok: z pełnego przepisu do listy
 propozycji (bez ponownego pytania AI — przepis jest zapamiętany), z propozycji
-na ekran startowy, a dopiero z ekranu startowego zamyka aplikację.
+na ekran startowy, a dopiero z ekranu startowego zamyka aplikację. Przepis
+otwarty **spoza propozycji** (np. danie dodane z linku/opisu) wraca od razu na
+ekran startowy — nie ma propozycji, do których można by wrócić.
 
 Bez klucza API (albo zanim aplikacja zdąży się czegoś o Tobie nauczyć — patrz
 niżej) działa offline: losuje dania z **wbudowanej puli** (blisko 60 prostych,

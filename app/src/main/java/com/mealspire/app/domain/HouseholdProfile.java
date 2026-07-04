@@ -93,40 +93,26 @@ public final class HouseholdProfile {
                     + "zaproponować coś ambitniejszego.");
         }
         if (!cuisines.isEmpty()) {
-            StringBuilder sb = new StringBuilder("Preferowane kuchnie: ");
-            for (int i = 0; i < cuisines.size(); i++) {
-                if (i > 0) {
-                    sb.append(", ");
-                }
-                sb.append(cuisines.get(i));
-            }
-            sentences.add(sb.append('.').toString());
+            sentences.add("Preferowane kuchnie: " + PromptText.join(cuisines) + ".");
         }
         return Collections.unmodifiableList(sentences);
     }
 
-    private static List<String> normalize(List<String> values) {
-        List<String> result = new ArrayList<>();
-        if (values != null) {
-            for (String value : values) {
-                if (value == null || value.trim().isEmpty()) {
-                    continue;
-                }
-                String trimmed = value.trim();
-                if (!containsIgnoreCase(result, trimmed)) {
-                    result.add(trimmed);
-                }
-            }
+    /**
+     * Dokleja zdania profilu do budowanego prompta (każde z wiodącą spacją).
+     * Jedno miejsce definiuje sposób sklejania dla wszystkich builderów;
+     * pusty profil nie dodaje nic.
+     */
+    public void appendPromptSentences(StringBuilder sb) {
+        for (String sentence : promptSentences()) {
+            sb.append(' ').append(sentence);
         }
-        return Collections.unmodifiableList(result);
     }
 
-    private static boolean containsIgnoreCase(List<String> values, String value) {
-        for (String existing : values) {
-            if (existing.equalsIgnoreCase(value)) {
-                return true;
-            }
-        }
-        return false;
+    private static List<String> normalize(List<String> values) {
+        // Jedna definicja "tego samego" tekstu gustu: trim, bez pustych,
+        // deduplikacja bez rozróżniania wielkości liter (jak w UserPreferences).
+        return Collections.unmodifiableList(
+                new ArrayList<>(UserPreferences.normalize(values)));
     }
 }

@@ -80,11 +80,23 @@ public class MainActivity extends Activity {
     private static final String[] MEAL_TYPES = {"Śniadanie", "Obiad", "Kolacja"};
     private static final int PROPOSAL_COUNT = 3;
     private static final int MAX_SERVINGS = 12;
+    // Odpowiedzi profilu domowników — wspólne dla quizu startowego i dialogów
+    // „Profil domowników", żeby oba miejsca zawsze pokazywały to samo.
     private static final String[] CUISINE_OPTIONS =
             {"polska", "włoska", "azjatycka", "meksykańska", "bliskowschodnia"};
+    private static final String[] AUDIENCE_LABELS = {"Tylko dorośli", "Dorośli i dzieci"};
+    private static final HouseholdProfile.Audience[] AUDIENCE_VALUES = {
+            HouseholdProfile.Audience.ADULTS_ONLY,
+            HouseholdProfile.Audience.WITH_CHILDREN};
+    private static final String[] SKILL_LABELS =
+            {"Dopiero zaczynam", "Radzę sobie", "Gotuję dobrze i lubię wyzwania"};
+    private static final HouseholdProfile.CookingSkill[] SKILL_VALUES = {
+            HouseholdProfile.CookingSkill.BEGINNER,
+            HouseholdProfile.CookingSkill.COMFORTABLE,
+            HouseholdProfile.CookingSkill.CONFIDENT};
+    private static final int ONBOARDING_QUESTIONS = 3;
     private static final int ONBOARDING_DISH_ROUNDS = 3;
-    // 3 pytania o dom + rundy wyboru dań.
-    private static final int ONBOARDING_STEPS = 3 + ONBOARDING_DISH_ROUNDS;
+    private static final int ONBOARDING_STEPS = ONBOARDING_QUESTIONS + ONBOARDING_DISH_ROUNDS;
 
     /** Intent extra: which meal to open (0=breakfast, 1=lunch, 2=dinner). */
     public static final String EXTRA_MEAL_INDEX = "meal_index";
@@ -122,6 +134,9 @@ public class MainActivity extends Activity {
     private List<Recipe> proposalRecipes = new ArrayList<>();
     // The full recipe currently open, or null while the proposal list is shown.
     private Recipe currentRecipe;
+    // Whether the open recipe was reached from the proposal list; a recipe from
+    // elsewhere (e.g. "Dodaj danie" import) has no proposals to go back to.
+    private boolean recipeFromProposals;
     // Bumped whenever the user changes what the content area shows, so an async
     // answer that comes back late (recipe fetch, proposals, modification) cannot
     // stomp whatever the user is looking at now.
@@ -135,6 +150,10 @@ public class MainActivity extends Activity {
     private final OnboardingDishSampler onboardingDishSampler = new OnboardingDishSampler();
     private int onboardingStep = -1;
     private List<List<Recipe>> onboardingRounds;
+    // The dish picked in each quiz round. Persisted as likes only when the quiz
+    // ends, so going back and re-picking replaces the choice instead of
+    // accumulating extra likes.
+    private final String[] onboardingPicks = new String[ONBOARDING_DISH_ROUNDS];
     private int pendingMealIndex = -1;
 
     @Override
@@ -216,31 +235,42 @@ public class MainActivity extends Activity {
 
         setContentView(scrollView);
         updateServingsLabel();
-        if (appSettings.isOnboardingDone()) {
-            showStartScreen();
-            maybeAskServings();
-        } else {
-            // Fresh install: a short taste quiz first; other dialogs (servings)
-            // wait until it is finished or skipped.
-            startOnboarding();
+
+        // A key remembered from a previous unlock loads silently (the password
+        // is asked only once); the password *dialog* waits for the quiz below.
+        if (!claudeClient.hasApiKey() && secretStore.hasApiKey()) {
+            buildClaudeClients(secretStore.loadApiKey());
         }
 
-        // Key sources, in order: build-time key, a key remembered from a previous
-        // unlock (so the password is asked only once), then the encrypted-in-repo
-        // key which still needs the password.
-        if (!claudeClient.hasApiKey()) {
-            if (secretStore.hasApiKey()) {
-                buildClaudeClients(secretStore.loadApiKey());
-            } else if (!encryptedApiKey().isEmpty()) {
-                promptForApiKeyPassword(false);
-            }
+        if (appSettings.isOnboardingDone()) {
+            showStartScreen();
+            showStartupPrompts();
+        } else {
+            // Fresh install: a short taste quiz first; every one-time dialog
+            // (servings, API-key password, notification permission) waits until
+            // it is finished or skipped.
+            startOnboarding();
         }
 
         // Daily meal reminders (8/12/18). Scheduling is idempotent.
         MealNotifications.ensureChannel(this);
         new MealReminderScheduler().scheduleAll(this);
-        maybeRequestNotificationPermission();
         handleMealIntent(getIntent());
+    }
+
+    /**
+     * One-time prompts asked outside the quiz, so nothing covers the first
+     * question: the servings dialog, the API-key password (only when the
+     * encrypted-in-repo key still needs unlocking) and the Android 13+
+     * notification permission.
+     */
+    private void showStartupPrompts() {
+        maybeAskServings();
+        if (!claudeClient.hasApiKey() && !secretStore.hasApiKey()
+                && !encryptedApiKey().isEmpty()) {
+            promptForApiKeyPassword(false);
+        }
+        maybeRequestNotificationPermission();
     }
 
     @Override
@@ -259,20 +289,17 @@ public class MainActivity extends Activity {
      */
     @Override
     public void onBackPressed() {
-        switch (BackNavigation.onBack(currentScreen, Math.max(0, onboardingStep))) {
+        // The quiz-active state has a single source of truth (onboardingStep);
+        // the ONBOARDING screen is derived from it, never stored.
+        BackNavigation.Screen screen = isOnboardingActive()
+                ? BackNavigation.Screen.ONBOARDING : currentScreen;
+        switch (BackNavigation.onBack(screen, onboardingStep,
+                recipeFromProposals && !proposals.isEmpty())) {
             case SHOW_PROPOSALS:
                 currentRecipe = null;
                 contentEpoch++;
                 setMealButtonsEnabled(true);
                 renderProposals();
-                break;
-            case SHOW_RECIPE:
-                if (currentRecipe != null) {
-                    contentEpoch++;
-                    showFullRecipe(currentRecipe);
-                    break;
-                }
-                showStartScreen();
                 break;
             case SHOW_START:
                 showStartScreen();
@@ -412,7 +439,6 @@ public class MainActivity extends Activity {
     }
 
     private void renderOnboardingStep() {
-        currentScreen = BackNavigation.Screen.ONBOARDING;
         contentContainer.removeAllViews();
 
         TextView progress = new TextView(this);
@@ -431,19 +457,23 @@ public class MainActivity extends Activity {
         switch (onboardingStep) {
             case 0:
                 question.setText("Dla kogo gotujesz?");
-                addOnboardingOption(1, "Tylko dorośli", () ->
-                        answerAudience(HouseholdProfile.Audience.ADULTS_ONLY));
-                addOnboardingOption(2, "Dorośli i dzieci", () ->
-                        answerAudience(HouseholdProfile.Audience.WITH_CHILDREN));
+                for (int i = 0; i < AUDIENCE_LABELS.length; i++) {
+                    final HouseholdProfile.Audience value = AUDIENCE_VALUES[i];
+                    addOnboardingOption(i + 1, AUDIENCE_LABELS[i], () -> {
+                        saveProfile(householdProfile.withAudience(value));
+                        advanceOnboarding();
+                    });
+                }
                 break;
             case 1:
                 question.setText("Jak Ci idzie gotowanie?");
-                addOnboardingOption(1, "Dopiero zaczynam", () ->
-                        answerSkill(HouseholdProfile.CookingSkill.BEGINNER));
-                addOnboardingOption(2, "Radzę sobie", () ->
-                        answerSkill(HouseholdProfile.CookingSkill.COMFORTABLE));
-                addOnboardingOption(3, "Gotuję dobrze i lubię wyzwania", () ->
-                        answerSkill(HouseholdProfile.CookingSkill.CONFIDENT));
+                for (int i = 0; i < SKILL_LABELS.length; i++) {
+                    final HouseholdProfile.CookingSkill value = SKILL_VALUES[i];
+                    addOnboardingOption(i + 1, SKILL_LABELS[i], () -> {
+                        saveProfile(householdProfile.withSkill(value));
+                        advanceOnboarding();
+                    });
+                }
                 break;
             case 2:
                 question.setText("Jakie kuchnie lubicie najbardziej?");
@@ -471,11 +501,15 @@ public class MainActivity extends Activity {
                 break;
             default:
                 question.setText("Które danie najbardziej Ci pasuje?");
-                List<Recipe> round = onboardingRounds.get(onboardingStep - 3);
+                final int roundIndex = onboardingStep - ONBOARDING_QUESTIONS;
+                List<Recipe> round = onboardingRounds.get(roundIndex);
                 for (int i = 0; i < round.size(); i++) {
                     final String dish = round.get(i).getTitle();
                     addOnboardingOption(i + 1, dish, () -> {
-                        rememberLike(dish);
+                        // Remembered per round and persisted at the end, so
+                        // going back and re-picking replaces the choice.
+                        onboardingPicks[roundIndex] = dish;
+                        toast("Zapamiętane — lubisz: " + dish);
                         advanceOnboarding();
                     });
                 }
@@ -507,16 +541,10 @@ public class MainActivity extends Activity {
         contentContainer.addView(option, marginTop(12));
     }
 
-    private void answerAudience(HouseholdProfile.Audience audience) {
-        householdProfile = householdProfile.withAudience(audience);
-        householdProfileStore.save(householdProfile);
-        advanceOnboarding();
-    }
-
-    private void answerSkill(HouseholdProfile.CookingSkill skill) {
-        householdProfile = householdProfile.withSkill(skill);
-        householdProfileStore.save(householdProfile);
-        advanceOnboarding();
+    /** The single place a profile change is kept and persisted. */
+    private void saveProfile(HouseholdProfile updated) {
+        householdProfile = updated;
+        householdProfileStore.save(updated);
     }
 
     /** Saves each (un)ticked cuisine immediately, so skipping keeps the answers. */
@@ -529,8 +557,7 @@ public class MainActivity extends Activity {
         } else {
             cuisines.remove(cuisine);
         }
-        householdProfile = householdProfile.withCuisines(cuisines);
-        householdProfileStore.save(householdProfile);
+        saveProfile(householdProfile.withCuisines(cuisines));
     }
 
     private void advanceOnboarding() {
@@ -549,8 +576,9 @@ public class MainActivity extends Activity {
     private void endOnboarding() {
         appSettings.markOnboardingDone();
         onboardingStep = -1;
+        saveOnboardingPicks();
         moreButton.setEnabled(true);
-        maybeAskServings();
+        showStartupPrompts();
         if (pendingMealIndex >= 0) {
             int meal = pendingMealIndex;
             pendingMealIndex = -1;
@@ -559,6 +587,16 @@ public class MainActivity extends Activity {
         } else {
             showStartScreen();
         }
+    }
+
+    /** Persists the quiz dish picks as ordinary likes, one per answered round. */
+    private void saveOnboardingPicks() {
+        for (String pick : onboardingPicks) {
+            if (pick != null) {
+                preferences = preferences.withLike(pick);
+            }
+        }
+        preferenceStore.save(preferences);
     }
 
     // ----- Meal selection + proposals -------------------------------------
@@ -773,6 +811,7 @@ public class MainActivity extends Activity {
         if (index < 0 || index >= proposals.size()) {
             return;
         }
+        recipeFromProposals = true;
         Recipe cached = index < proposalRecipes.size() ? proposalRecipes.get(index) : null;
         if (cached != null) {
             showFullRecipe(cached);
@@ -859,16 +898,15 @@ public class MainActivity extends Activity {
             actions.addView(change, equalWidthRowItem());
         }
 
+        // The button mirrors the system back button exactly (one shared path),
+        // so a recipe that has no proposals to return to goes to the start screen.
         Button back = new Button(this);
         back.setId(R.id.back_button);
-        back.setText("Wróć do propozycji");
+        back.setText(recipeFromProposals && !proposals.isEmpty()
+                ? "Wróć do propozycji" : "Wróć");
         back.setAllCaps(false);
         back.setTextSize(16);
-        back.setOnClickListener(v -> {
-            currentRecipe = null;
-            contentEpoch++;
-            renderProposals();
-        });
+        back.setOnClickListener(v -> onBackPressed());
         contentContainer.addView(back, marginTop(12));
     }
 
@@ -917,7 +955,8 @@ public class MainActivity extends Activity {
         showHint("Zmieniam przepis…");
         new Thread(() -> {
             try {
-                final Recipe revised = recipeService.modifyRecipe(base, instruction);
+                final Recipe revised = recipeService.modifyRecipe(base, instruction,
+                        householdProfile);
                 runOnUiThread(() -> {
                     if (epoch != contentEpoch) {
                         return;
@@ -987,34 +1026,28 @@ public class MainActivity extends Activity {
     }
 
     private void showAudienceDialog() {
-        final String[] options = {"Tylko dorośli", "Dorośli i dzieci"};
-        final HouseholdProfile.Audience[] values = {
-                HouseholdProfile.Audience.ADULTS_ONLY,
-                HouseholdProfile.Audience.WITH_CHILDREN};
-        int current = indexOf(values, householdProfile.getAudience());
-        new AlertDialog.Builder(this)
-                .setTitle("Dla kogo gotujesz?")
-                .setSingleChoiceItems(options, current, (dialog, which) -> {
-                    householdProfile = householdProfile.withAudience(values[which]);
-                    householdProfileStore.save(householdProfile);
-                    dialog.dismiss();
-                })
-                .show();
+        showProfileChoiceDialog("Dla kogo gotujesz?", AUDIENCE_LABELS, AUDIENCE_VALUES,
+                householdProfile.getAudience(), HouseholdProfile::withAudience);
     }
 
     private void showSkillDialog() {
-        final String[] options = {"Dopiero zaczynam", "Radzę sobie",
-                "Gotuję dobrze i lubię wyzwania"};
-        final HouseholdProfile.CookingSkill[] values = {
-                HouseholdProfile.CookingSkill.BEGINNER,
-                HouseholdProfile.CookingSkill.COMFORTABLE,
-                HouseholdProfile.CookingSkill.CONFIDENT};
-        int current = indexOf(values, householdProfile.getSkill());
+        showProfileChoiceDialog("Jak Ci idzie gotowanie?", SKILL_LABELS, SKILL_VALUES,
+                householdProfile.getSkill(), HouseholdProfile::withSkill);
+    }
+
+    /** Applies one picked value to the profile ({@code profile.withX(value)}). */
+    private interface ProfileUpdate<T> {
+        HouseholdProfile apply(HouseholdProfile profile, T value);
+    }
+
+    /** One single-choice dialog shape for every profile question. */
+    private <T> void showProfileChoiceDialog(String title, String[] labels,
+                                             final T[] values, T current,
+                                             final ProfileUpdate<T> update) {
         new AlertDialog.Builder(this)
-                .setTitle("Jak Ci idzie gotowanie?")
-                .setSingleChoiceItems(options, current, (dialog, which) -> {
-                    householdProfile = householdProfile.withSkill(values[which]);
-                    householdProfileStore.save(householdProfile);
+                .setTitle(title)
+                .setSingleChoiceItems(labels, indexOf(values, current), (dialog, which) -> {
+                    saveProfile(update.apply(householdProfile, values[which]));
                     dialog.dismiss();
                 })
                 .show();
@@ -1036,8 +1069,7 @@ public class MainActivity extends Activity {
                             cuisines.add(CUISINE_OPTIONS[i]);
                         }
                     }
-                    householdProfile = householdProfile.withCuisines(cuisines);
-                    householdProfileStore.save(householdProfile);
+                    saveProfile(householdProfile.withCuisines(cuisines));
                 })
                 .show();
     }
@@ -1091,6 +1123,8 @@ public class MainActivity extends Activity {
                     if (epoch != contentEpoch) {
                         return;
                     }
+                    // Not part of the proposal flow — back goes to the start screen.
+                    recipeFromProposals = false;
                     showFullRecipe(entry.toRecipe());
                 });
             } catch (IOException e) {

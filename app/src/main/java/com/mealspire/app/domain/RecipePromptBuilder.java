@@ -85,9 +85,7 @@ public final class RecipePromptBuilder {
     }
 
     private static void appendHousehold(StringBuilder sb, RecipeRequest request) {
-        for (String sentence : request.getHouseholdProfile().promptSentences()) {
-            sb.append(' ').append(sentence);
-        }
+        request.getHouseholdProfile().appendPromptSentences(sb);
     }
 
     private static List<String> toList(Iterable<String> values) {
@@ -101,13 +99,6 @@ public final class RecipePromptBuilder {
     }
 
     private static String join(Iterable<String> items) {
-        StringBuilder sb = new StringBuilder();
-        for (String item : items) {
-            if (sb.length() > 0) {
-                sb.append(", ");
-            }
-            sb.append(item);
-        }
-        return sb.toString();
+        return PromptText.join(items);
     }
 }

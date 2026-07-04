@@ -21,6 +21,11 @@ public final class ModifyRecipePromptBuilder {
     }
 
     public String userPrompt(Recipe current, String instruction) {
+        return userPrompt(current, instruction, null);
+    }
+
+    /** Modyfikacja z profilem domowników — zdania profilu obowiązują też tutaj. */
+    public String userPrompt(Recipe current, String instruction, HouseholdProfile profile) {
         String title = current == null ? "" : current.getTitle();
         String details = current == null ? "" : current.getDetails();
         String change = instruction == null ? "" : instruction.trim();
@@ -32,6 +37,7 @@ public final class ModifyRecipePromptBuilder {
                 .append(change).append("\".\n");
         sb.append("Podaj poprawiony przepis w tym samym formacie (nazwa, składniki, "
                 + "sposób przygotowania).");
+        (profile == null ? HouseholdProfile.empty() : profile).appendPromptSentences(sb);
         return sb.toString();
     }
 }
