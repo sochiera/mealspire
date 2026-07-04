@@ -74,16 +74,7 @@ public final class DietConstraints {
 
         /** Czy tekst (nazwa/składniki/przepis) narusza to wykluczenie. */
         boolean isViolatedBy(String lowerCaseText) {
-            for (String token : lowerCaseText.split("[^\\p{L}]+")) {
-                for (String stem : stems) {
-                    // Krótkie rdzenie tylko dokładnie (żeby „ser" nie łapał
-                    // „serwuj"); dłuższe jako prefiks odmian („śmietaną").
-                    if (stem.length() < 4 ? token.equals(stem) : token.startsWith(stem)) {
-                        return true;
-                    }
-                }
-            }
-            return false;
+            return WordStems.matchesAny(lowerCaseText, stems);
         }
     }
 
