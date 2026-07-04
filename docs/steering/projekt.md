@@ -26,6 +26,15 @@ Wszystkie teksty w UI i promptach są po polsku.
 
 ## Kluczowe decyzje produktowe
 
+- **Onboarding tylko raz**: świeża instalacja zaczyna od quizu (dla kogo
+  gotujesz / jak idzie gotowanie / ulubione kuchnie + 3 rundy wyboru dań).
+  Odpowiedzi 1–3 → `HouseholdProfile` (wpływa na prompty przez
+  `RecipeRequest.getHouseholdProfile()`), wybory dań → zwykłe polubienia
+  (celowo 3, nie 5 — AI nie ma przejmować propozycji po samym quizie).
+  Flaga ukończenia w `AppSettings.isOnboardingDone()` jest niezależna od
+  profilu; „Pomiń" też ją ustawia, a udzielone odpowiedzi zostają. Zmiana
+  odpowiedzi później: „Więcej…" → „Profil domowników".
+
 - **Uczenie tylko pozytywne**: zapamiętujemy wyłącznie polubienia
   („Lubię to"). Odrzucenie = po prostu „Inne propozycje".
 - **AI dopiero po nauce**: świeża instalacja proponuje z wbudowanej puli
@@ -57,4 +66,10 @@ Wszystkie teksty w UI i promptach są po polsku.
 - Manifest deklaruje `android:configChanges` dla orientacji — UI trzyma stan
   w Activity, więc obrót nie może jej odtwarzać (pilnuje `RotationSafetyTest`).
 - Intent z powiadomienia konsumuje `EXTRA_MEAL_INDEX` (`removeExtra`), żeby
-  ponowne dostarczenie intentu nie wymuszało wyboru posiłku.
+  ponowne dostarczenie intentu nie wymuszało wyboru posiłku. Przy nieukończonym
+  onboardingu posiłek czeka w `pendingMealIndex` i otwiera się po quizie.
+- Systemowe „Cofnij": `MainActivity.onBackPressed()` + czysta decyzja w
+  `BackNavigation` (przepis → propozycje → start → wyjście; w quizie poprzednie
+  pytanie, z pierwszego jak „Pomiń"). Każde cofnięcie podbija `contentEpoch`.
+  **Nie włączać** `android:enableOnBackInvokedCallback` w manifeście — wtedy
+  `onBackPressed()` przestaje być wołane.

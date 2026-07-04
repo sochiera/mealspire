@@ -6,6 +6,29 @@ razu podsuwa kilka prostych propozycji** naraz. Pełny przepis powstaje dopiero,
 gdy któryś pomysł Ci się spodoba. Idea: jak najmniej klikania, a aplikacja uczy
 się Twojej kuchni.
 
+## Pierwsze uruchomienie: krótki test gustu
+
+Świeża instalacja zaczyna od **krótkiego quizu** (jedno pytanie na ekran, duże
+przyciski, na każdym kroku widoczny przycisk **„Pomiń"**):
+
+1. **Dla kogo gotujesz?** — tylko dorośli / dorośli i dzieci.
+2. **Jak Ci idzie gotowanie?** — dopiero zaczynam / radzę sobie / gotuję dobrze
+   i lubię wyzwania.
+3. **Jakie kuchnie lubicie najbardziej?** — wielokrotny wybór (polska, włoska,
+   azjatycka, meksykańska, bliskowschodnia).
+4. Trzy rundy **„Które danie najbardziej Ci pasuje?"** — w każdej rundzie trzy
+   różnorodne dania z wbudowanej puli; wybór zapisuje się jako zwykłe polubienie
+   (to 3 z 5 polubień potrzebnych, by AI przejęło propozycje — resztę douczy
+   normalne używanie).
+
+Odpowiedzi z pytań 1–3 trafiają do **profilu domowników** i realnie wpływają na
+zapytania do AI („Gotuję też dla dzieci…", „Dopiero uczę się gotować…",
+„Preferowane kuchnie: …"). Quiz pokazuje się **tylko raz** — „Pomiń" na
+dowolnym kroku kończy go na zawsze, a już udzielone odpowiedzi zostają.
+Profil można później zmienić w menu **„Więcej…" → „Profil domowników"**.
+Systemowe „Cofnij" wraca w quizie do poprzedniego pytania (z pierwszego
+pytania działa jak „Pomiń").
+
 ## Jeden dotyk: pora dnia → kilka propozycji
 
 Na ekranie startowym są trzy przyciski: **Śniadanie / Obiad / Kolacja**. Dotknij
@@ -20,6 +43,10 @@ Przy każdej propozycji masz dwa przyciski:
 
 Pod propozycjami jest **„Inne propozycje”** — jeden dotyk podsuwa kolejny zestaw,
 więc nie musisz nic odrzucać po kolei.
+
+Systemowy przycisk **„Cofnij"** cofa o jeden widok: z pełnego przepisu do listy
+propozycji (bez ponownego pytania AI — przepis jest zapamiętany), z propozycji
+na ekran startowy, a dopiero z ekranu startowego zamyka aplikację.
 
 Bez klucza API (albo zanim aplikacja zdąży się czegoś o Tobie nauczyć — patrz
 niżej) działa offline: losuje dania z **wbudowanej puli** (blisko 60 prostych,
@@ -118,6 +145,8 @@ osób”**. Ustawienie przeżywa obrót ekranu i restart aplikacji.
 Aby utrzymać główny ekran prostym, dodatkowe akcje są pod przyciskiem „Więcej…”:
 
 - **Zmień liczbę osób** — zmienia zapamiętaną liczbę osób, dla których gotujesz.
+- **Profil domowników** — zmienia odpowiedzi z quizu startowego (dla kogo
+  gotujesz, jak Ci idzie gotowanie, ulubione kuchnie).
 - **Zapisz danie do mojej bazy** — zapisuje aktualnie pokazane danie.
 - **Lista zakupów** — wyciąga składniki z aktualnego przepisu i pokazuje je jako
   odhaczaną listę.
