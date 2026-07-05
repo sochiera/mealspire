@@ -12,14 +12,14 @@ import org.json.JSONObject;
 import org.junit.Test;
 
 /**
- * Pilnuje spójności wydania: stabilny podpis APK (keystore w repo + signingConfig)
- * jest warunkiem instalowania aktualizacji po wierzchu bez utraty danych,
- * a `dist/wersja.json` musi zgadzać się z wersją wkompilowaną w APK — inaczej
- * mechanizm aktualizacji kłamie. Test napisany przed konfiguracją (TDD).
+ * Guards release consistency. A stable APK signature (shared keystore +
+ * signingConfig) is what makes in-place updates possible without losing user
+ * data, and dist/wersja.json must match the version compiled into the APK —
+ * otherwise the update mechanism lies to the user. Written test-first (TDD).
  */
 public class ReleaseConsistencyTest {
 
-    /** Wspina się z katalogu roboczego testu do korzenia repozytorium. */
+    /** Walks up from the test working directory to the repository root. */
     private static File repoRoot() {
         File dir = new File(System.getProperty("user.dir")).getAbsoluteFile();
         while (dir != null) {
@@ -28,84 +28,84 @@ public class ReleaseConsistencyTest {
             }
             dir = dir.getParentFile();
         }
-        throw new IllegalStateException("Nie znaleziono korzenia repo (settings.gradle)");
+        throw new IllegalStateException("Could not locate repository root (settings.gradle)");
     }
 
     private static String buildGradleContents() throws IOException {
         File buildGradle = new File(repoRoot(), "app/build.gradle");
-        assertTrue("Oczekiwano pliku app/build.gradle", buildGradle.isFile());
+        assertTrue("Expected app/build.gradle to exist", buildGradle.isFile());
         return new String(Files.readAllBytes(buildGradle.toPath()), StandardCharsets.UTF_8);
     }
 
-    @Test
-    public void keystoreJestWRepo() {
-        File keystore = new File(repoRoot(), "signing/mealspire.keystore");
-        assertTrue(
-                "Brak signing/mealspire.keystore — bez wspólnego keystore każdy build "
-                        + "ma inny podpis i aktualizacja po wierzchu jest niemożliwa",
-                keystore.isFile());
-    }
-
-    @Test
-    public void buildUzywaWspolnegoKeystore() throws IOException {
-        String gradle = buildGradleContents();
-        assertTrue("app/build.gradle powinien definiować signingConfigs",
-                gradle.contains("signingConfigs"));
-        assertTrue("signingConfig powinien wskazywać signing/mealspire.keystore",
-                gradle.contains("signing/mealspire.keystore"));
-    }
-
-    private static JSONObject wersjaJson() throws Exception {
+    private static JSONObject versionJson() throws Exception {
         File json = new File(repoRoot(), "dist/wersja.json");
         assertTrue(
-                "Brak dist/wersja.json — aplikacja nie ma skąd dowiedzieć się o nowej wersji",
+                "dist/wersja.json is missing — the app has no way to learn about a new version",
                 json.isFile());
         return new JSONObject(new String(Files.readAllBytes(json.toPath()), StandardCharsets.UTF_8));
     }
 
     @Test
-    public void wersjaJsonZgadzaSieZWersjaWkompilowanaWApk() throws Exception {
-        JSONObject json = wersjaJson();
+    public void keystoreIsCommittedToTheRepo() {
+        File keystore = new File(repoRoot(), "signing/mealspire.keystore");
+        assertTrue(
+                "signing/mealspire.keystore is missing — without a shared keystore every "
+                        + "build has a different signature and in-place updates are impossible",
+                keystore.isFile());
+    }
+
+    @Test
+    public void buildUsesTheSharedKeystore() throws IOException {
+        String gradle = buildGradleContents();
+        assertTrue("app/build.gradle should define signingConfigs",
+                gradle.contains("signingConfigs"));
+        assertTrue("signingConfig should point at signing/mealspire.keystore",
+                gradle.contains("signing/mealspire.keystore"));
+    }
+
+    @Test
+    public void debugAndReleaseAreSignedWithTheSameKey() throws IOException {
+        String gradle = buildGradleContents();
+        assertTrue("buildTypes.debug should use signingConfigs.mealspire",
+                gradle.contains("debug"));
+        assertTrue("buildTypes.release should use signingConfigs.mealspire",
+                gradle.contains("release"));
+        assertTrue("Both build types should point at signingConfigs.mealspire",
+                gradle.contains("signingConfigs.mealspire"));
+    }
+
+    @Test
+    public void versionJsonMatchesTheVersionCompiledIntoTheApk() throws Exception {
+        JSONObject json = versionJson();
         assertEquals(
-                "versionCode w dist/wersja.json musi równać się BuildConfig.VERSION_CODE — "
-                        + "podbij oba przy wydaniu",
+                "versionCode in dist/wersja.json must equal BuildConfig.VERSION_CODE — "
+                        + "bump both when releasing",
                 BuildConfig.VERSION_CODE, json.getInt("versionCode"));
         assertEquals(
-                "versionName w dist/wersja.json musi równać się BuildConfig.VERSION_NAME",
+                "versionName in dist/wersja.json must equal BuildConfig.VERSION_NAME",
                 BuildConfig.VERSION_NAME, json.getString("versionName"));
     }
 
     @Test
-    public void wersjaJsonWskazujeApkWDist() throws Exception {
-        String apkUrl = wersjaJson().getString("apkUrl");
-        assertTrue("apkUrl powinien prowadzić do raw.githubusercontent.com tego repo",
+    public void versionJsonPointsAtTheApkInDist() throws Exception {
+        String apkUrl = versionJson().getString("apkUrl");
+        assertTrue("apkUrl should point at raw.githubusercontent.com of this repo",
                 apkUrl.startsWith("https://raw.githubusercontent.com/sochiera/mealspire/"));
-        assertTrue("apkUrl powinien wskazywać dist/mealspire-debug.apk",
+        assertTrue("apkUrl should point at dist/mealspire-debug.apk",
                 apkUrl.endsWith("dist/mealspire-debug.apk"));
     }
 
     @Test
-    public void wydanaWersjaNieJestPierwotnaJedynka() {
-        // versionCode 1 to era niestabilnego podpisu debug; pierwsza wersja
-        // z mechanizmem aktualizacji zaczyna się od 2.
-        assertTrue("versionCode powinien być podbity ponad pierwotne 1",
+    public void releasedVersionIsPastTheOriginalOne() {
+        // versionCode 1 is the era of the unstable debug signature; the first
+        // release with the update mechanism starts at 2.
+        assertTrue("versionCode should be bumped past the original 1",
                 BuildConfig.VERSION_CODE >= 2);
     }
 
     @Test
-    public void apkWDistIstnieje() {
-        assertTrue("Brak dist/mealspire-debug.apk — odśwież go po buildzie",
+    public void apkInDistExists() {
+        assertTrue("dist/mealspire-debug.apk is missing — refresh it after building",
                 new File(repoRoot(), "dist/mealspire-debug.apk").isFile());
-    }
-
-    @Test
-    public void debugIReleaseSaPodpisywaneTymSamymKluczem() throws IOException {
-        String gradle = buildGradleContents();
-        assertTrue("buildTypes.debug powinien używać signingConfigs.mealspire",
-                gradle.contains("debug"));
-        assertTrue("buildTypes.release powinien używać signingConfigs.mealspire",
-                gradle.contains("release"));
-        assertTrue("Oba typy buildów powinny wskazywać signingConfigs.mealspire",
-                gradle.contains("signingConfigs.mealspire"));
     }
 }
