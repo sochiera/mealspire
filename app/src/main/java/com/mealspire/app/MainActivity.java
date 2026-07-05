@@ -151,14 +151,18 @@ public class MainActivity extends Activity {
     private FrozenTasteAggregate tasteAggregate;
     private LearningStatsStore learningStatsStore;
     private LearningStats learningStats;
-    // Index of the deliberately-exploratory AI proposal in the current trio
-    // (-1 = none). Exploratory proposals never carry negative signals — the
-    // system must not punish its own experiments.
-    private int explorationIndex = -1;
+    // Titles (lowercase) of the deliberately-exploratory AI proposals in the
+    // current trio. Tracked by title, not index — the validator may drop an
+    // earlier AI proposal and shift the experiment to another slot, and it must
+    // still never carry negative signals (the system does not punish its own
+    // experiments).
+    private final java.util.Set<String> exploratoryDishes = new java.util.HashSet<>();
     // Implicit signals fire once per trio: the first opened recipe decides the
-    // SHOWN_NOT_CHOSEN losers, the first engagement bumps the stats.
+    // SHOWN_NOT_CHOSEN losers, the first engagement bumps the stats, and each
+    // dish counts as "viewed" at most once (re-opening must not inflate taste).
     private boolean trioChoiceRecorded;
     private boolean trioEngagementCounted;
+    private final java.util.Set<String> viewedInTrio = new java.util.HashSet<>();
     private final DishTagger dishTagger = new DishTagger();
     private final TasteContextBuilder tasteContextBuilder = new TasteContextBuilder();
     private final TasteEventCompactor tasteEventCompactor = new TasteEventCompactor();
@@ -741,7 +745,7 @@ public class MainActivity extends Activity {
         // Shared offline pipeline: pool -> shuffle -> at most one taste-led pick,
         // the rest kept varied (so liking three chicken dishes does not turn every
         // suggestion into chicken).
-        explorationIndex = -1;
+        exploratoryDishes.clear();
         List<Recipe> chosen = generateOfflineRecipes();
 
         List<DishProposal> newProposals = new ArrayList<>();
@@ -772,7 +776,8 @@ public class MainActivity extends Activity {
     }
 
     private void generateAiProposals() {
-        final RecipeRequest request = buildRequest();
+        final ExplorationPlanner.ExplorationGoal explorationGoal = planExploration();
+        final RecipeRequest request = buildRequest(explorationGoal);
         final int epoch = contentEpoch;
         setMealButtonsEnabled(false);
         showHint("Szukam pomysłów…");
@@ -795,14 +800,17 @@ public class MainActivity extends Activity {
                         showHint("Nie udało się wymyślić dań. Spróbuj ponownie.");
                         return;
                     }
-                    // The third slot is the deliberate exploration — but only
-                    // if it really came from the AI (not an offline substitute).
-                    boolean explored = !request.getTasteContext()
-                            .getExplorationSentence().isEmpty();
-                    explorationIndex = explored
-                            && vetted.getProposals().size() == PROPOSAL_COUNT
-                            && vetted.getRecipes().get(PROPOSAL_COUNT - 1) == null
-                            ? PROPOSAL_COUNT - 1 : -1;
+                    // Remember which of the model's answers were the deliberate
+                    // experiments (last one, or last two in the thin-slot 1+2
+                    // mode) — by title, so validator substitutions cannot shift
+                    // negative signals onto them.
+                    exploratoryDishes.clear();
+                    if (explorationGoal != null) {
+                        int from = explorationGoal.isBroad() ? 1 : PROPOSAL_COUNT - 1;
+                        for (int i = from; i < result.size() && i < PROPOSAL_COUNT; i++) {
+                            exploratoryDishes.add(result.get(i).getName().toLowerCase());
+                        }
+                    }
                     showProposals(vetted.getProposals(), vetted.getRecipes());
                 });
             } catch (IOException e) {
@@ -818,7 +826,25 @@ public class MainActivity extends Activity {
         }).start();
     }
 
+    /** Aktualny model gustu (pochodna dziennika + agregatu, tanio liczona). */
+    private TasteModel currentTasteModel(java.util.Map<String, String> detailsByTitle) {
+        return TasteModel.build(tasteEvents, tasteAggregate, dishTagger,
+                detailsByTitle, System.currentTimeMillis());
+    }
+
+    /** Cel eksploracji dla bieżącego posiłku (null = model nic jeszcze nie wie). */
+    private ExplorationPlanner.ExplorationGoal planExploration() {
+        return explorationPlanner.plan(
+                currentTasteModel(BuiltInRecipes.detailsByTitle(cookbook)),
+                householdProfile.getDiet(), currentMealIndex, random);
+    }
+
+    /** Żądanie bez eksploracji — dla pobrania pełnego przepisu, gdzie 2+1 nie gra. */
     private RecipeRequest buildRequest() {
+        return buildRequest(null);
+    }
+
+    private RecipeRequest buildRequest(ExplorationPlanner.ExplorationGoal exploration) {
         final String mealType = MEAL_TYPES[currentMealIndex];
         List<String> fragments = new ArrayList<>();
         String portionFragment = PortionSize.promptFragment(appSettings.loadDefaultServings());
@@ -831,14 +857,11 @@ public class MainActivity extends Activity {
         }
         java.util.Map<String, String> detailsByTitle =
                 BuiltInRecipes.detailsByTitle(cookbook);
-        TasteModel tasteModel = TasteModel.build(tasteEvents, tasteAggregate,
-                dishTagger, detailsByTitle, System.currentTimeMillis());
-        ExplorationPlanner.ExplorationGoal exploration = explorationPlanner.plan(
-                tasteModel, householdProfile.getDiet(), currentMealIndex, random);
         return new RecipeRequest(mealType, preferences, history.recentTitles(8),
                 fragments, knownDishes, buildTasteProfile().getAffinities(),
                 householdProfile)
-                .withTasteContext(tasteContextBuilder.build(tasteModel, tasteEvents,
+                .withTasteContext(tasteContextBuilder.build(
+                        currentTasteModel(detailsByTitle), tasteEvents,
                         householdProfile.getDiet(), currentMealIndex)
                         .withExploration(exploration == null
                                 ? "" : exploration.promptSentence())
@@ -853,6 +876,7 @@ public class MainActivity extends Activity {
         currentRecipe = null;
         trioChoiceRecorded = false;
         trioEngagementCounted = false;
+        viewedInTrio.clear();
         for (DishProposal proposal : newProposals) {
             recordChosen(proposal.getName());
         }
@@ -961,13 +985,18 @@ public class MainActivity extends Activity {
         return card;
     }
 
+    /** Czy danie w bieżącej trójce jest celowym eksperymentem systemu. */
+    private boolean isExploratory(String dish) {
+        return dish != null && exploratoryDishes.contains(dish.toLowerCase());
+    }
+
     /** „Inne propozycje" = słaby negatyw dla trójki; eksperyment systemu nie płaci. */
     private void recordTrioRerolled() {
-        for (int i = 0; i < proposals.size(); i++) {
-            if (i == explorationIndex) {
+        for (DishProposal proposal : proposals) {
+            if (isExploratory(proposal.getName())) {
                 continue;
             }
-            recordTasteEvent(TasteEvent.Type.REROLLED, proposals.get(i).getName(),
+            recordTasteEvent(TasteEvent.Type.REROLLED, proposal.getName(),
                     currentMealIndex, false);
         }
         learningStats = learningStats.withReroll();
@@ -979,7 +1008,8 @@ public class MainActivity extends Activity {
             return;
         }
         markTrioEngaged();
-        rememberLike(proposals.get(index).getName(), index == explorationIndex);
+        String dish = proposals.get(index).getName();
+        rememberLike(dish, isExploratory(dish));
     }
 
     /** Reveal the full recipe for a proposal: instant offline, fetched for AI. */
@@ -989,20 +1019,24 @@ public class MainActivity extends Activity {
         }
         recipeFromProposals = true;
         markTrioEngaged();
-        // Opening a recipe is an implicit "this one interests me" signal...
-        recordTasteEvent(TasteEvent.Type.RECIPE_VIEWED,
-                proposals.get(index).getName(), currentMealIndex,
-                index == explorationIndex);
+        String chosenDish = proposals.get(index).getName();
+        // Opening a recipe is an implicit "this one interests me" signal — once
+        // per dish per trio, so browsing back and forth does not inflate taste...
+        if (viewedInTrio.add(chosenDish.toLowerCase())) {
+            recordTasteEvent(TasteEvent.Type.RECIPE_VIEWED, chosenDish,
+                    currentMealIndex, isExploratory(chosenDish));
+        }
         // ...and the first choice in a trio marks the other dishes as "lost the
-        // comparison" — relative learning, the exploratory experiment exempted.
+        // comparison" — relative learning, the exploratory experiments exempted.
         if (!trioChoiceRecorded) {
             trioChoiceRecorded = true;
             for (int i = 0; i < proposals.size(); i++) {
-                if (i == index || i == explorationIndex) {
+                String other = proposals.get(i).getName();
+                if (i == index || isExploratory(other)) {
                     continue;
                 }
-                recordTasteEvent(TasteEvent.Type.SHOWN_NOT_CHOSEN,
-                        proposals.get(i).getName(), currentMealIndex, false);
+                recordTasteEvent(TasteEvent.Type.SHOWN_NOT_CHOSEN, other,
+                        currentMealIndex, false);
             }
         }
         Recipe cached = index < proposalRecipes.size() ? proposalRecipes.get(index) : null;
@@ -1031,6 +1065,7 @@ public class MainActivity extends Activity {
                         return;
                     }
                     showFullRecipe(recipe);
+                    warnIfRecipeBreaksDiet(recipe);
                 });
             } catch (IOException e) {
                 final String message = e.getMessage();
@@ -1046,6 +1081,19 @@ public class MainActivity extends Activity {
                 });
             }
         }).start();
+    }
+
+    /**
+     * Propozycje są twardo walidowane, ale pełny przepis od AI może mimo
+     * wymogu w prompcie przemycić wykluczony składnik — wtedy przynajmniej
+     * głośno ostrzegamy (przepisu nie podmieniamy, użytkownik na niego czeka).
+     */
+    private void warnIfRecipeBreaksDiet(Recipe recipe) {
+        String warning = householdProfile.getDiet().warningFor(
+                recipe.getTitle() + "\n" + recipe.getDetails());
+        if (!warning.isEmpty()) {
+            Toast.makeText(this, warning, Toast.LENGTH_LONG).show();
+        }
     }
 
     private void showFullRecipe(Recipe recipe) {
@@ -1183,6 +1231,7 @@ public class MainActivity extends Activity {
                         return;
                     }
                     showFullRecipe(revised);
+                    warnIfRecipeBreaksDiet(revised);
                 });
             } catch (IOException e) {
                 final String message = e.getMessage();

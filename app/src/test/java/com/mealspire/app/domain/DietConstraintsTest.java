@@ -64,7 +64,23 @@ public class DietConstraintsTest {
         DietConstraints diet = of(DietConstraints.Exclusion.NO_GLUTEN);
         assertFalse(diet.allows("Naleśniki\nSkładniki: mąka, mleko, jajka"));
         assertFalse(diet.allows("Tosty\nSkładniki: pieczywo tostowe"));
+        // Kanapki i grzanki to pieczywo z definicji — sama nazwa wystarcza
+        // (maskowanie profilu widzi tylko wartość „kanapki", bez składników).
+        assertFalse(diet.allows("Kanapki z pastą jajeczną"));
+        assertFalse(diet.allows("Grzanki z serem"));
+        assertFalse(diet.allows("kanapki"));
         assertTrue(diet.allows("Ryż z warzywami\nSkładniki: ryż, marchew, papryka"));
+    }
+
+    @Test
+    public void ostrzezenieDlaPrzepisuLamiacegoDiete() {
+        DietConstraints diet = of(DietConstraints.Exclusion.NO_LACTOSE);
+        String warning = diet.warningFor("Placki\nSkładniki: mąka, mleko, jajka.");
+        assertTrue(warning.contains("Uwaga"));
+        assertTrue(warning.contains("Bez laktozy"));
+        assertEquals("", diet.warningFor("Ryż z warzywami\nSkładniki: ryż, papryka."));
+        assertEquals("", DietConstraints.empty().warningFor("Kotlet schabowy"));
+        assertEquals("", diet.warningFor(null));
     }
 
     @Test

@@ -67,17 +67,39 @@ public class ExplorationPlannerTest {
         }
     }
 
+    /** Model z gęstą historią obiadową (≥ MIN_SLOT_OBSERVATIONS obserwacji). */
+    private TasteModel thickLunchModel() {
+        return modelOf("Kurczak z ryżem", "Kurczak pieczony", "Kurczak w curry",
+                "Zupa pomidorowa", "Zupa ogórkowa", "Łosoś z pieca",
+                "Pierogi z serem", "Rosół z makaronem");
+    }
+
     @Test
-    public void zdanieMaStrukture2Plus1() {
-        TasteModel model = modelOf("Kurczak z ryżem");
+    public void gestySlotDostajeStrukture2Plus1() {
         ExplorationPlanner.ExplorationGoal goal = planner.plan(
-                model, DietConstraints.empty(), 1, new Random(3));
+                thickLunchModel(), DietConstraints.empty(), 1, new Random(3));
         assertNotNull(goal);
+        assertTrue(!goal.isBroad());
         String sentence = goal.promptSentence();
         assertTrue(sentence.contains("Pierwsze dwie propozycje"));
         assertTrue(sentence.contains("Trzecią"));
         assertTrue(sentence.contains(goal.getValue()));
         assertTrue(sentence.contains("diety"));
+    }
+
+    @Test
+    public void cienkiSlotOdwracaProporcjeNa1Plus2() {
+        // Dużo obiadów, zero śniadań: śniadanie ma się douczać, nie udawać —
+        // jedna propozycja wg profilu ogólnego, dwie eksploracyjne (§5.1).
+        ExplorationPlanner.ExplorationGoal goal = planner.plan(
+                thickLunchModel(), DietConstraints.empty(), 0, new Random(3));
+        assertNotNull(goal);
+        assertTrue(goal.isBroad());
+        String sentence = goal.promptSentence();
+        assertTrue(sentence.contains("mało historii"));
+        assertTrue(sentence.contains("Pierwszą propozycję"));
+        assertTrue(sentence.contains("dwie pozostałe"));
+        assertTrue(sentence.contains(goal.getValue()));
     }
 
     @Test

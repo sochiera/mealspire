@@ -34,9 +34,9 @@ public final class DietConstraints {
                         "parówk", "karkówk", "żeberk", "salami", "smalec"}),
         NO_GLUTEN("Bez glutenu", "glutenu (mąki, pieczywa, makaronu, kaszy manny)",
                 new String[]{"mąk", "maka", "makaron", "pieczyw", "chleb", "bułk",
-                        "tost", "naleśnik", "nalesnik", "pierog", "manna", "manną",
-                        "musli", "kuskus", "spaghetti", "lasagn", "tortill",
-                        "gluten", "pszen", "jęczmien", "żytni"}),
+                        "tost", "kanapk", "grzank", "naleśnik", "nalesnik", "pierog",
+                        "manna", "manną", "musli", "kuskus", "spaghetti", "lasagn",
+                        "tortill", "gluten", "pszen", "jęczmien", "żytni"}),
         NO_LACTOSE("Bez laktozy", "laktozy (mleka, śmietany, sera, masła)",
                 new String[]{"mlek", "śmietan", "smietan", "jogurt", "twaróg",
                         "twarog", "twaroż", "twaroz", "maślan", "maslan", "masł",
@@ -110,16 +110,36 @@ public final class DietConstraints {
 
     /** Czy danie (dowolny jego tekst: nazwa, składniki, przepis) jest dozwolone. */
     public boolean allows(String dishText) {
+        return firstViolation(dishText) == null;
+    }
+
+    /** Pierwsze naruszone wykluczenie albo {@code null}, gdy tekst jest czysty. */
+    public Exclusion firstViolation(String dishText) {
         if (dishText == null || exclusions.isEmpty()) {
-            return true;
+            return null;
         }
         String lower = dishText.toLowerCase(Locale.ROOT);
         for (Exclusion exclusion : exclusions) {
             if (exclusion.isViolatedBy(lower)) {
-                return false;
+                return exclusion;
             }
         }
-        return true;
+        return null;
+    }
+
+    /**
+     * Ostrzeżenie dla użytkownika, gdy gotowy przepis (pełny tekst od AI)
+     * wygląda na naruszający dietę; pusty string, gdy jest czysty. Przepisów
+     * nie podmieniamy jak propozycji — użytkownik już na niego czeka — ale
+     * nieufność domyślna wymaga przynajmniej głośnego ostrzeżenia.
+     */
+    public String warningFor(String dishText) {
+        Exclusion violated = firstViolation(dishText);
+        if (violated == null) {
+            return "";
+        }
+        return "Uwaga: ten przepis może naruszać ustawienie „"
+                + violated.label() + "” — sprawdź składniki.";
     }
 
     /**

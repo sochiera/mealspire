@@ -84,21 +84,25 @@ public class TasteEventRecordingRobolectricTest {
     }
 
     @Test
-    public void przegraniZapisujaSieTylkoPrzyPierwszymWyborzeWTrojce() {
+    public void przegladanieTamIZPowrotemNiePompujeSygnalow() {
         MainActivity activity = launchPastOnboarding();
         activity.<Button>findViewById(R.id.meal_breakfast_button).performClick();
 
-        // Otwórz przepis, wróć do propozycji, otwórz ponownie.
+        // Otwórz przepis, wróć do propozycji, otwórz ten sam ponownie.
         activity.<Button>findViewById(R.id.accept_button).performClick();
         activity.onBackPressed();
         activity.<Button>findViewById(R.id.accept_button).performClick();
 
+        int viewed = 0;
         int notChosen = 0;
         for (TasteEvent event : loadEvents().events()) {
-            if (event.getType() == TasteEvent.Type.SHOWN_NOT_CHOSEN) {
+            if (event.getType() == TasteEvent.Type.RECIPE_VIEWED) {
+                viewed++;
+            } else if (event.getType() == TasteEvent.Type.SHOWN_NOT_CHOSEN) {
                 notChosen++;
             }
         }
+        assertEquals("to samo danie liczy się raz na trójkę", 1, viewed);
         assertEquals("porównanie liczy się raz na trójkę", 2, notChosen);
     }
 

@@ -18,10 +18,12 @@ public final class ExplorationPlanner {
     public static final class ExplorationGoal {
         private final TasteDimension dimension;
         private final String value;
+        private final boolean broad;
 
-        ExplorationGoal(TasteDimension dimension, String value) {
+        ExplorationGoal(TasteDimension dimension, String value, boolean broad) {
             this.dimension = dimension;
             this.value = value;
+            this.broad = broad;
         }
 
         public TasteDimension getDimension() {
@@ -32,8 +34,24 @@ public final class ExplorationPlanner {
             return value;
         }
 
-        /** Instrukcja 2+1 dla promptu propozycji. */
+        /**
+         * Slot z małą historią odwraca proporcje: zamiast 2+1 jest 1+2 —
+         * cienki slot ma się szybko douczać, nie udawać, że coś wie.
+         */
+        public boolean isBroad() {
+            return broad;
+        }
+
+        /** Instrukcja 2+1 (albo 1+2 dla cienkiego slotu) do promptu propozycji. */
         public String promptSentence() {
+            if (broad) {
+                return "Użytkownik ma dla tej pory posiłku mało historii. Pierwszą "
+                        + "propozycję dopasuj do jego ogólnego profilu, a dwie "
+                        + "pozostałe zaproponuj celowo różnorodne, spoza utartych "
+                        + "wyborów — jedną z nich jako danie, którego "
+                        + dimension.instrumental() + " jest " + value
+                        + " — nadal proste i bezwzględnie zgodne z wymaganiami diety.";
+            }
             return "Pierwsze dwie propozycje dopasuj do profilu użytkownika. "
                     + "Trzecią zaproponuj celowo spoza jego utartych wyborów: danie, "
                     + "którego " + dimension.instrumental() + " jest " + value
@@ -52,15 +70,15 @@ public final class ExplorationPlanner {
         if (model == null || model.totalObservations(TasteModel.ALL_MEALS) == 0) {
             return null;
         }
-        int slot = mealIndex >= 0 && model.totalObservations(mealIndex)
-                >= TasteContextBuilder.MIN_SLOT_OBSERVATIONS
-                ? mealIndex : TasteModel.ALL_MEALS;
+        boolean thinSlot = mealIndex >= 0 && model.totalObservations(mealIndex)
+                < TasteContextBuilder.MIN_SLOT_OBSERVATIONS;
+        int slot = thinSlot || mealIndex < 0 ? TasteModel.ALL_MEALS : mealIndex;
 
         // Najmniej zbadane wymiary najpierw; w każdym szukamy dozwolonej wartości.
         for (TasteDimension dimension : dimensionsByObservations(model, slot)) {
             String value = leastKnownAllowedValue(model, dimension, slot, diet, random);
             if (value != null) {
-                return new ExplorationGoal(dimension, value);
+                return new ExplorationGoal(dimension, value, thinSlot);
             }
         }
         return null;
