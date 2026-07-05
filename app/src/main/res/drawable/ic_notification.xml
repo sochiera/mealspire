@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Status-bar (small) notification icon: the Mealspire bowl drawn in pure white,
+  because Android renders small icons from the alpha channel only — a coloured
+  launcher icon there degrades to a flat blob. Tinted via Notification.setColor.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- Steam -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M8.6,3.6 C7.6,4.8 9.6,5.7 8.6,6.9" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M12,2.4 C11,3.6 13,4.5 12,5.7 C11,6.9 13,7.8 12,9" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M15.4,3.6 C14.4,4.8 16.4,5.7 15.4,6.9" />
+
+    <!-- Rim -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M6.4,11.4 L17.6,11.4" />
+
+    <!-- Bowl body -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M6,12.6 A6,6 0 0 0 18,12.6 Z" />
+
+    <!-- Foot -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M10.2,20.4 L13.8,20.4" />
+</vector>
