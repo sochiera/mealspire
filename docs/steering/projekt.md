@@ -88,6 +88,16 @@ Wszystkie teksty w UI i promptach są po polsku.
   Build może też wstrzyknąć klucz przez `ANTHROPIC_API_KEY` / `local.properties`.
 - **Model**: `claude-sonnet-4-6` (poprawne ID Anthropic Messages API),
   `MAX_TOKENS = 2048` (1024 ucinało dłuższe przepisy).
+- **Aktualizacje**: raz na dobę `UpdateChecker` pobiera `dist/wersja.json`
+  z raw.githubusercontent (bez tokenu) i porównuje z `BuildConfig.VERSION_CODE`;
+  wyższy → baner na ekranie startowym otwierający APK w przeglądarce
+  (`Intent.ACTION_VIEW`, bez nowych uprawnień). Decyzje w `domain/`
+  (`UpdateChecker`, `VersionInfoParser`), stan w `SharedPreferencesUpdateStateStore`,
+  transport w `net/HttpVersionJsonFetcher`. **Nigdy nie woła sieci w testach**:
+  pierwszy odczyt znacznika czasu zasiewa „teraz" (świeża instalacja/test czeka
+  dobę), a testy wstrzykują `versionJsonSourceOverride`/`updateCheckExecutorOverride`.
+  Przy wydaniu podbijaj `versionCode`/`versionName` i `dist/wersja.json` razem —
+  pilnuje `ReleaseConsistencyTest`. Pełny design: `docs/design/aktualizacja-aplikacji.md`.
 
 ## Pułapki w UI (naprawione — nie regresować)
 

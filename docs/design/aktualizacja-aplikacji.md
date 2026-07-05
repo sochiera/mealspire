@@ -1,7 +1,13 @@
 # Aktualizacja aplikacji: analiza, design, taski
 
-Stan: analiza + design zatwierdzone do realizacji, implementacja nie zaczęta.
+Stan: **Faza 0 i Faza 1 zaimplementowane** (TDD). Faza 2 w backlogu.
 Data: 2026-07-05.
+
+Zrealizowane: wspólny keystore + `signingConfig` (T1), `versionCode 2`/`1.1`
++ `dist/wersja.json` + `ReleaseConsistencyTest` (T2), `VersionInfo`/
+`VersionInfoParser` (T3), `UpdateChecker` (T4), `UpdateStateStore` +
+impl SharedPreferences (T5), baner + sprawdzanie w `MainActivity`
+(`VersionJsonSource`, `HttpVersionJsonFetcher`, T6), dokumentacja (T7).
 
 ## Część 1 — Analiza wykonalności
 

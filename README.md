@@ -85,6 +85,16 @@ klucza API. Przypomnienia korzystają z `AlarmManager` (lekko, bez dodatkowych
 bibliotek) i przeżywają restart telefonu. Na Androidzie 13+ aplikacja poprosi raz
 o zgodę na powiadomienia; bez zgody reszta działa normalnie, tylko bez przypomnień.
 
+## Powiadomienie o nowej wersji
+
+Aplikacja raz na dobę po cichu sprawdza, czy w repozytorium jest nowsze wydanie
+(pobiera mały plik `dist/wersja.json`, bez żadnego konta ani tokenu). Jeśli tak,
+na ekranie startowym pojawia się baner **„Dostępna nowa wersja … — dotknij, aby
+pobrać”**. Dotknięcie otwiera link do APK w przeglądarce; po pobraniu otwierasz
+plik, a system instaluje nową wersję **po wierzchu** starej — bez utraty danych
+(od wersji 1.1 wszystkie wydania są podpisane tym samym kluczem). Brak internetu
+niczego nie psuje — baner po prostu się nie pokazuje, a aplikacja działa dalej.
+
 ## Najpierw wbudowana baza, AI dopiero gdy ma z czego wnioskować
 
 Świeża instalacja nie ma żadnych danych o Twoim guście, więc na start aplikacja
