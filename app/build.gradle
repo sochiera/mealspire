@@ -32,6 +32,28 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Wspólny keystore z repo: każdy build (CI, kontener agenta, laptop) daje APK
+    // z tym samym podpisem, więc nowa wersja instaluje się po wierzchu bez utraty
+    // danych. Hasło celowo jawne — repo jest publiczne, appka poza Play Store
+    // (kompromis opisany w docs/design/aktualizacja-aplikacji.md).
+    signingConfigs {
+        mealspire {
+            storeFile rootProject.file("signing/mealspire.keystore")
+            storePassword "mealspire"
+            keyAlias "mealspire"
+            keyPassword "mealspire"
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.mealspire
+        }
+        release {
+            signingConfig signingConfigs.mealspire
+        }
+    }
+
     buildFeatures {
         buildConfig true
     }
