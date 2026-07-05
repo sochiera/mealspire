@@ -51,15 +51,30 @@ public final class ProposalPromptBuilder {
                 + "składnikiem, a przynajmniej jedna zupełnie nowa, inna niż zwykle. ");
         sb.append("Oddziel każdą propozycję osobną linią z trzema myślnikami: ---.");
         appendContext(sb, request);
+        // Reguła 2+1: cel eksploracji wybrała appka — model tylko go realizuje.
+        String exploration = request.getTasteContext().getExplorationSentence();
+        if (!exploration.isEmpty()) {
+            sb.append(' ').append(exploration);
+        }
         return sb.toString();
     }
 
     private void appendContext(StringBuilder sb, RecipeRequest request) {
         request.getHouseholdProfile().appendPromptSentences(sb);
-        UserPreferences preferences = request.getPreferences();
-        if (!preferences.getLikes().isEmpty()) {
+        TasteContext taste = request.getTasteContext();
+        if (!taste.isEmpty()) {
+            // Skompresowany profil zamiast surowej listy wszystkich polubień —
+            // przy 50+ polubieniach pełna lista szumi i rozmywa sygnał.
+            for (String sentence : taste.getProfileSentences()) {
+                sb.append(' ').append(sentence);
+            }
+            if (!taste.getExampleDishes().isEmpty()) {
+                sb.append(" Przykłady dań, które ostatnio polubił: ")
+                        .append(join(taste.getExampleDishes())).append('.');
+            }
+        } else if (!request.getPreferences().getLikes().isEmpty()) {
             sb.append(" Dania, które użytkownik lubi: ")
-                    .append(join(preferences.getLikes())).append('.');
+                    .append(join(request.getPreferences().getLikes())).append('.');
         }
         String affinities = join(request.getTasteAffinities());
         if (!affinities.isEmpty()) {
@@ -83,6 +98,10 @@ public final class ProposalPromptBuilder {
         if (!recent.isEmpty()) {
             sb.append(" Ostatnio proponowane dania (zaproponuj coś innego dla urozmaicenia): ")
                     .append(recent).append('.');
+        }
+        String antiMonotony = request.getTasteContext().getAntiMonotonySentence();
+        if (!antiMonotony.isEmpty()) {
+            sb.append(' ').append(antiMonotony);
         }
     }
 

@@ -28,17 +28,21 @@ import com.mealspire.app.domain.Cookbook;
 import com.mealspire.app.domain.CookbookEntry;
 import com.mealspire.app.domain.CookbookStore;
 import com.mealspire.app.domain.DataManager;
+import com.mealspire.app.domain.DietConstraints;
 import com.mealspire.app.domain.DishProposal;
 import com.mealspire.app.domain.HouseholdProfile;
 import com.mealspire.app.domain.HouseholdProfileStore;
 import com.mealspire.app.domain.KnownDishImporter;
 import com.mealspire.app.domain.KnownDishPromptBuilder;
+import com.mealspire.app.domain.LearningStats;
+import com.mealspire.app.domain.LearningStatsStore;
 import com.mealspire.app.domain.BuiltInRecipes;
+import com.mealspire.app.domain.ContrastiveDishSampler;
 import com.mealspire.app.domain.IngredientExtractor;
 import com.mealspire.app.domain.OfflineProposalGenerator;
-import com.mealspire.app.domain.OnboardingDishSampler;
 import com.mealspire.app.domain.PersonalizationReadiness;
 import com.mealspire.app.domain.PortionSize;
+import com.mealspire.app.domain.ProposalValidator;
 import com.mealspire.app.domain.MealHistory;
 import com.mealspire.app.domain.MealHistoryStore;
 import com.mealspire.app.domain.PreferenceStore;
@@ -48,6 +52,18 @@ import com.mealspire.app.domain.RecipeRequest;
 import com.mealspire.app.domain.RecipeService;
 import com.mealspire.app.domain.RecipeTextParser;
 import com.mealspire.app.domain.SecretStore;
+import com.mealspire.app.domain.DishTagger;
+import com.mealspire.app.domain.ExplorationPlanner;
+import com.mealspire.app.domain.FrozenTasteAggregate;
+import com.mealspire.app.domain.MonotonyDetector;
+import com.mealspire.app.domain.TasteContextBuilder;
+import com.mealspire.app.domain.TasteDimension;
+import com.mealspire.app.domain.TasteEvent;
+import com.mealspire.app.domain.TasteEventCompactor;
+import com.mealspire.app.domain.TasteEventLog;
+import com.mealspire.app.domain.TasteEventMigration;
+import com.mealspire.app.domain.TasteEventStore;
+import com.mealspire.app.domain.TasteModel;
 import com.mealspire.app.domain.TasteProfile;
 import com.mealspire.app.domain.TasteProfiler;
 import com.mealspire.app.domain.UserPreferences;
@@ -60,7 +76,9 @@ import com.mealspire.app.storage.SharedPreferencesCookbookStore;
 import com.mealspire.app.storage.SharedPreferencesHouseholdProfileStore;
 import com.mealspire.app.storage.SharedPreferencesMealHistoryStore;
 import com.mealspire.app.storage.SharedPreferencesPreferenceStore;
+import com.mealspire.app.storage.SharedPreferencesLearningStatsStore;
 import com.mealspire.app.storage.SharedPreferencesSecretStore;
+import com.mealspire.app.storage.SharedPreferencesTasteEventStore;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
@@ -94,8 +112,14 @@ public class MainActivity extends Activity {
             HouseholdProfile.CookingSkill.BEGINNER,
             HouseholdProfile.CookingSkill.COMFORTABLE,
             HouseholdProfile.CookingSkill.CONFIDENT};
-    private static final int ONBOARDING_QUESTIONS = 3;
-    private static final int ONBOARDING_DISH_ROUNDS = 3;
+    private static final String[] TIME_LABELS =
+            {"Do 20 minut", "Około pół godziny", "Godzina i więcej"};
+    private static final HouseholdProfile.CookingTime[] TIME_VALUES = {
+            HouseholdProfile.CookingTime.QUICK,
+            HouseholdProfile.CookingTime.MEDIUM,
+            HouseholdProfile.CookingTime.LONG};
+    private static final int ONBOARDING_QUESTIONS = 4;
+    private static final int ONBOARDING_DISH_ROUNDS = ContrastiveDishSampler.rounds();
     private static final int ONBOARDING_STEPS = ONBOARDING_QUESTIONS + ONBOARDING_DISH_ROUNDS;
 
     /** Intent extra: which meal to open (0=breakfast, 1=lunch, 2=dinner). */
@@ -122,7 +146,30 @@ public class MainActivity extends Activity {
     private HouseholdProfile householdProfile;
     private AppSettings appSettings;
     private SecretStore secretStore;
+    private TasteEventStore tasteEventStore;
+    private TasteEventLog tasteEvents;
+    private FrozenTasteAggregate tasteAggregate;
+    private LearningStatsStore learningStatsStore;
+    private LearningStats learningStats;
+    // Titles (lowercase) of the deliberately-exploratory AI proposals in the
+    // current trio. Tracked by title, not index — the validator may drop an
+    // earlier AI proposal and shift the experiment to another slot, and it must
+    // still never carry negative signals (the system does not punish its own
+    // experiments).
+    private final java.util.Set<String> exploratoryDishes = new java.util.HashSet<>();
+    // Implicit signals fire once per trio: the first opened recipe decides the
+    // SHOWN_NOT_CHOSEN losers, the first engagement bumps the stats, and each
+    // dish counts as "viewed" at most once (re-opening must not inflate taste).
+    private boolean trioChoiceRecorded;
+    private boolean trioEngagementCounted;
+    private final java.util.Set<String> viewedInTrio = new java.util.HashSet<>();
+    private final DishTagger dishTagger = new DishTagger();
+    private final TasteContextBuilder tasteContextBuilder = new TasteContextBuilder();
+    private final TasteEventCompactor tasteEventCompactor = new TasteEventCompactor();
+    private final ExplorationPlanner explorationPlanner = new ExplorationPlanner();
+    private final MonotonyDetector monotonyDetector = new MonotonyDetector();
     private final OfflineProposalGenerator offlineProposalGenerator = new OfflineProposalGenerator();
+    private final ProposalValidator proposalValidator = new ProposalValidator();
     private final IngredientExtractor ingredientExtractor = new IngredientExtractor();
     private final TasteProfiler tasteProfiler = new TasteProfiler();
     private final PersonalizationReadiness personalizationReadiness = new PersonalizationReadiness();
@@ -147,9 +194,11 @@ public class MainActivity extends Activity {
     // sampled dish rounds, and a meal tapped in a notification to open once the
     // quiz is finished or skipped. Held in fields (not saved state) because the
     // manifest's configChanges keeps the Activity alive across rotation.
-    private final OnboardingDishSampler onboardingDishSampler = new OnboardingDishSampler();
+    private final ContrastiveDishSampler onboardingDishSampler = new ContrastiveDishSampler();
     private int onboardingStep = -1;
     private List<List<Recipe>> onboardingRounds;
+    // Diet the rounds were sampled with; a change (via back navigation) resamples.
+    private String onboardingRoundsDietKey;
     // The dish picked in each quiz round. Persisted as likes only when the quiz
     // ends, so going back and re-picking replaces the choice instead of
     // accumulating extra likes.
@@ -172,6 +221,18 @@ public class MainActivity extends Activity {
         householdProfile = householdProfileStore.load();
         appSettings = new SharedPreferencesAppSettings(this);
         secretStore = new SharedPreferencesSecretStore(this);
+        tasteEventStore = new SharedPreferencesTasteEventStore(this);
+        tasteEvents = tasteEventStore.load();
+        tasteAggregate = tasteEventStore.loadAggregate();
+        learningStatsStore = new SharedPreferencesLearningStatsStore(this);
+        learningStats = learningStatsStore.load();
+        // Polubienia sprzed ery dziennika stają się zdarzeniami LIKED (raz).
+        TasteEventLog migrated = TasteEventMigration.migrate(
+                tasteEvents, preferences, System.currentTimeMillis());
+        if (migrated != tasteEvents) {
+            tasteEvents = migrated;
+            tasteEventStore.save(tasteEvents);
+        }
 
         ScrollView scrollView = new ScrollView(this);
         scrollView.setBackgroundColor(Color.rgb(255, 247, 237));
@@ -421,21 +482,38 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * A short taste quiz on a fresh install: who the user cooks for, how
-     * cooking goes, favourite cuisines, then a few "which dish appeals most?"
-     * rounds saved as ordinary likes. Every step can be skipped; answers given
-     * so far are kept either way.
+     * A short taste quiz on a fresh install: who the user cooks for, diet
+     * exclusions, weekday cooking time, cooking skill, then three contrastive
+     * "which dish appeals most?" rounds saved as ordinary likes. Every step can
+     * be skipped; answers given so far are kept either way.
      */
     private void startOnboarding() {
-        Recipe[][] pools = new Recipe[BuiltInRecipes.mealCount()][];
-        for (int i = 0; i < pools.length; i++) {
-            pools[i] = BuiltInRecipes.forMeal(i);
-        }
-        onboardingRounds = onboardingDishSampler.sample(pools, ONBOARDING_DISH_ROUNDS, random);
+        onboardingRounds = null;
+        onboardingRoundsDietKey = null;
         onboardingStep = 0;
         setMealButtonsEnabled(false);
         moreButton.setEnabled(false);
         renderOnboardingStep();
+    }
+
+    /**
+     * Samples the contrastive dish rounds lazily — after the diet question, so
+     * exclusions ticked moments earlier already filter the rounds. Changing the
+     * diet (back navigation) resamples and drops picks that may now be invalid.
+     */
+    private void ensureOnboardingRounds() {
+        String dietKey = householdProfile.getDiet().getExclusions().toString();
+        if (onboardingRounds != null && dietKey.equals(onboardingRoundsDietKey)) {
+            return;
+        }
+        Recipe[][] pools = new Recipe[BuiltInRecipes.mealCount()][];
+        for (int i = 0; i < pools.length; i++) {
+            pools[i] = BuiltInRecipes.forMeal(i);
+        }
+        onboardingRounds = onboardingDishSampler.sample(
+                pools, householdProfile.getDiet(), random);
+        onboardingRoundsDietKey = dietKey;
+        java.util.Arrays.fill(onboardingPicks, null);
     }
 
     private void renderOnboardingStep() {
@@ -466,6 +544,43 @@ public class MainActivity extends Activity {
                 }
                 break;
             case 1:
+                question.setText("Czego nie jadacie?");
+                TextView dietNote = new TextView(this);
+                dietNote.setText("Tego nigdy nie zaproponuję. Możesz zaznaczyć kilka "
+                        + "odpowiedzi albo nic.");
+                dietNote.setTextSize(15);
+                dietNote.setTextColor(Color.rgb(120, 104, 86));
+                contentContainer.addView(dietNote, marginTop(6));
+                for (final DietConstraints.Exclusion exclusion
+                        : DietConstraints.Exclusion.values()) {
+                    CheckBox dietBox = new CheckBox(this);
+                    dietBox.setText(exclusion.label());
+                    dietBox.setTextSize(18);
+                    dietBox.setChecked(householdProfile.getDiet().getExclusions()
+                            .contains(exclusion));
+                    dietBox.setOnCheckedChangeListener((view, checked) ->
+                            toggleExclusion(exclusion, checked));
+                    contentContainer.addView(dietBox, marginTop(8));
+                }
+                Button dietNext = new Button(this);
+                dietNext.setId(R.id.onboarding_next_button);
+                dietNext.setText("Dalej");
+                dietNext.setAllCaps(false);
+                dietNext.setTextSize(18);
+                dietNext.setOnClickListener(v -> advanceOnboarding());
+                contentContainer.addView(dietNext, marginTop(16));
+                break;
+            case 2:
+                question.setText("Ile masz zwykle czasu na gotowanie w dzień powszedni?");
+                for (int i = 0; i < TIME_LABELS.length; i++) {
+                    final HouseholdProfile.CookingTime value = TIME_VALUES[i];
+                    addOnboardingOption(i + 1, TIME_LABELS[i], () -> {
+                        saveProfile(householdProfile.withTime(value));
+                        advanceOnboarding();
+                    });
+                }
+                break;
+            case 3:
                 question.setText("Jak Ci idzie gotowanie?");
                 for (int i = 0; i < SKILL_LABELS.length; i++) {
                     final HouseholdProfile.CookingSkill value = SKILL_VALUES[i];
@@ -475,32 +590,9 @@ public class MainActivity extends Activity {
                     });
                 }
                 break;
-            case 2:
-                question.setText("Jakie kuchnie lubicie najbardziej?");
-                TextView note = new TextView(this);
-                note.setText("Możesz zaznaczyć kilka odpowiedzi.");
-                note.setTextSize(15);
-                note.setTextColor(Color.rgb(120, 104, 86));
-                contentContainer.addView(note, marginTop(6));
-                for (final String cuisine : CUISINE_OPTIONS) {
-                    CheckBox box = new CheckBox(this);
-                    box.setText(cuisine);
-                    box.setTextSize(18);
-                    box.setChecked(householdProfile.getCuisines().contains(cuisine));
-                    box.setOnCheckedChangeListener((view, checked) ->
-                            toggleCuisine(cuisine, checked));
-                    contentContainer.addView(box, marginTop(8));
-                }
-                Button next = new Button(this);
-                next.setId(R.id.onboarding_next_button);
-                next.setText("Dalej");
-                next.setAllCaps(false);
-                next.setTextSize(18);
-                next.setOnClickListener(v -> advanceOnboarding());
-                contentContainer.addView(next, marginTop(16));
-                break;
             default:
                 question.setText("Które danie najbardziej Ci pasuje?");
+                ensureOnboardingRounds();
                 final int roundIndex = onboardingStep - ONBOARDING_QUESTIONS;
                 List<Recipe> round = onboardingRounds.get(roundIndex);
                 for (int i = 0; i < round.size(); i++) {
@@ -513,6 +605,18 @@ public class MainActivity extends Activity {
                         advanceOnboarding();
                     });
                 }
+                // Wymuszony wybór to fałszywy sygnał — „Żadne z tych" po prostu
+                // nie zapisuje polubienia (uczenie pozostaje tylko pozytywne).
+                Button none = new Button(this);
+                none.setId(R.id.onboarding_option_none);
+                none.setText("Żadne z tych");
+                none.setAllCaps(false);
+                none.setTextSize(16);
+                none.setOnClickListener(v -> {
+                    onboardingPicks[roundIndex] = null;
+                    advanceOnboarding();
+                });
+                contentContainer.addView(none, marginTop(12));
                 break;
         }
 
@@ -547,17 +651,18 @@ public class MainActivity extends Activity {
         householdProfileStore.save(updated);
     }
 
-    /** Saves each (un)ticked cuisine immediately, so skipping keeps the answers. */
-    private void toggleCuisine(String cuisine, boolean liked) {
-        List<String> cuisines = new ArrayList<>(householdProfile.getCuisines());
-        if (liked) {
-            if (!cuisines.contains(cuisine)) {
-                cuisines.add(cuisine);
+    /** Saves each (un)ticked exclusion immediately, so skipping keeps the answers. */
+    private void toggleExclusion(DietConstraints.Exclusion exclusion, boolean excluded) {
+        List<DietConstraints.Exclusion> exclusions =
+                new ArrayList<>(householdProfile.getDiet().getExclusions());
+        if (excluded) {
+            if (!exclusions.contains(exclusion)) {
+                exclusions.add(exclusion);
             }
         } else {
-            cuisines.remove(cuisine);
+            exclusions.remove(exclusion);
         }
-        saveProfile(householdProfile.withCuisines(cuisines));
+        saveProfile(householdProfile.withDiet(DietConstraints.of(exclusions)));
     }
 
     private void advanceOnboarding() {
@@ -594,6 +699,8 @@ public class MainActivity extends Activity {
         for (String pick : onboardingPicks) {
             if (pick != null) {
                 preferences = preferences.withLike(pick);
+                recordTasteEvent(TasteEvent.Type.ONBOARDING_PICK, pick,
+                        TasteEvent.NO_MEAL);
             }
         }
         preferenceStore.save(preferences);
@@ -638,9 +745,8 @@ public class MainActivity extends Activity {
         // Shared offline pipeline: pool -> shuffle -> at most one taste-led pick,
         // the rest kept varied (so liking three chicken dishes does not turn every
         // suggestion into chicken).
-        List<Recipe> chosen = offlineProposalGenerator.generate(
-                BuiltInRecipes.forMeal(currentMealIndex), cookbook, preferences,
-                buildTasteProfile(), PROPOSAL_COUNT, random, history);
+        exploratoryDishes.clear();
+        List<Recipe> chosen = generateOfflineRecipes();
 
         List<DishProposal> newProposals = new ArrayList<>();
         List<Recipe> newRecipes = new ArrayList<>();
@@ -651,6 +757,14 @@ public class MainActivity extends Activity {
         showProposals(newProposals, newRecipes);
     }
 
+    /** The shared offline pipeline for the current meal, diet-filtered. */
+    private List<Recipe> generateOfflineRecipes() {
+        return offlineProposalGenerator.generate(
+                BuiltInRecipes.forMeal(currentMealIndex), cookbook, preferences,
+                buildTasteProfile(), PROPOSAL_COUNT, random, history,
+                System.currentTimeMillis(), householdProfile.getDiet());
+    }
+
     /** Distils the user's likes into recurring "taste" terms (with known recipe details). */
     private TasteProfile buildTasteProfile() {
         return tasteProfiler.build(preferences.getLikes(),
@@ -658,16 +772,12 @@ public class MainActivity extends Activity {
     }
 
     private DishProposal proposalFromRecipe(Recipe recipe) {
-        List<String> ingredients = ingredientExtractor.extract(recipe.getDetails());
-        if (ingredients.size() > 5) {
-            ingredients = new ArrayList<>(ingredients.subList(0, 5));
-        }
-        return new DishProposal(recipe.getTitle(),
-                "Proste danie z Twojej puli.", "", ingredients);
+        return proposalValidator.proposalFromRecipe(recipe);
     }
 
     private void generateAiProposals() {
-        final RecipeRequest request = buildRequest();
+        final ExplorationPlanner.ExplorationGoal explorationGoal = planExploration();
+        final RecipeRequest request = buildRequest(explorationGoal);
         final int epoch = contentEpoch;
         setMealButtonsEnabled(false);
         showHint("Szukam pomysłów…");
@@ -680,15 +790,28 @@ public class MainActivity extends Activity {
                     if (epoch != contentEpoch) {
                         return; // the user moved on; don't stomp the new content
                     }
-                    if (result.isEmpty()) {
+                    // Distrust-by-default: drop proposals that break the diet
+                    // (or duplicate each other) and top the set back up from
+                    // the diet-filtered offline pool.
+                    ProposalValidator.Result vetted = proposalValidator.validate(
+                            result, householdProfile.getDiet(),
+                            generateOfflineRecipes(), PROPOSAL_COUNT);
+                    if (vetted.getProposals().isEmpty()) {
                         showHint("Nie udało się wymyślić dań. Spróbuj ponownie.");
                         return;
                     }
-                    List<Recipe> noRecipes = new ArrayList<>();
-                    for (int i = 0; i < result.size(); i++) {
-                        noRecipes.add(null); // full recipe is fetched on demand
+                    // Remember which of the model's answers were the deliberate
+                    // experiments (last one, or last two in the thin-slot 1+2
+                    // mode) — by title, so validator substitutions cannot shift
+                    // negative signals onto them.
+                    exploratoryDishes.clear();
+                    if (explorationGoal != null) {
+                        int from = explorationGoal.isBroad() ? 1 : PROPOSAL_COUNT - 1;
+                        for (int i = from; i < result.size() && i < PROPOSAL_COUNT; i++) {
+                            exploratoryDishes.add(result.get(i).getName().toLowerCase());
+                        }
                     }
-                    showProposals(result, noRecipes);
+                    showProposals(vetted.getProposals(), vetted.getRecipes());
                 });
             } catch (IOException e) {
                 final String message = e.getMessage();
@@ -703,7 +826,25 @@ public class MainActivity extends Activity {
         }).start();
     }
 
+    /** Aktualny model gustu (pochodna dziennika + agregatu, tanio liczona). */
+    private TasteModel currentTasteModel(java.util.Map<String, String> detailsByTitle) {
+        return TasteModel.build(tasteEvents, tasteAggregate, dishTagger,
+                detailsByTitle, System.currentTimeMillis());
+    }
+
+    /** Cel eksploracji dla bieżącego posiłku (null = model nic jeszcze nie wie). */
+    private ExplorationPlanner.ExplorationGoal planExploration() {
+        return explorationPlanner.plan(
+                currentTasteModel(BuiltInRecipes.detailsByTitle(cookbook)),
+                householdProfile.getDiet(), currentMealIndex, random);
+    }
+
+    /** Żądanie bez eksploracji — dla pobrania pełnego przepisu, gdzie 2+1 nie gra. */
     private RecipeRequest buildRequest() {
+        return buildRequest(null);
+    }
+
+    private RecipeRequest buildRequest(ExplorationPlanner.ExplorationGoal exploration) {
         final String mealType = MEAL_TYPES[currentMealIndex];
         List<String> fragments = new ArrayList<>();
         String portionFragment = PortionSize.promptFragment(appSettings.loadDefaultServings());
@@ -714,19 +855,61 @@ public class MainActivity extends Activity {
         if (knownDishes.size() > 10) {
             knownDishes = knownDishes.subList(0, 10);
         }
+        java.util.Map<String, String> detailsByTitle =
+                BuiltInRecipes.detailsByTitle(cookbook);
         return new RecipeRequest(mealType, preferences, history.recentTitles(8),
                 fragments, knownDishes, buildTasteProfile().getAffinities(),
-                householdProfile);
+                householdProfile)
+                .withTasteContext(tasteContextBuilder.build(
+                        currentTasteModel(detailsByTitle), tasteEvents,
+                        householdProfile.getDiet(), currentMealIndex)
+                        .withExploration(exploration == null
+                                ? "" : exploration.promptSentence())
+                        .withAntiMonotony(monotonyDetector.detect(
+                                history.recentTitles(MonotonyDetector.WINDOW),
+                                detailsByTitle)));
     }
 
     private void showProposals(List<DishProposal> newProposals, List<Recipe> newRecipes) {
         proposals = newProposals;
         proposalRecipes = newRecipes;
         currentRecipe = null;
+        trioChoiceRecorded = false;
+        trioEngagementCounted = false;
+        viewedInTrio.clear();
         for (DishProposal proposal : newProposals) {
             recordChosen(proposal.getName());
         }
+        countShownTrio(newProposals, newRecipes);
         renderProposals();
+    }
+
+    /** Liczniki diagnostyczne: pokazany zestaw + jakość tagowania propozycji AI. */
+    private void countShownTrio(List<DishProposal> newProposals, List<Recipe> newRecipes) {
+        int aiCount = 0;
+        int aiUntagged = 0;
+        for (int i = 0; i < newProposals.size(); i++) {
+            boolean fromAi = i >= newRecipes.size() || newRecipes.get(i) == null;
+            if (fromAi) {
+                aiCount++;
+                if (dishTagger.tag(newProposals.get(i)).get(TasteDimension.BASE) == null) {
+                    aiUntagged++;
+                }
+            }
+        }
+        learningStats = learningStats.withTrioShown()
+                .withAiProposals(aiCount, aiUntagged);
+        learningStatsStore.save(learningStats);
+    }
+
+    /** Pierwsze zaangażowanie w zestaw (przepis/lajk) liczy się do acceptance. */
+    private void markTrioEngaged() {
+        if (trioEngagementCounted) {
+            return;
+        }
+        trioEngagementCounted = true;
+        learningStats = learningStats.withTrioEngaged();
+        learningStatsStore.save(learningStats);
     }
 
     private void renderProposals() {
@@ -741,7 +924,10 @@ public class MainActivity extends Activity {
         refresh.setText("Inne propozycje");
         refresh.setAllCaps(false);
         refresh.setTextSize(16);
-        refresh.setOnClickListener(v -> generateProposals());
+        refresh.setOnClickListener(v -> {
+            recordTrioRerolled();
+            generateProposals();
+        });
         contentContainer.addView(refresh, marginTop(16));
     }
 
@@ -799,11 +985,31 @@ public class MainActivity extends Activity {
         return card;
     }
 
+    /** Czy danie w bieżącej trójce jest celowym eksperymentem systemu. */
+    private boolean isExploratory(String dish) {
+        return dish != null && exploratoryDishes.contains(dish.toLowerCase());
+    }
+
+    /** „Inne propozycje" = słaby negatyw dla trójki; eksperyment systemu nie płaci. */
+    private void recordTrioRerolled() {
+        for (DishProposal proposal : proposals) {
+            if (isExploratory(proposal.getName())) {
+                continue;
+            }
+            recordTasteEvent(TasteEvent.Type.REROLLED, proposal.getName(),
+                    currentMealIndex, false);
+        }
+        learningStats = learningStats.withReroll();
+        learningStatsStore.save(learningStats);
+    }
+
     private void likeProposal(int index) {
         if (index < 0 || index >= proposals.size()) {
             return;
         }
-        rememberLike(proposals.get(index).getName());
+        markTrioEngaged();
+        String dish = proposals.get(index).getName();
+        rememberLike(dish, isExploratory(dish));
     }
 
     /** Reveal the full recipe for a proposal: instant offline, fetched for AI. */
@@ -812,6 +1018,27 @@ public class MainActivity extends Activity {
             return;
         }
         recipeFromProposals = true;
+        markTrioEngaged();
+        String chosenDish = proposals.get(index).getName();
+        // Opening a recipe is an implicit "this one interests me" signal — once
+        // per dish per trio, so browsing back and forth does not inflate taste...
+        if (viewedInTrio.add(chosenDish.toLowerCase())) {
+            recordTasteEvent(TasteEvent.Type.RECIPE_VIEWED, chosenDish,
+                    currentMealIndex, isExploratory(chosenDish));
+        }
+        // ...and the first choice in a trio marks the other dishes as "lost the
+        // comparison" — relative learning, the exploratory experiments exempted.
+        if (!trioChoiceRecorded) {
+            trioChoiceRecorded = true;
+            for (int i = 0; i < proposals.size(); i++) {
+                String other = proposals.get(i).getName();
+                if (i == index || isExploratory(other)) {
+                    continue;
+                }
+                recordTasteEvent(TasteEvent.Type.SHOWN_NOT_CHOSEN, other,
+                        currentMealIndex, false);
+            }
+        }
         Recipe cached = index < proposalRecipes.size() ? proposalRecipes.get(index) : null;
         if (cached != null) {
             showFullRecipe(cached);
@@ -838,6 +1065,7 @@ public class MainActivity extends Activity {
                         return;
                     }
                     showFullRecipe(recipe);
+                    warnIfRecipeBreaksDiet(recipe);
                 });
             } catch (IOException e) {
                 final String message = e.getMessage();
@@ -853,6 +1081,19 @@ public class MainActivity extends Activity {
                 });
             }
         }).start();
+    }
+
+    /**
+     * Propozycje są twardo walidowane, ale pełny przepis od AI może mimo
+     * wymogu w prompcie przemycić wykluczony składnik — wtedy przynajmniej
+     * głośno ostrzegamy (przepisu nie podmieniamy, użytkownik na niego czeka).
+     */
+    private void warnIfRecipeBreaksDiet(Recipe recipe) {
+        String warning = householdProfile.getDiet().warningFor(
+                recipe.getTitle() + "\n" + recipe.getDetails());
+        if (!warning.isEmpty()) {
+            Toast.makeText(this, warning, Toast.LENGTH_LONG).show();
+        }
     }
 
     private void showFullRecipe(Recipe recipe) {
@@ -913,12 +1154,40 @@ public class MainActivity extends Activity {
     // ----- Likes-only learning --------------------------------------------
 
     private void rememberLike(String dish) {
+        rememberLike(dish, false);
+    }
+
+    private void rememberLike(String dish, boolean exploratory) {
         if (dish == null || dish.trim().isEmpty()) {
             return;
         }
         preferences = preferences.withLike(dish);
         preferenceStore.save(preferences);
+        recordTasteEvent(TasteEvent.Type.LIKED, dish, currentMealIndex, exploratory);
         Toast.makeText(this, "Zapamiętane — lubisz: " + dish, Toast.LENGTH_SHORT).show();
+    }
+
+    private void recordTasteEvent(TasteEvent.Type type, String dish, int mealIndex) {
+        recordTasteEvent(type, dish, mealIndex, false);
+    }
+
+    /** The single place taste events are appended, compacted and persisted. */
+    private void recordTasteEvent(TasteEvent.Type type, String dish, int mealIndex,
+                                  boolean exploratory) {
+        tasteEvents = tasteEvents.append(new TasteEvent(
+                type, dish, mealIndex, System.currentTimeMillis(), exploratory));
+        if (tasteEvents.size() > TasteEventLog.MAX_EVENTS) {
+            // Najstarsze zdarzenia zwijają się do zamrożonego agregatu —
+            // model liczony dalej wychodzi ten sam, dziennik nie puchnie.
+            TasteEventCompactor.Result compacted = tasteEventCompactor.compact(
+                    tasteEvents, tasteAggregate, dishTagger,
+                    BuiltInRecipes.detailsByTitle(cookbook),
+                    System.currentTimeMillis(), TasteEventLog.MAX_EVENTS);
+            tasteEvents = compacted.getLog();
+            tasteAggregate = compacted.getAggregate();
+            tasteEventStore.saveAggregate(tasteAggregate);
+        }
+        tasteEventStore.save(tasteEvents);
     }
 
     // ----- Modify the shown recipe ----------------------------------------
@@ -962,6 +1231,7 @@ public class MainActivity extends Activity {
                         return;
                     }
                     showFullRecipe(revised);
+                    warnIfRecipeBreaksDiet(revised);
                 });
             } catch (IOException e) {
                 final String message = e.getMessage();
@@ -1009,7 +1279,8 @@ public class MainActivity extends Activity {
 
     /** Lets the user change the quiz answers later, one simple dialog each. */
     private void showHouseholdProfileDialog() {
-        final String[] items = {"Dla kogo gotujesz?", "Jak Ci idzie gotowanie?",
+        final String[] items = {"Dla kogo gotujesz?", "Czego nie jadacie?",
+                "Ile masz czasu na gotowanie?", "Jak Ci idzie gotowanie?",
                 "Ulubione kuchnie"};
         new AlertDialog.Builder(this)
                 .setTitle("Profil domowników")
@@ -1017,10 +1288,38 @@ public class MainActivity extends Activity {
                     if (which == 0) {
                         showAudienceDialog();
                     } else if (which == 1) {
+                        showDietDialog();
+                    } else if (which == 2) {
+                        showTimeDialog();
+                    } else if (which == 3) {
                         showSkillDialog();
                     } else {
                         showCuisinesDialog();
                     }
+                })
+                .show();
+    }
+
+    private void showDietDialog() {
+        final DietConstraints.Exclusion[] values = DietConstraints.Exclusion.values();
+        final String[] labels = new String[values.length];
+        final boolean[] checked = new boolean[values.length];
+        for (int i = 0; i < values.length; i++) {
+            labels[i] = values[i].label();
+            checked[i] = householdProfile.getDiet().getExclusions().contains(values[i]);
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Czego nie jadacie?")
+                .setMultiChoiceItems(labels, checked, (dialog, which, isChecked) ->
+                        checked[which] = isChecked)
+                .setPositiveButton("Gotowe", (dialog, which) -> {
+                    List<DietConstraints.Exclusion> exclusions = new ArrayList<>();
+                    for (int i = 0; i < values.length; i++) {
+                        if (checked[i]) {
+                            exclusions.add(values[i]);
+                        }
+                    }
+                    saveProfile(householdProfile.withDiet(DietConstraints.of(exclusions)));
                 })
                 .show();
     }
@@ -1033,6 +1332,11 @@ public class MainActivity extends Activity {
     private void showSkillDialog() {
         showProfileChoiceDialog("Jak Ci idzie gotowanie?", SKILL_LABELS, SKILL_VALUES,
                 householdProfile.getSkill(), HouseholdProfile::withSkill);
+    }
+
+    private void showTimeDialog() {
+        showProfileChoiceDialog("Ile masz zwykle czasu na gotowanie?", TIME_LABELS,
+                TIME_VALUES, householdProfile.getTime(), HouseholdProfile::withTime);
     }
 
     /** Applies one picked value to the profile ({@code profile.withX(value)}). */
@@ -1118,6 +1422,8 @@ public class MainActivity extends Activity {
                     cookbookStore.save(cookbook);
                     preferences = preferences.withLike(entry.getTitle());
                     preferenceStore.save(preferences);
+                    recordTasteEvent(TasteEvent.Type.IMPORTED, entry.getTitle(),
+                            TasteEvent.NO_MEAL);
                     Toast.makeText(MainActivity.this,
                             "Dodano do bazy: " + entry.getTitle(), Toast.LENGTH_SHORT).show();
                     if (epoch != contentEpoch) {
@@ -1149,6 +1455,12 @@ public class MainActivity extends Activity {
         actions.add(() -> {
             dataManager.clearPreferences();
             preferences = UserPreferences.empty();
+            // Dziennik gustu też — inaczej „zapomniane" polubienia wróciłyby
+            // do propozycji bocznymi drzwiami przez model gustu.
+            tasteEvents = TasteEventLog.empty();
+            tasteEventStore.save(tasteEvents);
+            tasteAggregate = FrozenTasteAggregate.empty();
+            tasteEventStore.saveAggregate(tasteAggregate);
             toast("Wyczyszczono polubione dania.");
         });
         labels.add("Wyczyść historię podpowiedzi");
@@ -1163,6 +1475,8 @@ public class MainActivity extends Activity {
             cookbook = Cookbook.empty();
             toast("Wyczyszczono bazę dań.");
         });
+        labels.add("Statystyki uczenia (diagnostyka)");
+        actions.add(this::showLearningStatsDialog);
         // Only offer "forget" when AI was unlocked with the password (not when the
         // key is baked in at build time, which clearing here would not undo).
         if (secretStore.hasApiKey() && BuildConfig.ANTHROPIC_API_KEY.isEmpty()) {
@@ -1174,6 +1488,15 @@ public class MainActivity extends Activity {
                 .setTitle("Moje dane")
                 .setItems(labels.toArray(new String[0]),
                         (dialog, which) -> actions.get(which).run())
+                .show();
+    }
+
+    /** Lokalne liczniki jakości uczenia — nic nie wychodzi z telefonu. */
+    private void showLearningStatsDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("Statystyki uczenia")
+                .setMessage(learningStats.summaryText(tasteEvents.size()))
+                .setPositiveButton("OK", null)
                 .show();
     }
 

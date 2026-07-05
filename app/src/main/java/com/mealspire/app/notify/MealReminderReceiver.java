@@ -6,6 +6,7 @@ import android.content.Intent;
 
 import com.mealspire.app.domain.BuiltInRecipes;
 import com.mealspire.app.domain.Cookbook;
+import com.mealspire.app.domain.DietConstraints;
 import com.mealspire.app.domain.MealHistory;
 import com.mealspire.app.domain.MealNotificationContent;
 import com.mealspire.app.domain.MealSlot;
@@ -15,6 +16,7 @@ import com.mealspire.app.domain.TasteProfile;
 import com.mealspire.app.domain.TasteProfiler;
 import com.mealspire.app.domain.UserPreferences;
 import com.mealspire.app.storage.SharedPreferencesCookbookStore;
+import com.mealspire.app.storage.SharedPreferencesHouseholdProfileStore;
 import com.mealspire.app.storage.SharedPreferencesMealHistoryStore;
 import com.mealspire.app.storage.SharedPreferencesPreferenceStore;
 
@@ -52,10 +54,14 @@ public final class MealReminderReceiver extends BroadcastReceiver {
         MealHistory history = historyStore.load();
         TasteProfile profile = tasteProfiler.build(
                 preferences.getLikes(), BuiltInRecipes.detailsByTitle(cookbook));
+        DietConstraints diet =
+                new SharedPreferencesHouseholdProfileStore(context).load().getDiet();
 
+        // The same diet-filtered pipeline as the screen — do not let the two drift.
         List<Recipe> chosen = proposalGenerator.generate(
                 BuiltInRecipes.forMeal(mealIndex), cookbook, preferences,
-                profile, PROPOSAL_COUNT, new Random(), history);
+                profile, PROPOSAL_COUNT, new Random(), history,
+                System.currentTimeMillis(), diet);
 
         List<String> names = new ArrayList<>();
         long now = System.currentTimeMillis();

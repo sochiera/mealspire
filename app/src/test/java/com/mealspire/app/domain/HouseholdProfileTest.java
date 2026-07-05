@@ -82,6 +82,55 @@ public class HouseholdProfileTest {
     }
 
     @Test
+    public void maloCzasuDodajeZdanieOSzybkichDaniach() {
+        String joined = joined(HouseholdProfile.empty()
+                .withTime(HouseholdProfile.CookingTime.QUICK)
+                .promptSentences());
+        assertTrue(joined.contains("20 minut"));
+        assertTrue(joined.contains("szybkie"));
+    }
+
+    @Test
+    public void duzoCzasuDopuszczaDluzszePrzepisyASredniNieDodajeNic() {
+        assertTrue(joined(HouseholdProfile.empty()
+                .withTime(HouseholdProfile.CookingTime.LONG)
+                .promptSentences()).contains("dłuższe"));
+        // Około pół godziny to typowe założenie — bez osobnego zdania.
+        assertTrue(HouseholdProfile.empty()
+                .withTime(HouseholdProfile.CookingTime.MEDIUM)
+                .promptSentences().isEmpty());
+        assertFalse(HouseholdProfile.empty()
+                .withTime(HouseholdProfile.CookingTime.MEDIUM).isEmpty());
+    }
+
+    @Test
+    public void wykluczeniaDietyDodajaBezwzgledneZdanieNaPoczatku() {
+        HouseholdProfile profile = HouseholdProfile.empty()
+                .withSkill(HouseholdProfile.CookingSkill.BEGINNER)
+                .withDiet(DietConstraints.of(Arrays.asList(
+                        DietConstraints.Exclusion.NO_PORK)));
+
+        List<String> sentences = profile.promptSentences();
+        assertTrue(sentences.get(0).contains("Bezwzględny wymóg diety"));
+        assertTrue(sentences.get(0).contains("wieprzowiny"));
+        assertFalse(profile.isEmpty());
+    }
+
+    @Test
+    public void witherDietyZachowujeResztePol() {
+        HouseholdProfile profile = HouseholdProfile.empty()
+                .withAudience(HouseholdProfile.Audience.WITH_CHILDREN)
+                .withDiet(DietConstraints.of(Arrays.asList(
+                        DietConstraints.Exclusion.VEGETARIAN)));
+
+        assertEquals(HouseholdProfile.Audience.WITH_CHILDREN, profile.getAudience());
+        assertTrue(profile.getDiet().getExclusions()
+                .contains(DietConstraints.Exclusion.VEGETARIAN));
+        // Null wraca do braku wykluczeń, nie do NPE.
+        assertTrue(profile.withDiet(null).getDiet().isEmpty());
+    }
+
+    @Test
     public void kuchnieSaNormalizowaneBezPustychIDuplikatow() {
         HouseholdProfile profile = HouseholdProfile.empty()
                 .withCuisines(Arrays.asList(" polska ", "", null, "polska", "włoska"));
