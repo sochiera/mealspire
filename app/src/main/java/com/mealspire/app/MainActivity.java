@@ -4,8 +4,11 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
@@ -95,6 +98,21 @@ import java.util.Random;
  * likes when suggesting the next, equally simple, everyday dishes.
  */
 public class MainActivity extends Activity {
+    // Warm palette shared by the whole UI (programmatic views, no XML layouts).
+    // Keep in sync with values/styles.xml (dialog accent) and the launcher icon.
+    private static final int COLOR_BACKGROUND = Color.rgb(255, 247, 237);
+    private static final int COLOR_SURFACE = Color.WHITE;
+    private static final int COLOR_OUTLINE = Color.rgb(243, 222, 195);
+    private static final int COLOR_INK = Color.rgb(67, 56, 45);
+    private static final int COLOR_INK_BODY = Color.rgb(80, 68, 54);
+    private static final int COLOR_INK_SOFT = Color.rgb(120, 104, 86);
+    private static final int COLOR_ACCENT = Color.rgb(234, 88, 12);
+    private static final int COLOR_ACCENT_DEEP = Color.rgb(154, 52, 18);
+    private static final int COLOR_ACCENT_SOFT = Color.rgb(255, 237, 213);
+    private static final int RIPPLE_ON_ACCENT = Color.argb(64, 255, 255, 255);
+    private static final int RIPPLE_ON_LIGHT = Color.argb(38, 234, 88, 12);
+    private static final int BUTTON_CORNER_DP = 24;
+
     private static final String[] MEAL_TYPES = {"Śniadanie", "Obiad", "Kolacja"};
     private static final int PROPOSAL_COUNT = 3;
     private static final int MAX_SERVINGS = 12;
@@ -235,7 +253,7 @@ public class MainActivity extends Activity {
         }
 
         ScrollView scrollView = new ScrollView(this);
-        scrollView.setBackgroundColor(Color.rgb(255, 247, 237));
+        scrollView.setBackgroundColor(COLOR_BACKGROUND);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -245,7 +263,8 @@ public class MainActivity extends Activity {
         TextView title = new TextView(this);
         title.setText("Mealspire");
         title.setTextSize(34);
-        title.setTextColor(Color.rgb(67, 56, 45));
+        title.setTextColor(COLOR_INK);
+        title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         title.setGravity(Gravity.CENTER_HORIZONTAL);
         root.addView(title, matchWrap());
 
@@ -259,7 +278,7 @@ public class MainActivity extends Activity {
         servingsLabel = new TextView(this);
         servingsLabel.setId(R.id.servings_label);
         servingsLabel.setTextSize(15);
-        servingsLabel.setTextColor(Color.rgb(120, 104, 86));
+        servingsLabel.setTextColor(COLOR_INK_SOFT);
         servingsLabel.setGravity(Gravity.CENTER_HORIZONTAL);
         root.addView(servingsLabel, marginTop(6));
 
@@ -275,8 +294,8 @@ public class MainActivity extends Activity {
             Button button = new Button(this);
             button.setId(mealIds[i]);
             button.setText(MEAL_TYPES[i]);
-            button.setAllCaps(false);
             button.setTextSize(16);
+            styleTonalButton(button);
             button.setOnClickListener(v -> selectMeal(index));
             mealButtons[i] = button;
             mealRow.addView(button, equalWidthRowItem());
@@ -289,8 +308,8 @@ public class MainActivity extends Activity {
         moreButton = new Button(this);
         moreButton.setId(R.id.more_button);
         moreButton.setText("Więcej…");
-        moreButton.setAllCaps(false);
         moreButton.setTextSize(16);
+        styleGhostButton(moreButton);
         moreButton.setOnClickListener(view -> showMoreMenu());
         root.addView(moreButton, marginTop(24));
 
@@ -492,7 +511,7 @@ public class MainActivity extends Activity {
         onboardingRoundsDietKey = null;
         onboardingStep = 0;
         setMealButtonsEnabled(false);
-        moreButton.setEnabled(false);
+        setEnabledWithFade(moreButton, false);
         renderOnboardingStep();
     }
 
@@ -522,13 +541,13 @@ public class MainActivity extends Activity {
         TextView progress = new TextView(this);
         progress.setText("Pytanie " + (onboardingStep + 1) + " z " + ONBOARDING_STEPS);
         progress.setTextSize(15);
-        progress.setTextColor(Color.rgb(120, 104, 86));
+        progress.setTextColor(COLOR_INK_SOFT);
         contentContainer.addView(progress, matchWrap());
 
         TextView question = new TextView(this);
         question.setId(R.id.onboarding_question);
         question.setTextSize(22);
-        question.setTextColor(Color.rgb(67, 56, 45));
+        question.setTextColor(COLOR_INK);
         question.setTypeface(null, Typeface.BOLD);
         contentContainer.addView(question, marginTop(8));
 
@@ -549,13 +568,14 @@ public class MainActivity extends Activity {
                 dietNote.setText("Tego nigdy nie zaproponuję. Możesz zaznaczyć kilka "
                         + "odpowiedzi albo nic.");
                 dietNote.setTextSize(15);
-                dietNote.setTextColor(Color.rgb(120, 104, 86));
+                dietNote.setTextColor(COLOR_INK_SOFT);
                 contentContainer.addView(dietNote, marginTop(6));
                 for (final DietConstraints.Exclusion exclusion
                         : DietConstraints.Exclusion.values()) {
                     CheckBox dietBox = new CheckBox(this);
                     dietBox.setText(exclusion.label());
                     dietBox.setTextSize(18);
+                    dietBox.setTextColor(COLOR_INK);
                     dietBox.setChecked(householdProfile.getDiet().getExclusions()
                             .contains(exclusion));
                     dietBox.setOnCheckedChangeListener((view, checked) ->
@@ -565,8 +585,8 @@ public class MainActivity extends Activity {
                 Button dietNext = new Button(this);
                 dietNext.setId(R.id.onboarding_next_button);
                 dietNext.setText("Dalej");
-                dietNext.setAllCaps(false);
                 dietNext.setTextSize(18);
+                stylePrimaryButton(dietNext);
                 dietNext.setOnClickListener(v -> advanceOnboarding());
                 contentContainer.addView(dietNext, marginTop(16));
                 break;
@@ -610,8 +630,8 @@ public class MainActivity extends Activity {
                 Button none = new Button(this);
                 none.setId(R.id.onboarding_option_none);
                 none.setText("Żadne z tych");
-                none.setAllCaps(false);
                 none.setTextSize(16);
+                styleGhostButton(none);
                 none.setOnClickListener(v -> {
                     onboardingPicks[roundIndex] = null;
                     advanceOnboarding();
@@ -623,8 +643,8 @@ public class MainActivity extends Activity {
         Button skip = new Button(this);
         skip.setId(R.id.onboarding_skip_button);
         skip.setText("Pomiń");
-        skip.setAllCaps(false);
         skip.setTextSize(16);
+        styleGhostButton(skip);
         skip.setOnClickListener(v -> endOnboarding());
         contentContainer.addView(skip, marginTop(24));
     }
@@ -638,8 +658,8 @@ public class MainActivity extends Activity {
             option.setId(optionIds[index - 1]);
         }
         option.setText(label);
-        option.setAllCaps(false);
         option.setTextSize(18);
+        styleChoiceButton(option);
         option.setPadding(dp(16), dp(14), dp(16), dp(14));
         option.setOnClickListener(v -> action.run());
         contentContainer.addView(option, marginTop(12));
@@ -682,7 +702,7 @@ public class MainActivity extends Activity {
         appSettings.markOnboardingDone();
         onboardingStep = -1;
         saveOnboardingPicks();
-        moreButton.setEnabled(true);
+        setEnabledWithFade(moreButton, true);
         showStartupPrompts();
         if (pendingMealIndex >= 0) {
             int meal = pendingMealIndex;
@@ -716,7 +736,12 @@ public class MainActivity extends Activity {
 
     private void highlightSelectedMeal() {
         for (int i = 0; i < mealButtons.length; i++) {
-            mealButtons[i].setTypeface(null, i == currentMealIndex ? Typeface.BOLD : Typeface.NORMAL);
+            // The picked meal flips to the filled primary look; the rest stay tonal.
+            if (i == currentMealIndex) {
+                stylePrimaryButton(mealButtons[i]);
+            } else {
+                styleTonalButton(mealButtons[i]);
+            }
         }
     }
 
@@ -922,8 +947,8 @@ public class MainActivity extends Activity {
         Button refresh = new Button(this);
         refresh.setId(R.id.refresh_button);
         refresh.setText("Inne propozycje");
-        refresh.setAllCaps(false);
         refresh.setTextSize(16);
+        styleTonalButton(refresh);
         refresh.setOnClickListener(v -> {
             recordTrioRerolled();
             generateProposals();
@@ -936,8 +961,9 @@ public class MainActivity extends Activity {
 
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackgroundColor(Color.rgb(255, 237, 213));
-        card.setPadding(dp(16), dp(14), dp(16), dp(14));
+        card.setBackground(outlined(COLOR_SURFACE, 20));
+        card.setElevation(dp(1));
+        card.setPadding(dp(18), dp(16), dp(18), dp(16));
 
         TextView name = new TextView(this);
         if (index == 0) {
@@ -945,7 +971,7 @@ public class MainActivity extends Activity {
         }
         name.setText(proposal.getName());
         name.setTextSize(20);
-        name.setTextColor(Color.rgb(67, 56, 45));
+        name.setTextColor(COLOR_INK);
         name.setTypeface(null, Typeface.BOLD);
         card.addView(name, matchWrap());
 
@@ -954,7 +980,7 @@ public class MainActivity extends Activity {
             TextView body = new TextView(this);
             body.setText(summary);
             body.setTextSize(15);
-            body.setTextColor(Color.rgb(80, 68, 54));
+            body.setTextColor(COLOR_INK_BODY);
             card.addView(body, marginTop(6));
         }
 
@@ -967,8 +993,8 @@ public class MainActivity extends Activity {
             like.setId(R.id.like_button);
         }
         like.setText("Lubię to");
-        like.setAllCaps(false);
         like.setTextSize(15);
+        styleTonalButton(like);
         like.setOnClickListener(v -> likeProposal(index));
         actions.addView(like, equalWidthRowItem());
 
@@ -977,8 +1003,8 @@ public class MainActivity extends Activity {
             show.setId(R.id.accept_button);
         }
         show.setText("Pokaż przepis");
-        show.setAllCaps(false);
         show.setTextSize(15);
+        stylePrimaryButton(show);
         show.setOnClickListener(v -> openRecipe(index));
         actions.addView(show, equalWidthRowItem());
 
@@ -1105,7 +1131,7 @@ public class MainActivity extends Activity {
         name.setId(R.id.recipe_title);
         name.setText(recipe.getTitle());
         name.setTextSize(24);
-        name.setTextColor(Color.rgb(67, 56, 45));
+        name.setTextColor(COLOR_INK);
         name.setTypeface(null, Typeface.BOLD);
         contentContainer.addView(name, matchWrap());
 
@@ -1114,7 +1140,7 @@ public class MainActivity extends Activity {
         details.setText(recipe.getDetails());
         details.setTextSize(17);
         details.setLineSpacing(dp(4), 1.0f);
-        details.setTextColor(Color.rgb(80, 68, 54));
+        details.setTextColor(COLOR_INK_BODY);
         contentContainer.addView(details, marginTop(12));
 
         LinearLayout actions = new LinearLayout(this);
@@ -1124,8 +1150,8 @@ public class MainActivity extends Activity {
         Button like = new Button(this);
         like.setId(R.id.like_button);
         like.setText("Lubię to");
-        like.setAllCaps(false);
         like.setTextSize(16);
+        stylePrimaryButton(like);
         like.setOnClickListener(v -> rememberLike(recipe.getTitle()));
         actions.addView(like, equalWidthRowItem());
 
@@ -1133,8 +1159,8 @@ public class MainActivity extends Activity {
             Button change = new Button(this);
             change.setId(R.id.change_button);
             change.setText("Zmień przepis");
-            change.setAllCaps(false);
             change.setTextSize(16);
+            styleTonalButton(change);
             change.setOnClickListener(v -> showModifyRecipeDialog());
             actions.addView(change, equalWidthRowItem());
         }
@@ -1145,8 +1171,8 @@ public class MainActivity extends Activity {
         back.setId(R.id.back_button);
         back.setText(recipeFromProposals && !proposals.isEmpty()
                 ? "Wróć do propozycji" : "Wróć");
-        back.setAllCaps(false);
         back.setTextSize(16);
+        styleGhostButton(back);
         back.setOnClickListener(v -> onBackPressed());
         contentContainer.addView(back, marginTop(12));
     }
@@ -1595,20 +1621,81 @@ public class MainActivity extends Activity {
 
     // ----- Shared helpers --------------------------------------------------
 
+    /** A rounded rectangle in {@code fill}, the building block of the theme. */
+    private GradientDrawable rounded(int fill, int cornerDp) {
+        GradientDrawable shape = new GradientDrawable();
+        shape.setColor(fill);
+        shape.setCornerRadius(dp(cornerDp));
+        return shape;
+    }
+
+    /** Rounded rectangle with a hairline outline (cards, choice buttons). */
+    private GradientDrawable outlined(int fill, int cornerDp) {
+        GradientDrawable shape = rounded(fill, cornerDp);
+        shape.setStroke(Math.max(1, dp(1)), COLOR_OUTLINE);
+        return shape;
+    }
+
+    /** Shared button chrome: pill background with a ripple, no platform skin. */
+    private void styleButton(Button button, int fill, int textColor, int ripple) {
+        button.setBackground(new RippleDrawable(ColorStateList.valueOf(ripple),
+                rounded(fill, BUTTON_CORNER_DP), rounded(Color.WHITE, BUTTON_CORNER_DP)));
+        button.setTextColor(textColor);
+        button.setAllCaps(false);
+        button.setStateListAnimator(null);
+        button.setElevation(0f);
+        button.setMinHeight(dp(48));
+        button.setPadding(dp(18), dp(12), dp(18), dp(12));
+    }
+
+    /** The one main action on a screen: filled terracotta, white bold label. */
+    private void stylePrimaryButton(Button button) {
+        styleButton(button, COLOR_ACCENT, Color.WHITE, RIPPLE_ON_ACCENT);
+        button.setTypeface(null, Typeface.BOLD);
+    }
+
+    /** Secondary actions: soft peach fill with deep-terracotta label. */
+    private void styleTonalButton(Button button) {
+        styleButton(button, COLOR_ACCENT_SOFT, COLOR_ACCENT_DEEP, RIPPLE_ON_LIGHT);
+        button.setTypeface(null, Typeface.NORMAL);
+    }
+
+    /** Quiet actions ("Pomiń", "Wróć", "Więcej…"): label only, bounded ripple. */
+    private void styleGhostButton(Button button) {
+        styleButton(button, Color.TRANSPARENT, COLOR_ACCENT_DEEP, RIPPLE_ON_LIGHT);
+        button.setTypeface(null, Typeface.NORMAL);
+    }
+
+    /** Quiz answers: white card-like buttons with dark text, easy to scan. */
+    private void styleChoiceButton(Button button) {
+        button.setBackground(new RippleDrawable(ColorStateList.valueOf(RIPPLE_ON_LIGHT),
+                outlined(COLOR_SURFACE, 16), rounded(Color.WHITE, 16)));
+        button.setTextColor(COLOR_INK);
+        button.setAllCaps(false);
+        button.setStateListAnimator(null);
+        button.setElevation(dp(1));
+    }
+
     /** Shows a single informational line in the content area (no recipe yet). */
     private void showHint(String text) {
         contentContainer.removeAllViews();
         TextView hint = new TextView(this);
         hint.setText(text);
         hint.setTextSize(16);
-        hint.setTextColor(Color.rgb(120, 104, 86));
+        hint.setTextColor(COLOR_INK_SOFT);
         contentContainer.addView(hint, matchWrap());
     }
 
     private void setMealButtonsEnabled(boolean enabled) {
         for (Button button : mealButtons) {
-            button.setEnabled(enabled);
+            setEnabledWithFade(button, enabled);
         }
+    }
+
+    /** Custom-drawn buttons have no platform disabled state, so fade them. */
+    private static void setEnabledWithFade(View view, boolean enabled) {
+        view.setEnabled(enabled);
+        view.setAlpha(enabled ? 1f : 0.45f);
     }
 
     private void recordChosen(String dishTitle) {

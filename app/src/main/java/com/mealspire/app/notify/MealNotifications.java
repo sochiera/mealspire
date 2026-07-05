@@ -6,9 +6,11 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Color;
 import android.os.Build;
 
 import com.mealspire.app.MainActivity;
+import com.mealspire.app.R;
 import com.mealspire.app.domain.MealNotificationContent;
 import com.mealspire.app.domain.MealSlot;
 
@@ -49,8 +51,11 @@ public final class MealNotifications {
             return;
         }
 
+        // A dedicated white-only small icon: the status bar keeps just the alpha
+        // channel, so the coloured launcher icon would degrade to a flat blob.
         Notification notification = builder(context)
-                .setSmallIcon(context.getApplicationInfo().icon)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setColor(Color.rgb(234, 88, 12))
                 .setContentTitle(content.getTitle())
                 .setContentText(content.getText())
                 .setStyle(new Notification.BigTextStyle().bigText(content.getText()))

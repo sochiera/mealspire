@@ -4,6 +4,14 @@
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:statusBarColor">#FFF7ED</item>
         <item name="android:navigationBarColor">#FFF7ED</item>
+        <item name="android:windowBackground">#FFF7ED</item>
         <item name="android:windowActionModeOverlay">true</item>
+        <!-- Warm terracotta accent, so dialogs, checkboxes and radio buttons
+             match the app palette instead of the platform default teal. -->
+        <item name="android:colorPrimary">#EA580C</item>
+        <item name="android:colorPrimaryDark">#C2410C</item>
+        <item name="android:colorAccent">#EA580C</item>
+        <item name="android:colorControlActivated">#EA580C</item>
+        <item name="android:colorControlHighlight">#33EA580C</item>
     </style>
 </resources>
