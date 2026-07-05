@@ -85,6 +85,16 @@ klucza API. Przypomnienia korzystają z `AlarmManager` (lekko, bez dodatkowych
 bibliotek) i przeżywają restart telefonu. Na Androidzie 13+ aplikacja poprosi raz
 o zgodę na powiadomienia; bez zgody reszta działa normalnie, tylko bez przypomnień.
 
+## Powiadomienie o nowej wersji
+
+Aplikacja raz na dobę po cichu sprawdza, czy w repozytorium jest nowsze wydanie
+(pobiera mały plik `dist/wersja.json`, bez żadnego konta ani tokenu). Jeśli tak,
+na ekranie startowym pojawia się baner **„Dostępna nowa wersja … — dotknij, aby
+pobrać”**. Dotknięcie otwiera link do APK w przeglądarce; po pobraniu otwierasz
+plik, a system instaluje nową wersję **po wierzchu** starej — bez utraty danych
+(od wersji 1.1 wszystkie wydania są podpisane tym samym kluczem). Brak internetu
+niczego nie psuje — baner po prostu się nie pokazuje, a aplikacja działa dalej.
+
 ## Najpierw wbudowana baza, AI dopiero gdy ma z czego wnioskować
 
 Świeża instalacja nie ma żadnych danych o Twoim guście, więc na start aplikacja
@@ -297,6 +307,17 @@ Po zakończeniu Android Studio pokaże link `locate`. APK będzie zwykle tutaj:
 `app/build/outputs/apk/debug/app-debug.apk`
 
 Taki plik można skopiować na telefon i otworzyć, ale telefon może poprosić o zgodę na instalację aplikacji spoza sklepu.
+
+### Aktualizacja zainstalowanej aplikacji
+
+Od wersji **1.1** wszystkie wydania są podpisane tym samym kluczem, więc nowszy
+APK instaluje się **po wierzchu** starego — polubienia, profil i książka
+kucharska zostają na miejscu.
+
+Uwaga jednorazowa: jeśli masz zainstalowaną wersję **starszą niż 1.1**
+(podpisaną dawnym, przypadkowym kluczem debug), telefon odmówi nadpisania.
+Trzeba raz odinstalować starą wersję i zainstalować nową — od tego momentu
+kolejne aktualizacje przechodzą już bez deinstalacji.
 
 ## Licencja
 

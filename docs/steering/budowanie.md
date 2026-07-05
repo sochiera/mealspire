@@ -11,14 +11,21 @@
 - APK wyjściowy: `app/build/outputs/apk/debug/app-debug.apk` (~80 KB — appka
   nie ma zależności runtime poza platformą).
 
-## Zbudowana appka w repo
+## Zbudowana appka w repo — checklist wydania
 
-W `dist/mealspire-debug.apk` trzymamy **aktualny debug APK**. Po każdej
-zmianie kodu, która trafia do gałęzi/PR-a, odśwież go:
+W `dist/mealspire-debug.apk` trzymamy **aktualny debug APK**, a w
+`dist/wersja.json` metadane, z których zainstalowana aplikacja dowiaduje się
+o nowej wersji. Po każdej zmianie kodu, która trafia do gałęzi/PR-a:
 
-```bash
-cp app/build/outputs/apk/debug/app-debug.apk dist/mealspire-debug.apk
-```
+1. Podbij `versionCode` (+1) i `versionName` w `app/build.gradle`.
+2. Zaktualizuj `dist/wersja.json` na te same wartości.
+3. `./gradlew test assembleDebug` (spójności wersji pilnuje
+   `ReleaseConsistencyTest` — rozjazd wywala testy).
+4. `cp app/build/outputs/apk/debug/app-debug.apk dist/mealspire-debug.apk`
+
+APK jest podpisywany wspólnym keystore `signing/mealspire.keystore`
+(hasło `mealspire`, celowo jawne — patrz steering projektu). **Nie generować
+nowego keystore** — zerwałoby to ciągłość aktualizacji u użytkowników.
 
 CI (`.github/workflows/build.yml`) dodatkowo buduje APK i wystawia artefakt
 `mealspire-debug-apk` przy każdym pushu/PR.

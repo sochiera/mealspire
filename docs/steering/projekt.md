@@ -77,12 +77,27 @@ Wszystkie teksty w UI i promptach są po polsku.
 - **Powiadomienia 8/12/18** liczone offline (bez sieci i klucza), AlarmManager
   `setInexactRepeating` (bez uprawnienia exact-alarm), przeżywają reboot przez
   `BootReceiver`. W Doze mogą być opóźnione — świadomy kompromis.
+- **Podpis APK**: wspólny keystore `signing/mealspire.keystore` (hasło
+  `mealspire`, **celowo jawne** — repo publiczne, appka poza Play Store;
+  kompromis opisany w `docs/design/aktualizacja-aplikacji.md`). Dzięki temu
+  każdy build instaluje się po wierzchu poprzedniego bez utraty danych.
+  Nie generować nowego keystore — to zerwałoby ciągłość aktualizacji.
 - **Klucz API**: w repo tylko zaszyfrowany (AES/GCM + PBKDF2,
   `res/values/secrets.xml`), hasło poza repo. Po pierwszym odblokowaniu klucz
   ląduje w `SharedPreferencesSecretStore`, więc hasło podaje się raz.
   Build może też wstrzyknąć klucz przez `ANTHROPIC_API_KEY` / `local.properties`.
 - **Model**: `claude-sonnet-4-6` (poprawne ID Anthropic Messages API),
   `MAX_TOKENS = 2048` (1024 ucinało dłuższe przepisy).
+- **Aktualizacje**: raz na dobę `UpdateChecker` pobiera `dist/wersja.json`
+  z raw.githubusercontent (bez tokenu) i porównuje z `BuildConfig.VERSION_CODE`;
+  wyższy → baner na ekranie startowym otwierający APK w przeglądarce
+  (`Intent.ACTION_VIEW`, bez nowych uprawnień). Decyzje w `domain/`
+  (`UpdateChecker`, `VersionInfoParser`), stan w `SharedPreferencesUpdateStateStore`,
+  transport w `net/HttpVersionJsonFetcher`. **Nigdy nie woła sieci w testach**:
+  pierwszy odczyt znacznika czasu zasiewa „teraz" (świeża instalacja/test czeka
+  dobę), a testy wstrzykują `versionJsonSourceOverride`/`updateCheckExecutorOverride`.
+  Przy wydaniu podbijaj `versionCode`/`versionName` i `dist/wersja.json` razem —
+  pilnuje `ReleaseConsistencyTest`. Pełny design: `docs/design/aktualizacja-aplikacji.md`.
 
 ## Pułapki w UI (naprawione — nie regresować)
 

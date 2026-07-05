@@ -26,10 +26,34 @@ android {
         applicationId "com.mealspire.app"
         minSdk 23
         targetSdk 35
-        versionCode 1
-        versionName "1.0"
+        // Podbijaj przy każdym wydaniu (odświeżeniu dist/) razem z dist/wersja.json —
+        // spójności pilnuje ReleaseConsistencyTest.
+        versionCode 2
+        versionName "1.1"
         buildConfigField "String", "ANTHROPIC_API_KEY", "\"${anthropicApiKey()}\""
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // Wspólny keystore z repo: każdy build (CI, kontener agenta, laptop) daje APK
+    // z tym samym podpisem, więc nowa wersja instaluje się po wierzchu bez utraty
+    // danych. Hasło celowo jawne — repo jest publiczne, appka poza Play Store
+    // (kompromis opisany w docs/design/aktualizacja-aplikacji.md).
+    signingConfigs {
+        mealspire {
+            storeFile rootProject.file("signing/mealspire.keystore")
+            storePassword "mealspire"
+            keyAlias "mealspire"
+            keyPassword "mealspire"
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.mealspire
+        }
+        release {
+            signingConfig signingConfigs.mealspire
+        }
     }
 
     buildFeatures {

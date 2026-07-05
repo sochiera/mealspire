@@ -9,6 +9,7 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
@@ -69,9 +70,15 @@ import com.mealspire.app.domain.TasteEventStore;
 import com.mealspire.app.domain.TasteModel;
 import com.mealspire.app.domain.TasteProfile;
 import com.mealspire.app.domain.TasteProfiler;
+import com.mealspire.app.domain.UpdateChecker;
+import com.mealspire.app.domain.UpdateStateStore;
 import com.mealspire.app.domain.UserPreferences;
+import com.mealspire.app.domain.VersionInfo;
+import com.mealspire.app.domain.VersionInfoParser;
+import com.mealspire.app.domain.VersionJsonSource;
 import com.mealspire.app.net.HttpClaudeClient;
 import com.mealspire.app.net.HttpPageFetcher;
+import com.mealspire.app.net.HttpVersionJsonFetcher;
 import com.mealspire.app.notify.MealNotifications;
 import com.mealspire.app.notify.MealReminderScheduler;
 import com.mealspire.app.storage.SharedPreferencesAppSettings;
@@ -82,12 +89,14 @@ import com.mealspire.app.storage.SharedPreferencesPreferenceStore;
 import com.mealspire.app.storage.SharedPreferencesLearningStatsStore;
 import com.mealspire.app.storage.SharedPreferencesSecretStore;
 import com.mealspire.app.storage.SharedPreferencesTasteEventStore;
+import com.mealspire.app.storage.SharedPreferencesUpdateStateStore;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.Executor;
 
 /**
  * Thin UI layer. The user taps a meal — Śniadanie / Obiad / Kolacja — and the
@@ -144,6 +153,12 @@ public class MainActivity extends Activity {
     public static final String EXTRA_MEAL_INDEX = "meal_index";
     private static final int REQ_POST_NOTIFICATIONS = 1001;
 
+    // Test seams (package-private, null in production): replace the network
+    // source and the background executor so Robolectric tests stay offline and
+    // deterministic. Never assign these from production code.
+    static VersionJsonSource versionJsonSourceOverride;
+    static Executor updateCheckExecutorOverride;
+
     private final Random random = new Random();
     private TextView servingsLabel;
     private Button[] mealButtons;
@@ -192,6 +207,9 @@ public class MainActivity extends Activity {
     private final TasteProfiler tasteProfiler = new TasteProfiler();
     private final PersonalizationReadiness personalizationReadiness = new PersonalizationReadiness();
     private final ApiKeyCipher apiKeyCipher = new ApiKeyCipher();
+    private final UpdateChecker updateChecker = new UpdateChecker();
+    private final VersionInfoParser versionInfoParser = new VersionInfoParser();
+    private UpdateStateStore updateStateStore;
 
     private int currentMealIndex = -1;
     // The proposals currently on offer and (for the offline flow) their recipes.
@@ -244,6 +262,7 @@ public class MainActivity extends Activity {
         tasteAggregate = tasteEventStore.loadAggregate();
         learningStatsStore = new SharedPreferencesLearningStatsStore(this);
         learningStats = learningStatsStore.load();
+        updateStateStore = new SharedPreferencesUpdateStateStore(this);
         // Polubienia sprzed ery dziennika stają się zdarzeniami LIKED (raz).
         TasteEventLog migrated = TasteEventMigration.migrate(
                 tasteEvents, preferences, System.currentTimeMillis());
@@ -325,6 +344,7 @@ public class MainActivity extends Activity {
         if (appSettings.isOnboardingDone()) {
             showStartScreen();
             showStartupPrompts();
+            maybeCheckForUpdate();
         } else {
             // Fresh install: a short taste quiz first; every one-time dialog
             // (servings, API-key password, notification permission) waits until
@@ -407,6 +427,74 @@ public class MainActivity extends Activity {
         setMealButtonsEnabled(true);
         currentScreen = BackNavigation.Screen.START;
         showHint("Wybierz porę dnia, a podsunę kilka prostych pomysłów.");
+        maybeShowUpdateBanner();
+    }
+
+    /**
+     * Checks the repo for a newer release at most once a day. The decision and
+     * comparison are pure ({@link UpdateChecker}); here we run the fetch off the
+     * main thread and, on success, refresh the start screen so the banner
+     * appears. Any failure is swallowed — updates are not a critical feature —
+     * but the attempt is still recorded so we don't hammer the network offline.
+     */
+    private void maybeCheckForUpdate() {
+        final long now = System.currentTimeMillis();
+        if (!updateChecker.shouldCheck(updateStateStore.loadLastCheckMillis(now), now)) {
+            return;
+        }
+        final int epoch = contentEpoch;
+        final VersionJsonSource source = versionJsonSourceOverride != null
+                ? versionJsonSourceOverride : new HttpVersionJsonFetcher();
+        updateCheckExecutor().execute(() -> {
+            VersionInfo fetched = null;
+            try {
+                fetched = versionInfoParser.parse(source.fetchJson());
+            } catch (IOException ignored) {
+                // Brak sieci / błąd HTTP — próbę i tak odnotowujemy niżej.
+            }
+            final VersionInfo result = fetched;
+            runOnUiThread(() -> {
+                updateStateStore.saveLastCheckMillis(now);
+                if (result != null) {
+                    updateStateStore.saveLatestKnown(result);
+                }
+                // Odśwież baner tylko jeśli użytkownik wciąż jest na ekranie startowym.
+                if (currentScreen == BackNavigation.Screen.START && epoch == contentEpoch) {
+                    showStartScreen();
+                }
+            });
+        });
+    }
+
+    private Executor updateCheckExecutor() {
+        return updateCheckExecutorOverride != null
+                ? updateCheckExecutorOverride
+                : runnable -> new Thread(runnable).start();
+    }
+
+    /** Adds a tappable "new version available" banner atop the start screen. */
+    private void maybeShowUpdateBanner() {
+        VersionInfo latest = updateStateStore.loadLatestKnown();
+        if (!updateChecker.isUpdateAvailable(BuildConfig.VERSION_CODE, latest)) {
+            return;
+        }
+        Button banner = new Button(this);
+        banner.setId(R.id.update_banner);
+        banner.setText("Dostępna nowa wersja " + latest.getVersionName()
+                + " — dotknij, aby pobrać");
+        banner.setTextSize(15);
+        styleTonalButton(banner);
+        final String apkUrl = latest.getApkUrl();
+        banner.setOnClickListener(v -> openDownloadUrl(apkUrl));
+        contentContainer.addView(banner, 0, matchWrap());
+    }
+
+    private void openDownloadUrl(String apkUrl) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(apkUrl)));
+        } catch (android.content.ActivityNotFoundException e) {
+            toast("Nie udało się otworzyć linku do pobrania.");
+        }
     }
 
     /** Opens the meal carried by a tapped reminder notification, if any. */
