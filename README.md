@@ -298,6 +298,17 @@ Po zakończeniu Android Studio pokaże link `locate`. APK będzie zwykle tutaj:
 
 Taki plik można skopiować na telefon i otworzyć, ale telefon może poprosić o zgodę na instalację aplikacji spoza sklepu.
 
+### Aktualizacja zainstalowanej aplikacji
+
+Od wersji **1.1** wszystkie wydania są podpisane tym samym kluczem, więc nowszy
+APK instaluje się **po wierzchu** starego — polubienia, profil i książka
+kucharska zostają na miejscu.
+
+Uwaga jednorazowa: jeśli masz zainstalowaną wersję **starszą niż 1.1**
+(podpisaną dawnym, przypadkowym kluczem debug), telefon odmówi nadpisania.
+Trzeba raz odinstalować starą wersję i zainstalować nową — od tego momentu
+kolejne aktualizacje przechodzą już bez deinstalacji.
+
 ## Licencja
 
 Projekt jest udostępniony na licencji **PolyForm Noncommercial License 1.0.0** —

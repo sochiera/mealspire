@@ -1,5 +1,6 @@
 package com.mealspire.app;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.io.File;
@@ -7,12 +8,14 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
+import org.json.JSONObject;
 import org.junit.Test;
 
 /**
  * Pilnuje spójności wydania: stabilny podpis APK (keystore w repo + signingConfig)
- * jest warunkiem instalowania aktualizacji po wierzchu bez utraty danych.
- * Test napisany przed konfiguracją (TDD) — opisuje kontrakt wydania.
+ * jest warunkiem instalowania aktualizacji po wierzchu bez utraty danych,
+ * a `dist/wersja.json` musi zgadzać się z wersją wkompilowaną w APK — inaczej
+ * mechanizm aktualizacji kłamie. Test napisany przed konfiguracją (TDD).
  */
 public class ReleaseConsistencyTest {
 
@@ -50,6 +53,49 @@ public class ReleaseConsistencyTest {
                 gradle.contains("signingConfigs"));
         assertTrue("signingConfig powinien wskazywać signing/mealspire.keystore",
                 gradle.contains("signing/mealspire.keystore"));
+    }
+
+    private static JSONObject wersjaJson() throws Exception {
+        File json = new File(repoRoot(), "dist/wersja.json");
+        assertTrue(
+                "Brak dist/wersja.json — aplikacja nie ma skąd dowiedzieć się o nowej wersji",
+                json.isFile());
+        return new JSONObject(new String(Files.readAllBytes(json.toPath()), StandardCharsets.UTF_8));
+    }
+
+    @Test
+    public void wersjaJsonZgadzaSieZWersjaWkompilowanaWApk() throws Exception {
+        JSONObject json = wersjaJson();
+        assertEquals(
+                "versionCode w dist/wersja.json musi równać się BuildConfig.VERSION_CODE — "
+                        + "podbij oba przy wydaniu",
+                BuildConfig.VERSION_CODE, json.getInt("versionCode"));
+        assertEquals(
+                "versionName w dist/wersja.json musi równać się BuildConfig.VERSION_NAME",
+                BuildConfig.VERSION_NAME, json.getString("versionName"));
+    }
+
+    @Test
+    public void wersjaJsonWskazujeApkWDist() throws Exception {
+        String apkUrl = wersjaJson().getString("apkUrl");
+        assertTrue("apkUrl powinien prowadzić do raw.githubusercontent.com tego repo",
+                apkUrl.startsWith("https://raw.githubusercontent.com/sochiera/mealspire/"));
+        assertTrue("apkUrl powinien wskazywać dist/mealspire-debug.apk",
+                apkUrl.endsWith("dist/mealspire-debug.apk"));
+    }
+
+    @Test
+    public void wydanaWersjaNieJestPierwotnaJedynka() {
+        // versionCode 1 to era niestabilnego podpisu debug; pierwsza wersja
+        // z mechanizmem aktualizacji zaczyna się od 2.
+        assertTrue("versionCode powinien być podbity ponad pierwotne 1",
+                BuildConfig.VERSION_CODE >= 2);
+    }
+
+    @Test
+    public void apkWDistIstnieje() {
+        assertTrue("Brak dist/mealspire-debug.apk — odśwież go po buildzie",
+                new File(repoRoot(), "dist/mealspire-debug.apk").isFile());
     }
 
     @Test
