@@ -25,6 +25,7 @@ Dane personalizacji są lokalne, w SharedPreferences, a nie w zdalnej bazie. Pro
 - Model jednocześnie wymyśla, porządkuje i różnicuje całą trójkę. Aplikacja nie liczy jakości dopasowania kandydatów, a separator tekstowy i słownikowe tagowanie są kruche. Gdy część kart odpadnie, offline fallback może dać zestaw o różnym pochodzeniu i jakości.
 - Stały próg pięciu polubień mierzy liczbę, nie pewność profilu. Jedna osoba może polubić pięć podobnych dań, inna pięć bardzo różnych; obie trafiają w ten sam tryb.
 - Ciche sygnały są niejednoznaczne: „Inne propozycje” lekko obniża ocenę każdej zwykłej karty, choć powód może dotyczyć tylko jednej albo dostępnego czasu. Otwarcie przepisu oznacza zainteresowanie, niekoniecznie aprobatę.
+- Zdarzenie gustu przechowuje tytuł, ale nie składniki ani cechy konkretnej propozycji. Przy ponownym liczeniu AI-owego dania słownik ma więc zwykle tylko tytuł (chyba że danie trafiło do książki); ważne składniki z karty nie muszą wejść do uczenia.
 - Brak trwałego ID zestawu i karty oraz powiązania z rolą karty, wersją promptu/modelu i wynikiem. Nie da się odtworzyć, co ranker pokazał ani ocenić, która cecha doprowadziła do wyboru. Statystyki są zbiorcze.
 - Rozpoznawanie diety i gustu opiera się częściowo na słownikach. Nieznane składniki nie uczą modelu, a tekstowa kontrola nie daje gwarancji bezpieczeństwa alergicznego. Pełny przepis wymaga osobnej kontroli.
 - Dane o „ostatnio pokazanych” i zdarzenia gustu mają różne role, ale nazwa MealHistory i wcześniejsze opisy mogą sugerować posiłki faktycznie ugotowane. Aplikacja nie ma obecnie wiarygodnego sygnału „ugotowałam/ugotowałem”.
@@ -39,7 +40,7 @@ Trójka powinna zawierać najlepsze dopasowania oraz eksperyment dobrany do niep
 
 ### 2. Zdarzenia odnoszą się do tego, co faktycznie pokazano i wybrano
 
-Zapisywać lokalnie batch rekomendacji i jego karty: identyfikator batcha/kandydata, slot, pozycję i rolę (dopasowanie/eksperyment), źródło, czas pokazania, wersję polityki/promptu oraz niewielki zestaw cech użytych do rankingu. Działania zapisują ID karty i rodzaj sygnału. „Więcej propozycji” jest zdarzeniem dla batcha; nie karze automatycznie wszystkich kart. Samo nieotwarcie karty nie uczy negatywnie.
+Zapisywać lokalnie batch rekomendacji i jego karty: identyfikator batcha/kandydata, slot, pozycję i rolę (dopasowanie/eksperyment), źródło, czas pokazania, wersję polityki/promptu oraz niewielki zestaw cech użytych do rankingu. Dzięki migawce cech można uczyć się również z kandydatów AI bez archiwizowania promptu. Działania zapisują ID karty i rodzaj sygnału. „Więcej propozycji” jest zdarzeniem dla batcha; nie karze automatycznie wszystkich kart. Samo nieotwarcie karty nie uczy negatywnie.
 
 Na karcie można użyć „Lubię”, „Nie dla mnie” z opcjonalnym powodem (np. składnik, za długo, nie mam tego) i „Ugotowane” jako osobnego, dobrowolnego potwierdzenia. Otwarcie przepisu i zapis do książki zostają osobnymi, słabszymi zachowaniami. Jawna dieta ma nadal twardy filtr; opinie o guście nigdy nie stają się zakazem.
 
