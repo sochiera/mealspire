@@ -15,7 +15,6 @@ import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.text.InputType;
 import android.text.TextUtils;
 import android.widget.Button;
 import android.widget.CheckBox;
@@ -25,7 +24,9 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.mealspire.app.domain.ApiKeyCipher;
+import com.mealspire.app.domain.ChatGptAccount;
+import com.mealspire.app.domain.ChatGptLlmClient;
+import com.mealspire.app.domain.ChatGptOAuth;
 import com.mealspire.app.domain.AppSettings;
 import com.mealspire.app.domain.BackNavigation;
 import com.mealspire.app.domain.Cookbook;
@@ -55,7 +56,6 @@ import com.mealspire.app.domain.RecipePromptBuilder;
 import com.mealspire.app.domain.RecipeRequest;
 import com.mealspire.app.domain.RecipeService;
 import com.mealspire.app.domain.RecipeTextParser;
-import com.mealspire.app.domain.SecretStore;
 import com.mealspire.app.domain.DishTagger;
 import com.mealspire.app.domain.ExplorationPlanner;
 import com.mealspire.app.domain.FrozenTasteAggregate;
@@ -76,7 +76,10 @@ import com.mealspire.app.domain.UserPreferences;
 import com.mealspire.app.domain.VersionInfo;
 import com.mealspire.app.domain.VersionInfoParser;
 import com.mealspire.app.domain.VersionJsonSource;
-import com.mealspire.app.net.HttpClaudeClient;
+import com.mealspire.app.domain.IdTokenVerifier;
+import com.mealspire.app.domain.LlmClient;
+import com.mealspire.app.net.HttpUrlTransport;
+import com.mealspire.app.net.LoopbackCallbackServer;
 import com.mealspire.app.net.HttpPageFetcher;
 import com.mealspire.app.net.HttpVersionJsonFetcher;
 import com.mealspire.app.notify.MealNotifications;
@@ -87,12 +90,12 @@ import com.mealspire.app.storage.SharedPreferencesHouseholdProfileStore;
 import com.mealspire.app.storage.SharedPreferencesMealHistoryStore;
 import com.mealspire.app.storage.SharedPreferencesPreferenceStore;
 import com.mealspire.app.storage.SharedPreferencesLearningStatsStore;
-import com.mealspire.app.storage.SharedPreferencesSecretStore;
+import com.mealspire.app.storage.SharedPreferencesChatGptSessionStore;
 import com.mealspire.app.storage.SharedPreferencesTasteEventStore;
 import com.mealspire.app.storage.SharedPreferencesUpdateStateStore;
 
 import java.io.IOException;
-import java.security.GeneralSecurityException;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -152,6 +155,9 @@ public class MainActivity extends Activity {
     /** Intent extra: which meal to open (0=breakfast, 1=lunch, 2=dinner). */
     public static final String EXTRA_MEAL_INDEX = "meal_index";
     private static final int REQ_POST_NOTIFICATIONS = 1001;
+    static final String SIGN_IN_DIALOG_TITLE = "Zaloguj się kontem ChatGPT";
+    static final String SIGN_IN_MENU_LABEL = "Zaloguj się kontem ChatGPT";
+    private static final int SIGN_IN_TIMEOUT_MS = 5 * 60 * 1000;
 
     // Test seams (package-private, null in production): replace the network
     // source and the background executor so Robolectric tests stay offline and
@@ -165,7 +171,9 @@ public class MainActivity extends Activity {
     private LinearLayout contentContainer;
     private Button moreButton;
 
-    private HttpClaudeClient claudeClient;
+    private ChatGptAccount chatGptAccount;
+    // Guards against a second browser sign-in while one is waiting for its redirect.
+    private volatile boolean chatGptSignInRunning;
     private RecipeService recipeService;
     private PreferenceStore preferenceStore;
     private UserPreferences preferences;
@@ -178,7 +186,6 @@ public class MainActivity extends Activity {
     private HouseholdProfileStore householdProfileStore;
     private HouseholdProfile householdProfile;
     private AppSettings appSettings;
-    private SecretStore secretStore;
     private TasteEventStore tasteEventStore;
     private TasteEventLog tasteEvents;
     private FrozenTasteAggregate tasteAggregate;
@@ -206,7 +213,6 @@ public class MainActivity extends Activity {
     private final IngredientExtractor ingredientExtractor = new IngredientExtractor();
     private final TasteProfiler tasteProfiler = new TasteProfiler();
     private final PersonalizationReadiness personalizationReadiness = new PersonalizationReadiness();
-    private final ApiKeyCipher apiKeyCipher = new ApiKeyCipher();
     private final UpdateChecker updateChecker = new UpdateChecker();
     private final VersionInfoParser versionInfoParser = new VersionInfoParser();
     private UpdateStateStore updateStateStore;
@@ -245,7 +251,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        buildClaudeClients(BuildConfig.ANTHROPIC_API_KEY);
+        buildLlmClients();
         preferenceStore = new SharedPreferencesPreferenceStore(this);
         preferences = preferenceStore.load();
         historyStore = new SharedPreferencesMealHistoryStore(this);
@@ -256,7 +262,6 @@ public class MainActivity extends Activity {
         householdProfileStore = new SharedPreferencesHouseholdProfileStore(this);
         householdProfile = householdProfileStore.load();
         appSettings = new SharedPreferencesAppSettings(this);
-        secretStore = new SharedPreferencesSecretStore(this);
         tasteEventStore = new SharedPreferencesTasteEventStore(this);
         tasteEvents = tasteEventStore.load();
         tasteAggregate = tasteEventStore.loadAggregate();
@@ -335,19 +340,13 @@ public class MainActivity extends Activity {
         setContentView(scrollView);
         updateServingsLabel();
 
-        // A key remembered from a previous unlock loads silently (the password
-        // is asked only once); the password *dialog* waits for the quiz below.
-        if (!claudeClient.hasApiKey() && secretStore.hasApiKey()) {
-            buildClaudeClients(secretStore.loadApiKey());
-        }
-
         if (appSettings.isOnboardingDone()) {
             showStartScreen();
             showStartupPrompts();
             maybeCheckForUpdate();
         } else {
             // Fresh install: a short taste quiz first; every one-time dialog
-            // (servings, API-key password, notification permission) waits until
+            // (servings, ChatGPT sign-in, notification permission) waits until
             // it is finished or skipped.
             startOnboarding();
         }
@@ -360,15 +359,13 @@ public class MainActivity extends Activity {
 
     /**
      * One-time prompts asked outside the quiz, so nothing covers the first
-     * question: the servings dialog, the API-key password (only when the
-     * encrypted-in-repo key still needs unlocking) and the Android 13+
-     * notification permission.
+     * question: the servings dialog, the ChatGPT sign-in offer (only while
+     * signed out) and the Android 13+ notification permission.
      */
     private void showStartupPrompts() {
         maybeAskServings();
-        if (!claudeClient.hasApiKey() && !secretStore.hasApiKey()
-                && !encryptedApiKey().isEmpty()) {
-            promptForApiKeyPassword(false);
+        if (!chatGptAccount.isSignedIn()) {
+            offerChatGptSignIn();
         }
         maybeRequestNotificationPermission();
     }
@@ -527,59 +524,82 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void buildClaudeClients(String apiKey) {
-        claudeClient = new HttpClaudeClient(apiKey);
-        recipeService = new RecipeService(claudeClient, new RecipePromptBuilder(),
+    private void buildLlmClients() {
+        HttpUrlTransport transport = new HttpUrlTransport();
+        chatGptAccount = new ChatGptAccount(new SharedPreferencesChatGptSessionStore(this),
+                transport, new ChatGptOAuth(new SecureRandom()), new IdTokenVerifier(),
+                System::currentTimeMillis);
+        LlmClient llmClient = new ChatGptLlmClient(chatGptAccount, transport);
+        recipeService = new RecipeService(llmClient, new RecipePromptBuilder(),
                 new RecipeTextParser());
-        dishImporter = new KnownDishImporter(claudeClient, new HttpPageFetcher(),
+        dishImporter = new KnownDishImporter(llmClient, new HttpPageFetcher(),
                 new KnownDishPromptBuilder(), new RecipeTextParser());
     }
 
-    private String encryptedApiKey() {
-        return getString(R.string.encrypted_api_key).trim();
+    private boolean isAiAvailable() {
+        return chatGptAccount.isSignedIn();
     }
 
-    private void promptForApiKeyPassword(boolean retry) {
-        final EditText field = new EditText(this);
-        field.setHint("Hasło");
-        field.setInputType(InputType.TYPE_CLASS_TEXT
-                | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+    private void offerChatGptSignIn() {
         new AlertDialog.Builder(this)
-                .setTitle(retry ? "Niepoprawne hasło — spróbuj ponownie"
-                        : "Podaj hasło, aby odblokować AI")
-                .setMessage("Klucz API jest zaszyfrowany. Bez hasła aplikacja działa "
-                        + "offline (losuje dania z bazy).")
-                .setView(field)
-                .setPositiveButton("Odblokuj", (dialog, which) ->
-                        unlockApiKey(field.getText().toString()))
+                .setTitle(SIGN_IN_DIALOG_TITLE)
+                .setMessage("AI korzysta z Twojego konta ChatGPT (plan Plus lub Pro) — "
+                        + "logujesz się w przeglądarce, aplikacja nie ma własnego klucza. "
+                        + "Bez logowania aplikacja działa offline (losuje dania z bazy).")
+                .setPositiveButton("Zaloguj się", (dialog, which) -> startChatGptSignIn())
                 .setNegativeButton("Pomiń", null)
                 .show();
     }
 
-    private void unlockApiKey(final String password) {
-        if (TextUtils.isEmpty(password)) {
-            promptForApiKeyPassword(true);
+    /**
+     * Sign in with ChatGPT: a loopback listener catches the browser redirect,
+     * then the code is exchanged (PKCE) for the user's own tokens.
+     */
+    private void startChatGptSignIn() {
+        if (chatGptSignInRunning) {
+            toast("Logowanie do ChatGPT już trwa — dokończ je w przeglądarce.");
             return;
         }
-        final String blob = encryptedApiKey();
+        chatGptSignInRunning = true;
         new Thread(() -> {
-            try {
-                final String key = apiKeyCipher.decrypt(blob, password);
+            try (LoopbackCallbackServer server = new LoopbackCallbackServer()) {
+                final ChatGptOAuth.PendingSignIn pending =
+                        chatGptAccount.beginSignIn(server.redirectUri());
                 runOnUiThread(() -> {
-                    buildClaudeClients(key);
-                    // Remember the unlocked key so the password is asked only once.
-                    secretStore.saveApiKey(key);
+                    try {
+                        startActivity(new Intent(Intent.ACTION_VIEW,
+                                Uri.parse(pending.authorizeUrl)));
+                    } catch (android.content.ActivityNotFoundException e) {
+                        toast("Brak przeglądarki do zalogowania w ChatGPT.");
+                    }
+                });
+                String query = server.awaitCallbackQuery(SIGN_IN_TIMEOUT_MS);
+                final String email = chatGptAccount.completeSignIn(pending, query).email;
+                runOnUiThread(() -> {
                     // Refresh the open recipe so the AI-only "Zmień przepis" button appears.
                     if (currentRecipe != null) {
                         showFullRecipe(currentRecipe);
                     }
-                    Toast.makeText(this, "Odblokowano AI — możesz generować dania.",
-                            Toast.LENGTH_SHORT).show();
+                    toast(email.isEmpty() ? "Zalogowano do ChatGPT — możesz generować dania."
+                            : "Zalogowano do ChatGPT jako " + email + ".");
                 });
-            } catch (GeneralSecurityException e) {
-                runOnUiThread(() -> promptForApiKeyPassword(true));
+            } catch (IOException e) {
+                final String message = e.getMessage();
+                runOnUiThread(() -> toast(message != null ? message
+                        : "Logowanie do ChatGPT nie powiodło się."));
+            } finally {
+                chatGptSignInRunning = false;
             }
         }).start();
+    }
+
+    private void signOutOfChatGpt() {
+        new Thread(chatGptAccount::signOut).start();
+        // Refresh the open recipe so the AI-only "Zmień przepis" button disappears.
+        if (currentRecipe != null) {
+            showFullRecipe(currentRecipe);
+        }
+        toast("Wylogowano z ChatGPT — aplikacja działa offline.");
     }
 
     // ----- First-launch onboarding quiz ------------------------------------
@@ -847,7 +867,7 @@ public class MainActivity extends Activity {
         // From now on the content area belongs to the proposal flow, so back
         // (even while the AI is still thinking) returns to the start screen.
         currentScreen = BackNavigation.Screen.PROPOSALS;
-        if (claudeClient.hasApiKey() && personalizationReadiness.isReady(preferences)) {
+        if (isAiAvailable() && personalizationReadiness.isReady(preferences)) {
             generateAiProposals();
         } else {
             generateOfflineProposals();
@@ -1243,7 +1263,7 @@ public class MainActivity extends Activity {
         like.setOnClickListener(v -> rememberLike(recipe.getTitle()));
         actions.addView(like, equalWidthRowItem());
 
-        if (claudeClient.hasApiKey()) {
+        if (isAiAvailable()) {
             Button change = new Button(this);
             change.setId(R.id.change_button);
             change.setText("Zmień przepis");
@@ -1310,8 +1330,8 @@ public class MainActivity extends Activity {
         if (currentRecipe == null || currentRecipe.getTitle().trim().isEmpty()) {
             return;
         }
-        if (!claudeClient.hasApiKey()) {
-            Toast.makeText(this, "Zmiana przepisu wymaga klucza API.",
+        if (!isAiAvailable()) {
+            Toast.makeText(this, "Zmiana przepisu wymaga zalogowania kontem ChatGPT.",
                     Toast.LENGTH_LONG).show();
             return;
         }
@@ -1381,6 +1401,14 @@ public class MainActivity extends Activity {
         actions.add(this::showAddKnownDishDialog);
         labels.add("Zarządzaj moimi danymi");
         actions.add(this::showManageDialog);
+        if (chatGptAccount.isSignedIn()) {
+            String email = chatGptAccount.email();
+            labels.add(email.isEmpty() ? "Wyloguj z ChatGPT" : "Wyloguj z ChatGPT (" + email + ")");
+            actions.add(this::signOutOfChatGpt);
+        } else {
+            labels.add(SIGN_IN_MENU_LABEL);
+            actions.add(this::startChatGptSignIn);
+        }
 
         new AlertDialog.Builder(this)
                 .setTitle("Więcej")
@@ -1502,8 +1530,8 @@ public class MainActivity extends Activity {
     }
 
     private void showAddKnownDishDialog() {
-        if (!claudeClient.hasApiKey()) {
-            Toast.makeText(this, "Dodawanie z linku/opisu wymaga klucza API.",
+        if (!isAiAvailable()) {
+            Toast.makeText(this, "Dodawanie z linku/opisu wymaga zalogowania kontem ChatGPT.",
                     Toast.LENGTH_LONG).show();
             return;
         }
@@ -1591,12 +1619,6 @@ public class MainActivity extends Activity {
         });
         labels.add("Statystyki uczenia (diagnostyka)");
         actions.add(this::showLearningStatsDialog);
-        // Only offer "forget" when AI was unlocked with the password (not when the
-        // key is baked in at build time, which clearing here would not undo).
-        if (secretStore.hasApiKey() && BuildConfig.ANTHROPIC_API_KEY.isEmpty()) {
-            labels.add("Zablokuj AI (zapomnij hasło)");
-            actions.add(this::forgetApiKey);
-        }
 
         new AlertDialog.Builder(this)
                 .setTitle("Moje dane")
@@ -1612,16 +1634,6 @@ public class MainActivity extends Activity {
                 .setMessage(learningStats.summaryText(tasteEvents.size()))
                 .setPositiveButton("OK", null)
                 .show();
-    }
-
-    private void forgetApiKey() {
-        secretStore.clear();
-        buildClaudeClients(BuildConfig.ANTHROPIC_API_KEY);
-        // Refresh the open recipe so the AI-only "Zmień przepis" button disappears.
-        if (currentRecipe != null) {
-            showFullRecipe(currentRecipe);
-        }
-        toast("Zablokowano AI — aplikacja działa offline. Hasło przy następnym starcie.");
     }
 
     private void showCookbookDialog() {

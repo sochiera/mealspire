@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 6–11: tokeny konta ChatGPT nie trafiają do kopii zapasowej. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="mealspire_chatgpt.xml" />
+</full-backup-content>

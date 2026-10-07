@@ -6,7 +6,7 @@ import java.io.IOException;
  * Minimal abstraction over a single-turn LLM completion, so the recipe logic
  * can be unit-tested without any network calls.
  */
-public interface ClaudeClient {
+public interface LlmClient {
     /**
      * Sends the prompts to the model and returns the assistant's plain-text answer.
      *

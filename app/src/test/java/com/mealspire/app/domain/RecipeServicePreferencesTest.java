@@ -6,7 +6,7 @@ import org.junit.Test;
 
 public class RecipeServicePreferencesTest {
 
-    private static class CapturingClient implements ClaudeClient {
+    private static class CapturingClient implements LlmClient {
         String lastUser;
 
         @Override

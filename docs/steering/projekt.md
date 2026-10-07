@@ -39,7 +39,7 @@ Wszystkie teksty w UI i promptach są po polsku.
   quizu, żeby „Cofnij" + inny wybór **podmieniał** polubienie, a nie dokładał
   kolejne. Flaga ukończenia w `AppSettings.isOnboardingDone()` jest niezależna
   od profilu; „Pomiń" też ją ustawia, a udzielone odpowiedzi zostają.
-  Jednorazowe dialogi startowe (liczba osób, hasło do klucza API, uprawnienie
+  Jednorazowe dialogi startowe (liczba osób, logowanie kontem ChatGPT, uprawnienie
   do powiadomień) przechodzą przez `showStartupPrompts()` i czekają do końca
   quizu. Zmiana odpowiedzi później: „Więcej…" → „Profil domowników" (etykiety
   odpowiedzi współdzielone z quizem przez stałe `*_LABELS`/`*_VALUES`;
@@ -70,11 +70,11 @@ Wszystkie teksty w UI i promptach są po polsku.
 - **AI dopiero po nauce**: świeża instalacja proponuje z wbudowanej puli
   (`BuiltInRecipes`, ~60 dań). AI przejmuje propozycje dopiero po ≥5
   polubieniach (`PersonalizationReadiness.MIN_LIKED_DISHES`). Inne funkcje AI
-  (pełny przepis, „Zmień przepis", import z linku) działają od razu z kluczem.
+  (pełny przepis, „Zmień przepis", import z linku) działają od razu po zalogowaniu kontem ChatGPT.
 - **Wspólny pipeline offline** (`OfflineProposalGenerator`): pula → shuffle →
   filtr „ostatnio pokazane" (3 dni) → `VariedMealPicker` (max 1 wybór wg gustu,
   reszta różnorodna). Używany przez ekran i przez powiadomienia — nie rozjeżdżać.
-- **Powiadomienia 8/12/18** liczone offline (bez sieci i klucza), AlarmManager
+- **Powiadomienia 8/12/18** liczone offline (bez sieci i logowania), AlarmManager
   `setInexactRepeating` (bez uprawnienia exact-alarm), przeżywają reboot przez
   `BootReceiver`. W Doze mogą być opóźnione — świadomy kompromis.
 - **Podpis APK**: wspólny keystore `signing/mealspire.keystore` (hasło
@@ -82,12 +82,21 @@ Wszystkie teksty w UI i promptach są po polsku.
   kompromis opisany w `docs/design/aktualizacja-aplikacji.md`). Dzięki temu
   każdy build instaluje się po wierzchu poprzedniego bez utraty danych.
   Nie generować nowego keystore — to zerwałoby ciągłość aktualizacji.
-- **Klucz API**: w repo tylko zaszyfrowany (AES/GCM + PBKDF2,
-  `res/values/secrets.xml`), hasło poza repo. Po pierwszym odblokowaniu klucz
-  ląduje w `SharedPreferencesSecretStore`, więc hasło podaje się raz.
-  Build może też wstrzyknąć klucz przez `ANTHROPIC_API_KEY` / `local.properties`.
-- **Model**: `claude-sonnet-4-6` (poprawne ID Anthropic Messages API),
-  `MAX_TOKENS = 2048` (1024 ucinało dłuższe przepisy).
+- **AI = konto ChatGPT użytkownika, zero sekretów w buildzie**. Żadnego
+  klucza API w repo, w `BuildConfig` ani w zasobach (pilnuje
+  `NoBuiltInApiKeyTest`); żadnej ścieżki „wklej swój klucz” ani Claude API.
+  Logowanie: Sign in with ChatGPT dla open source (`ChatGptOAuth`: PKCE,
+  `client_id=dynamic_agent_client` → wydany `oaiapp_…`, redirect tylko loopback
+  `http://127.0.0.1:PORT/callback` → `LoopbackCallbackServer`). ID token
+  weryfikowany RS256 z JWKS (`IdTokenVerifier`). Sesja w
+  `SharedPreferencesChatGptSessionStore` (wyłączona z backupu, `res/xml/`),
+  odświeżanie i rotacja refresh tokenu w `ChatGptAccount`.
+- **Inferencja**: `ChatGptLlmClient` → `POST /v1/responses` z dozwolonymi
+  wyłącznie `model`, `input`, `store:false`, `stream:true` (plan usage nie
+  pozwala na `temperature`/`max_output_tokens`); prompt systemowy idzie jako
+  wiadomość `developer`. Model = pierwszy z `GET /v1/models` o
+  `visibility:"list"`, zapisany w sesji. Wymaga planu Plus/Pro.
+  Docs: https://developers.openai.com/siwc
 - **Aktualizacje**: raz na dobę `UpdateChecker` pobiera `dist/wersja.json`
   z raw.githubusercontent (bez tokenu) i porównuje z `BuildConfig.VERSION_CODE`;
   wyższy → baner na ekranie startowym otwierający APK w przeglądarce

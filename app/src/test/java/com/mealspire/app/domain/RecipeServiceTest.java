@@ -7,12 +7,12 @@ import org.junit.Test;
 public class RecipeServiceTest {
 
     /** Fake client that records the prompts and returns a canned response. */
-    private static class FakeClaudeClient implements ClaudeClient {
+    private static class FakeLlmClient implements LlmClient {
         String lastSystem;
         String lastUser;
         String response;
 
-        FakeClaudeClient(String response) {
+        FakeLlmClient(String response) {
             this.response = response;
         }
 
@@ -26,7 +26,7 @@ public class RecipeServiceTest {
 
     @Test
     public void generatesRecipeFromClientResponse() throws Exception {
-        FakeClaudeClient client = new FakeClaudeClient(
+        FakeLlmClient client = new FakeLlmClient(
                 "Placki ziemniaczane\n\nZetrzyj ziemniaki, dodaj jajko i mąkę, smaż na oleju.");
         RecipeService service = new RecipeService(client, new RecipePromptBuilder(),
                 new RecipeTextParser());
@@ -40,7 +40,7 @@ public class RecipeServiceTest {
 
     @Test
     public void passesSystemPromptToClient() throws Exception {
-        FakeClaudeClient client = new FakeClaudeClient("Tytuł\nszczegóły");
+        FakeLlmClient client = new FakeLlmClient("Tytuł\nszczegóły");
         RecipeService service = new RecipeService(client, new RecipePromptBuilder(),
                 new RecipeTextParser());
 

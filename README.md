@@ -35,7 +35,7 @@ odpowiedzi zostają. Profil można później zmienić w menu **„Więcej…" �
 domowników"**. Systemowe „Cofnij" wraca w quizie do poprzedniego pytania
 (z pierwszego pytania działa jak „Pomiń") i pozwala **zmienić wybór dania** —
 liczy się ostatni wybór w rundzie, polubienia zapisują się dopiero na końcu
-quizu. Jednorazowe pytania startowe (liczba osób, hasło do AI, zgoda na
+quizu. Jednorazowe pytania startowe (liczba osób, logowanie kontem ChatGPT, zgoda na
 powiadomienia) pojawiają się dopiero po zakończeniu lub pominięciu quizu —
 nic nie zasłania pierwszego pytania.
 
@@ -60,16 +60,16 @@ na ekran startowy, a dopiero z ekranu startowego zamyka aplikację. Przepis
 otwarty **spoza propozycji** (np. danie dodane z linku/opisu) wraca od razu na
 ekran startowy — nie ma propozycji, do których można by wrócić.
 
-Bez klucza API (albo zanim aplikacja zdąży się czegoś o Tobie nauczyć — patrz
+Bez zalogowania kontem ChatGPT (albo zanim aplikacja zdąży się czegoś o Tobie nauczyć — patrz
 niżej) działa offline: losuje dania z **wbudowanej puli** (blisko 60 prostych,
 codziennych dań: śniadania, obiady, kolacje) i z Twojej bazy. Dania są celowo
 proste, do zrobienia z tego, co zwykle jest w kuchni — a tam, gdzie naturalnie
 pasują dodatki (owsianka, płatki, tosty…), są one opcją do dopisania, a nie
 osobnym, bardziej skomplikowanym daniem.
 
-Gdy skonfigurowany jest klucz API **i** aplikacja ma już wystarczająco dużo
-polubień, propozycje i przepisy zaczyna tworzyć model Claude (Anthropic
-Messages API) — może przy tym **sięgnąć po danie z Twojej bazy** albo
+Gdy jesteś zalogowany kontem ChatGPT **i** aplikacja ma już wystarczająco dużo
+polubień, propozycje i przepisy zaczyna tworzyć model GPT z Twojego planu
+ChatGPT (OpenAI Responses API) — może przy tym **sięgnąć po danie z Twojej bazy** albo
 **wymyślić zupełnie nowe**.
 
 ## Codzienne powiadomienia z propozycjami (8 / 12 / 18)
@@ -81,7 +81,7 @@ porze dnia, z gotowymi pomysłami.
 
 Propozycje w powiadomieniach powstają **offline** (z wbudowanej puli i Twojej
 bazy, z uwzględnieniem polubień), więc działają zawsze — także bez internetu i bez
-klucza API. Przypomnienia korzystają z `AlarmManager` (lekko, bez dodatkowych
+logowania. Przypomnienia korzystają z `AlarmManager` (lekko, bez dodatkowych
 bibliotek) i przeżywają restart telefonu. Na Androidzie 13+ aplikacja poprosi raz
 o zgodę na powiadomienia; bez zgody reszta działa normalnie, tylko bez przypomnień.
 
@@ -98,8 +98,8 @@ niczego nie psuje — baner po prostu się nie pokazuje, a aplikacja działa dal
 ## Najpierw wbudowana baza, AI dopiero gdy ma z czego wnioskować
 
 Świeża instalacja nie ma żadnych danych o Twoim guście, więc na start aplikacja
-**zawsze** proponuje z wbudowanej bazy prostych dań — nawet jeśli klucz API jest
-skonfigurowany. Dopiero gdy polubisz co najmniej **5 dań** (czyli `TasteProfiler`
+**zawsze** proponuje z wbudowanej bazy prostych dań — nawet jeśli jesteś
+zalogowany kontem ChatGPT. Dopiero gdy polubisz co najmniej **5 dań** (czyli `TasteProfiler`
 ma z czego realnie zbudować profil gustu), aplikacja przełącza się na
 personalizowane propozycje AI, które potrafią też wymyślać zupełnie nowe dania.
 Próg pilnuje `PersonalizationReadiness`. Inne funkcje AI (pełny przepis na
@@ -126,41 +126,34 @@ podgląd: **„Więcej…” → „Zarządzaj moimi danymi” → „Statystyki
 
 Przy pokazanym przepisie jest przycisk **„Zmień przepis”**. Możesz wpisać własną
 prośbę do AI, np. *„nie mam jogurtu — czym zastąpić?”*, a aplikacja zwróci
-poprawiony przepis z sensownym zamiennikiem. Wymaga klucza API.
+poprawiony przepis z sensownym zamiennikiem. Wymaga zalogowania kontem ChatGPT.
 
-### Klucz API zaszyfrowany hasłem (domyślnie)
+### AI na Twoim koncie ChatGPT („Zaloguj się kontem ChatGPT”)
 
-Klucz API jest zapisany w repo **w postaci zaszyfrowanej** (AES/GCM, klucz
-wyprowadzany z hasła przez PBKDF2) — w zasobie `app/src/main/res/values/secrets.xml`.
-**Hasło nie jest nigdzie w repo.** Po uruchomieniu aplikacja pyta o hasło i dopiero
-po jego podaniu odszyfrowuje klucz i odblokowuje generowanie przez AI. Błędne hasło
-nie odblokuje klucza (chroni go znacznik uwierzytelniający GCM).
+Aplikacja **nie ma własnego klucza API** — ani w repo, ani w zbudowanym APK.
+Funkcje AI działają na **Twoim** koncie ChatGPT (plan Plus lub Pro) przez
+oficjalne „Sign in with ChatGPT” od OpenAI:
 
-> To celowo umiarkowane zabezpieczenie: kto ma aplikację **i** hasło, odzyska klucz.
-> Chodzi tylko o to, by klucz nie leżał w repo otwartym tekstem.
+1. Po quizie (albo w **„Więcej…” → „Zaloguj się kontem ChatGPT”**) aplikacja
+   otwiera przeglądarkę ze stroną logowania OpenAI.
+2. Logujesz się i zgadzasz, by Mealspire korzystał z Twojego planu ChatGPT
+   (w ustawieniach ChatGPT możesz ustawić tygodniowy limit dla tej aplikacji).
+3. Przeglądarka pokazuje „Gotowe — możesz wrócić do aplikacji Mealspire”.
+   Wracasz do aplikacji i AI jest odblokowane.
 
-#### Hasło pytane tylko raz
+Technicznie: OAuth 2.0 Authorization Code + PKCE z dynamiczną rejestracją
+klienta (ścieżka dla aplikacji open source), przekierowanie na
+`http://127.0.0.1:PORT/callback` obsługiwane przez aplikację na czas logowania.
+Nie istnieje żaden sekret klienta. Tokeny (dostępowy ważny godzinę, odświeżający
+30 dni, odnawiany przy każdym użyciu) są tylko w prywatnym magazynie aplikacji
+i są **wyłączone z kopii zapasowej Androida**. Zapytania idą do OpenAI Responses
+API i są liczone z limitu Twojego planu, nie z czyjegokolwiek klucza.
 
-Po **pierwszym** poprawnym podaniu hasła odblokowany klucz jest zapamiętywany w
-prywatnych preferencjach aplikacji, więc kolejne uruchomienia od razu mają dostęp
-do AI — **bez ponownego pytania o hasło**. Zapamiętany klucz żyje w prywatnym
-magazynie aplikacji (ten sam, umiarkowany model zagrożeń co wyżej — nie jest
-dodatkowo szyfrowany na urządzeniu). Możesz w każdej chwili go usunąć i wrócić do
-trybu offline: **„Więcej…” → „Zarządzaj moimi danymi” → „Zablokuj AI (zapomnij
-hasło)”**; przy następnym starcie aplikacja znów zapyta o hasło.
+Wylogowanie: **„Więcej…” → „Wyloguj z ChatGPT”** — usuwa tokeny z telefonu
+i unieważnia je po stronie OpenAI. Gdy sesja wygaśnie (np. po 30 dniach
+nieużywania), aplikacja poprosi o ponowne zalogowanie.
 
-Możesz wygenerować nowy zaszyfrowany klucz tą samą metodą, której używa aplikacja
-(`com.mealspire.app.domain.ApiKeyCipher#encrypt(klucz, hasło)`), i podmienić wartość
-`encrypted_api_key` w `secrets.xml`.
-
-### Alternatywnie: klucz przy budowaniu
-
-Można też wstrzyknąć klucz przy budowaniu (wtedy pytanie o hasło się nie pojawia):
-
-- zmienna środowiskowa `ANTHROPIC_API_KEY`, albo
-- wpis `anthropic.api.key=...` w pliku `local.properties` (plik jest w `.gitignore`).
-
-Bez klucza (i bez hasła) aplikacja działa w trybie offline — po dotknięciu pory
+Bez zalogowania aplikacja działa w trybie offline — po dotknięciu pory
 dnia losuje kilka dań z wbudowanej puli i z Twojej bazy.
 
 ## Dla ilu osób (pytane tylko raz)
@@ -186,7 +179,7 @@ Aby utrzymać główny ekran prostym, dodatkowe akcje są pod przyciskiem „Wi�
 - **Dodaj danie, które znasz i lubisz** — możesz **wkleić link do przepisu** albo
   **krótko opisać danie**. Aplikacja rozpozna danie (przy linku pobiera treść
   strony), zapisze je w Twojej bazie i oznaczy jako lubiane — dzięki temu trafia
-  do puli podpowiedzi. Wymaga klucza API.
+  do puli podpowiedzi. Wymaga zalogowania kontem ChatGPT.
 - **Zarządzaj moimi danymi** — przejrzyj i usuwaj pojedyncze dania z bazy oraz
   wyczyść preferencje, historię podpowiedzi lub całą bazę. Masz pełną kontrolę
   nad tym, co aplikacja o Tobie pamięta.

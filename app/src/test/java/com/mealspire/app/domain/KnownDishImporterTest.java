@@ -9,7 +9,7 @@ import java.io.IOException;
 
 public class KnownDishImporterTest {
 
-    private static class StubClient implements ClaudeClient {
+    private static class StubClient implements LlmClient {
         String lastUser;
         String response;
 
@@ -39,7 +39,7 @@ public class KnownDishImporterTest {
         }
     }
 
-    private KnownDishImporter importer(ClaudeClient client, PageFetcher fetcher) {
+    private KnownDishImporter importer(LlmClient client, PageFetcher fetcher) {
         return new KnownDishImporter(client, fetcher,
                 new KnownDishPromptBuilder(), new RecipeTextParser());
     }
