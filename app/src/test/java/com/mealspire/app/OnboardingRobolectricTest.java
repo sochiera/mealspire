@@ -237,18 +237,18 @@ public class OnboardingRobolectricTest {
     }
 
     @Test
-    public void dialogHaslaNieZaslaniaQuizuIPojawiaSieDopieroPoNim() {
+    public void logowanieChatGptNieZaslaniaQuizuIPojawiaSieDopieroPoNim() {
         MainActivity activity = launch();
 
-        // Zasoby zawierają zaszyfrowany klucz, ale pytanie o hasło czeka na
-        // koniec quizu — quiz ma być pierwszym, co widzi użytkownik.
-        assertFalse("dialog hasła nie może zasłaniać quizu",
-                dialogShownWithTitle("Podaj hasło, aby odblokować AI"));
+        // Propozycja logowania kontem ChatGPT czeka na koniec quizu — quiz ma
+        // być pierwszym, co widzi użytkownik.
+        assertFalse("dialog logowania nie może zasłaniać quizu",
+                dialogShownWithTitle(MainActivity.SIGN_IN_DIALOG_TITLE));
 
         activity.<Button>findViewById(R.id.onboarding_skip_button).performClick();
 
-        assertTrue("po quizie jednorazowe pytanie o hasło ma się pojawić",
-                dialogShownWithTitle("Podaj hasło, aby odblokować AI"));
+        assertTrue("po quizie ma się pojawić propozycja logowania kontem ChatGPT",
+                dialogShownWithTitle(MainActivity.SIGN_IN_DIALOG_TITLE));
     }
 
     private static boolean dialogShownWithTitle(String title) {

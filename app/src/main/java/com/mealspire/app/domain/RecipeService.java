@@ -8,7 +8,7 @@ import java.io.IOException;
  */
 public final class RecipeService {
 
-    private final ClaudeClient client;
+    private final LlmClient client;
     private final RecipePromptBuilder promptBuilder;
     private final RecipeTextParser textParser;
     private final ProposalPromptBuilder proposalPromptBuilder;
@@ -16,13 +16,13 @@ public final class RecipeService {
     private final ProposalListParser proposalListParser = new ProposalListParser();
     private final ModifyRecipePromptBuilder modifyPromptBuilder;
 
-    public RecipeService(ClaudeClient client, RecipePromptBuilder promptBuilder,
+    public RecipeService(LlmClient client, RecipePromptBuilder promptBuilder,
                          RecipeTextParser textParser) {
         this(client, promptBuilder, textParser, new ProposalPromptBuilder(),
                 new ProposalParser(), new ModifyRecipePromptBuilder());
     }
 
-    public RecipeService(ClaudeClient client, RecipePromptBuilder promptBuilder,
+    public RecipeService(LlmClient client, RecipePromptBuilder promptBuilder,
                          RecipeTextParser textParser,
                          ProposalPromptBuilder proposalPromptBuilder,
                          ProposalParser proposalParser,

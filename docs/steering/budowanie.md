@@ -52,5 +52,6 @@ CI (`.github/workflows/build.yml`) dodatkowo buduje APK i wystawia artefakt
 
 - Commity po polsku, prefiksy typu `feat:`, `fix:`, `docs+build:`, autor
   `Jan Sochiera <jan@sochiera.pl>`.
-- Nie commitować `local.properties` ani odszyfrowanego klucza API.
+- Nie commitować `local.properties`. Aplikacja nie potrzebuje żadnego klucza API
+  (AI działa na koncie ChatGPT użytkownika) — nie dodawać kluczy do buildu.
 - README opisuje funkcje użytkownika — aktualizować przy zmianach zachowania.

@@ -28,7 +28,7 @@ public class RecipeRequestPromptTest {
     @Test
     public void serviceUsesRequestPrompt() throws Exception {
         final String[] captured = new String[1];
-        ClaudeClient client = (system, user) -> {
+        LlmClient client = (system, user) -> {
             captured[0] = user;
             return "Danie\nopis";
         };

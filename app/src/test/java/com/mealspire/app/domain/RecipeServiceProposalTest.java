@@ -11,12 +11,12 @@ import org.junit.Test;
 public class RecipeServiceProposalTest {
 
     /** Fake client that records prompts and returns a canned response. */
-    private static class FakeClaudeClient implements ClaudeClient {
+    private static class FakeLlmClient implements LlmClient {
         String lastSystem;
         String lastUser;
         final String response;
 
-        FakeClaudeClient(String response) {
+        FakeLlmClient(String response) {
             this.response = response;
         }
 
@@ -28,13 +28,13 @@ public class RecipeServiceProposalTest {
         }
     }
 
-    private RecipeService service(FakeClaudeClient client) {
+    private RecipeService service(FakeLlmClient client) {
         return new RecipeService(client, new RecipePromptBuilder(), new RecipeTextParser());
     }
 
     @Test
     public void proposeDishReturnsParsedProposal() throws Exception {
-        FakeClaudeClient client = new FakeClaudeClient(
+        FakeLlmClient client = new FakeLlmClient(
                 "Nazwa: Leczo\nOpis: Warzywne leczo.\nCzas: 40 min\nSkładniki: papryka, cebula, kiełbasa");
         RecipeRequest request = new RecipeRequest("Obiad", UserPreferences.empty(),
                 Collections.<String>emptyList(), Collections.<String>emptyList());
@@ -49,7 +49,7 @@ public class RecipeServiceProposalTest {
 
     @Test
     public void proposeDishesReturnsSeveralProposalsFromOneCall() throws Exception {
-        FakeClaudeClient client = new FakeClaudeClient(
+        FakeLlmClient client = new FakeLlmClient(
                 "Nazwa: Jajecznica\nCzas: 10 min\nSkładniki: jajka\n"
                         + "---\nNazwa: Owsianka\nCzas: 8 min\nSkładniki: płatki\n"
                         + "---\nNazwa: Tost\nCzas: 5 min\nSkładniki: chleb");
@@ -65,7 +65,7 @@ public class RecipeServiceProposalTest {
 
     @Test
     public void generateRecipeForPinsTheAcceptedDishName() throws Exception {
-        FakeClaudeClient client = new FakeClaudeClient(
+        FakeLlmClient client = new FakeLlmClient(
                 "Leczo\n\nSkładniki: papryka...\nDusić warzywa.");
         RecipeRequest request = new RecipeRequest("Obiad", UserPreferences.empty(),
                 Collections.<String>emptyList(), Arrays.asList("dla 4 osób"));
@@ -79,7 +79,7 @@ public class RecipeServiceProposalTest {
 
     @Test
     public void modifyRecipeSendsCurrentRecipeAndInstruction() throws Exception {
-        FakeClaudeClient client = new FakeClaudeClient(
+        FakeLlmClient client = new FakeLlmClient(
                 "Kurczak z kaszą\n\nSkładniki: kurczak, kasza, śmietana.\nUsmaż.");
         Recipe current = new Recipe("Kurczak z kaszą",
                 "Składniki: kurczak, kasza, jogurt.");

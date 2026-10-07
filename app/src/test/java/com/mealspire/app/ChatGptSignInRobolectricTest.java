@@ -8,8 +8,9 @@ import android.app.Dialog;
 
 import androidx.test.core.app.ApplicationProvider;
 
+import com.mealspire.app.domain.ChatGptSession;
 import com.mealspire.app.storage.SharedPreferencesAppSettings;
-import com.mealspire.app.storage.SharedPreferencesSecretStore;
+import com.mealspire.app.storage.SharedPreferencesChatGptSessionStore;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -19,42 +20,36 @@ import org.robolectric.Shadows;
 import org.robolectric.shadows.ShadowDialog;
 
 /**
- * The password is asked only once. Once the unlocked key is remembered, later
- * launches skip the password prompt; without a remembered key (but with an
- * encrypted key in resources) the prompt still appears.
+ * AI is unlocked by signing in with the user's own ChatGPT account — there is
+ * no built-in key and no password. Signed-out users are offered the sign-in;
+ * signed-in users are not nagged.
  */
 @RunWith(RobolectricTestRunner.class)
-public class RememberPasswordRobolectricTest {
-
-    private static final String PASSWORD_DIALOG_TITLE = "Podaj hasło, aby odblokować AI";
+public class ChatGptSignInRobolectricTest {
 
     @Test
-    public void rememberedKeySkipsPasswordPrompt() {
-        new SharedPreferencesAppSettings(ApplicationProvider.getApplicationContext())
-                .markOnboardingDone();
-        new SharedPreferencesSecretStore(ApplicationProvider.getApplicationContext())
-                .saveApiKey("sk-ant-remembered");
-
-        Robolectric.buildActivity(MainActivity.class).setup().get();
-
-        assertFalse("a remembered key must not trigger the password prompt",
-                dialogShownWithTitle(PASSWORD_DIALOG_TITLE));
-    }
-
-    @Test
-    public void noRememberedKeyShowsPasswordPrompt() {
-        // No remembered key, but resources ship an encrypted key -> ask once.
-        // (The fresh-install case, where the prompt waits for the onboarding
-        // quiz, is covered by OnboardingRobolectricTest.)
+    public void signedOutUserIsOfferedChatGptSignIn() {
         new SharedPreferencesAppSettings(ApplicationProvider.getApplicationContext())
                 .markOnboardingDone();
         Robolectric.buildActivity(MainActivity.class).setup().get();
 
-        assertTrue("expected the one-time password prompt on first launch",
-                dialogShownWithTitle(PASSWORD_DIALOG_TITLE));
+        assertTrue(dialogShownWithTitle(MainActivity.SIGN_IN_DIALOG_TITLE));
     }
 
-    private boolean dialogShownWithTitle(String title) {
+    @Test
+    public void signedInUserIsNotAskedAgain() {
+        new SharedPreferencesAppSettings(ApplicationProvider.getApplicationContext())
+                .markOnboardingDone();
+        new SharedPreferencesChatGptSessionStore(ApplicationProvider.getApplicationContext())
+                .save(new ChatGptSession("oaiapp_x", "at", "rt", "it",
+                        System.currentTimeMillis() + 3_600_000, "sub", "ola@example.com", "gpt-6-luna", "gpt-6.1-sol"));
+
+        Robolectric.buildActivity(MainActivity.class).setup().get();
+
+        assertFalse(dialogShownWithTitle(MainActivity.SIGN_IN_DIALOG_TITLE));
+    }
+
+    private static boolean dialogShownWithTitle(String title) {
         for (Dialog dialog : ShadowDialog.getShownDialogs()) {
             if (dialog instanceof AlertDialog) {
                 CharSequence shown = Shadows.shadowOf((AlertDialog) dialog).getTitle();

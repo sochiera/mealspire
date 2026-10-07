@@ -6,18 +6,18 @@ import java.io.IOException;
  * Turns a user's "I already know and like this dish" input (a link or a short
  * description) into a {@link CookbookEntry}, using the LLM to normalize the dish
  * name and produce a concise recipe. Network access is behind {@link PageFetcher}
- * and {@link ClaudeClient} so this orchestration is fully unit-testable.
+ * and {@link LlmClient} so this orchestration is fully unit-testable.
  */
 public final class KnownDishImporter {
 
     private static final String SOURCE_DESCRIPTION = "opis";
 
-    private final ClaudeClient client;
+    private final LlmClient client;
     private final PageFetcher pageFetcher;
     private final KnownDishPromptBuilder promptBuilder;
     private final RecipeTextParser textParser;
 
-    public KnownDishImporter(ClaudeClient client, PageFetcher pageFetcher,
+    public KnownDishImporter(LlmClient client, PageFetcher pageFetcher,
                              KnownDishPromptBuilder promptBuilder, RecipeTextParser textParser) {
         this.client = client;
         this.pageFetcher = pageFetcher;
