@@ -42,6 +42,21 @@ public final class ChatGptAccount {
         return session == null ? "" : session.email;
     }
 
+    /** Model family used for AI requests (GPT Luna unless the user switched). */
+    public GptModel modelChoice() {
+        return store.modelChoice();
+    }
+
+    public void setModelChoice(GptModel model) {
+        store.saveModelChoice(model);
+    }
+
+    /** Whether the signed-in account's plan offers {@code model}. */
+    public boolean isAvailable(GptModel model) {
+        ChatGptSession session = store.load();
+        return session != null && !session.modelFor(model).isEmpty();
+    }
+
     /** Starts a sign-in whose browser redirect lands on {@code redirectUri}. */
     public ChatGptOAuth.PendingSignIn beginSignIn(String redirectUri) {
         ChatGptSession previous = store.load();
@@ -83,15 +98,16 @@ public final class ChatGptAccount {
         if (!models.isSuccess()) {
             throw ResponsesApi.parseErrorBody(models.status, models.body);
         }
-        String model = ResponsesApi.pickModel(models.body);
-        if (model.isEmpty()) {
-            throw new IOException("Twoje konto ChatGPT nie udostępnia modeli innym aplikacjom "
-                    + "(potrzebny plan Plus lub Pro).");
+        String luna = ResponsesApi.resolveModel(models.body, GptModel.LUNA);
+        String sol = ResponsesApi.resolveModel(models.body, GptModel.SOL);
+        if (luna.isEmpty() && sol.isEmpty()) {
+            throw new IOException("Twoje konto ChatGPT nie udostępnia innym aplikacjom "
+                    + "modeli GPT Luna ani GPT Sol (potrzebny plan Plus lub Pro).");
         }
 
         ChatGptSession session = new ChatGptSession(callback.clientId, tokens.accessToken,
                 tokens.refreshToken, tokens.idToken,
-                now + tokens.expiresInSeconds * 1000, claims.subject, claims.email, model);
+                now + tokens.expiresInSeconds * 1000, claims.subject, claims.email, luna, sol);
         store.save(session);
         return session;
     }

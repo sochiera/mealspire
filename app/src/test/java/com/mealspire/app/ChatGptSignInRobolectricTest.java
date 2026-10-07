@@ -42,7 +42,7 @@ public class ChatGptSignInRobolectricTest {
                 .markOnboardingDone();
         new SharedPreferencesChatGptSessionStore(ApplicationProvider.getApplicationContext())
                 .save(new ChatGptSession("oaiapp_x", "at", "rt", "it",
-                        System.currentTimeMillis() + 3_600_000, "sub", "ola@example.com", "gpt-x"));
+                        System.currentTimeMillis() + 3_600_000, "sub", "ola@example.com", "gpt-6-luna", "gpt-6.1-sol"));
 
         Robolectric.buildActivity(MainActivity.class).setup().get();
 

@@ -18,11 +18,14 @@ public final class ChatGptSession {
     public final long accessTokenExpiresAtMs;
     public final String subject;
     public final String email;
-    public final String model;
+    /** Account's slug for GPT Luna, or empty when its plan lacks Luna. */
+    public final String lunaModel;
+    /** Account's slug for GPT Sol, or empty when its plan lacks Sol. */
+    public final String solModel;
 
     public ChatGptSession(String clientId, String accessToken, String refreshToken,
                           String idToken, long accessTokenExpiresAtMs, String subject,
-                          String email, String model) {
+                          String email, String lunaModel, String solModel) {
         this.clientId = nonNull(clientId);
         this.accessToken = nonNull(accessToken);
         this.refreshToken = nonNull(refreshToken);
@@ -30,7 +33,8 @@ public final class ChatGptSession {
         this.accessTokenExpiresAtMs = accessTokenExpiresAtMs;
         this.subject = nonNull(subject);
         this.email = nonNull(email);
-        this.model = nonNull(model);
+        this.lunaModel = nonNull(lunaModel);
+        this.solModel = nonNull(solModel);
     }
 
     /** Same account and model, rotated tokens (refresh tokens are single-use). */
@@ -38,7 +42,12 @@ public final class ChatGptSession {
                                      String idToken, long accessTokenExpiresAtMs) {
         return new ChatGptSession(clientId, accessToken, refreshToken,
                 idToken.isEmpty() ? this.idToken : idToken,
-                accessTokenExpiresAtMs, subject, email, model);
+                accessTokenExpiresAtMs, subject, email, lunaModel, solModel);
+    }
+
+    /** The account's slug for {@code family}, or empty when unavailable. */
+    public String modelFor(GptModel family) {
+        return family == GptModel.SOL ? solModel : lunaModel;
     }
 
     public String toJson() {
@@ -51,7 +60,8 @@ public final class ChatGptSession {
             o.put("accessTokenExpiresAtMs", accessTokenExpiresAtMs);
             o.put("subject", subject);
             o.put("email", email);
-            o.put("model", model);
+            o.put("lunaModel", lunaModel);
+            o.put("solModel", solModel);
             return o.toString();
         } catch (JSONException e) {
             throw new IllegalStateException(e);
@@ -69,7 +79,8 @@ public final class ChatGptSession {
                     o.optString("clientId"), o.optString("accessToken"),
                     o.optString("refreshToken"), o.optString("idToken"),
                     o.optLong("accessTokenExpiresAtMs"), o.optString("subject"),
-                    o.optString("email"), o.optString("model"));
+                    o.optString("email"), o.optString("lunaModel"),
+                    o.optString("solModel"));
             return session.clientId.isEmpty() || session.refreshToken.isEmpty()
                     ? null : session;
         } catch (JSONException e) {

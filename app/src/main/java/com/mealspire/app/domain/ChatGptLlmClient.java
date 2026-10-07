@@ -4,7 +4,8 @@ import java.io.IOException;
 
 /**
  * {@link LlmClient} that runs on the signed-in user's ChatGPT plan via the
- * Responses API. Retries once with a refreshed token on HTTP 401.
+ * Responses API, with the model family the user picked (GPT Luna by default).
+ * Retries once with a refreshed token on HTTP 401.
  */
 public final class ChatGptLlmClient implements LlmClient {
 
@@ -32,7 +33,14 @@ public final class ChatGptLlmClient implements LlmClient {
 
     private HttpTransport.Response send(ChatGptSession session, String systemPrompt,
                                         String userPrompt) throws IOException {
+        GptModel choice = account.modelChoice();
+        String slug = session.modelFor(choice);
+        if (slug.isEmpty()) {
+            // Never fall back to another model silently — the user picks.
+            throw new IOException("Model " + choice.label + " nie jest dostępny na Twoim koncie "
+                    + "ChatGPT. Zmień model w „Więcej…” → „Model AI”.");
+        }
         return transport.postJson(ResponsesApi.RESPONSES_URL, session.accessToken,
-                ResponsesApi.buildRequest(session.model, systemPrompt, userPrompt));
+                ResponsesApi.buildRequest(slug, systemPrompt, userPrompt));
     }
 }

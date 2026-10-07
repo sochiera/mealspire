@@ -8,7 +8,7 @@ import org.junit.Test;
 public class ChatGptSessionTest {
 
     private final ChatGptSession session = new ChatGptSession("oaiapp_x", "at", "rt", "it",
-            123L, "sub", "ola@example.com", "gpt-x");
+            123L, "sub", "ola@example.com", "gpt-6-luna", "gpt-6.1-sol");
 
     @Test
     public void jsonRoundTrip() {
@@ -20,7 +20,10 @@ public class ChatGptSessionTest {
         assertEquals(123L, copy.accessTokenExpiresAtMs);
         assertEquals("sub", copy.subject);
         assertEquals("ola@example.com", copy.email);
-        assertEquals("gpt-x", copy.model);
+        assertEquals("gpt-6-luna", copy.lunaModel);
+        assertEquals("gpt-6.1-sol", copy.solModel);
+        assertEquals("gpt-6-luna", copy.modelFor(GptModel.LUNA));
+        assertEquals("gpt-6.1-sol", copy.modelFor(GptModel.SOL));
     }
 
     @Test
@@ -39,6 +42,7 @@ public class ChatGptSessionTest {
         assertEquals("it", refreshed.idToken);
         assertEquals(999L, refreshed.accessTokenExpiresAtMs);
         assertEquals("ola@example.com", refreshed.email);
-        assertEquals("gpt-x", refreshed.model);
+        assertEquals("gpt-6-luna", refreshed.lunaModel);
+        assertEquals("gpt-6.1-sol", refreshed.solModel);
     }
 }

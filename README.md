@@ -69,7 +69,7 @@ osobnym, bardziej skomplikowanym daniem.
 
 Gdy jesteś zalogowany kontem ChatGPT **i** aplikacja ma już wystarczająco dużo
 polubień, propozycje i przepisy zaczyna tworzyć model GPT z Twojego planu
-ChatGPT (OpenAI Responses API) — może przy tym **sięgnąć po danie z Twojej bazy** albo
+ChatGPT (domyślnie GPT Luna, do przełączenia na GPT Sol; OpenAI Responses API) — może przy tym **sięgnąć po danie z Twojej bazy** albo
 **wymyślić zupełnie nowe**.
 
 ## Codzienne powiadomienia z propozycjami (8 / 12 / 18)
@@ -148,6 +148,13 @@ Nie istnieje żaden sekret klienta. Tokeny (dostępowy ważny godzinę, odświe�
 30 dni, odnawiany przy każdym użyciu) są tylko w prywatnym magazynie aplikacji
 i są **wyłączone z kopii zapasowej Androida**. Zapytania idą do OpenAI Responses
 API i są liczone z limitu Twojego planu, nie z czyjegokolwiek klucza.
+
+**Model AI**: domyślnie **GPT Luna** (szybki i oszczędny dla limitów planu).
+W **„Więcej…” → „Model AI: …”** możesz przełączyć na **GPT Sol** (mocniejszy,
+z mniejszym limitem w planie) i z powrotem; wybór jest zapamiętywany. Dokładny
+identyfikator modelu aplikacja bierze z katalogu Twojego konta (`GET /v1/models`,
+np. `gpt-6-luna`, `gpt-6.1-sol`). Jeśli wybranego modelu nie ma na Twoim koncie,
+aplikacja to pokaże i **nie podstawi innego modelu**.
 
 Wylogowanie: **„Więcej…” → „Wyloguj z ChatGPT”** — usuwa tokeny z telefonu
 i unieważnia je po stronie OpenAI. Gdy sesja wygaśnie (np. po 30 dniach

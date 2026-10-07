@@ -15,8 +15,9 @@ public class ChatGptAccountTest {
 
     private static final String REDIRECT = "http://127.0.0.1:43210/callback";
     private static final long NOW_MS = 1_800_000_000_000L;
-    private static final String MODELS =
-            "{\"models\":[{\"slug\":\"gpt-x\",\"display_name\":\"X\",\"visibility\":\"list\"}]}";
+    private static final String MODELS = "{\"models\":["
+            + "{\"slug\":\"gpt-6-luna\",\"display_name\":\"GPT-6 Luna\",\"visibility\":\"list\"},"
+            + "{\"slug\":\"gpt-6.1-sol\",\"display_name\":\"GPT-6.1 Sol\",\"visibility\":\"list\"}]}";
 
     private final InMemoryChatGptSessionStore store = new InMemoryChatGptSessionStore();
     private final FakeHttpTransport http = new FakeHttpTransport();
@@ -51,7 +52,11 @@ public class ChatGptAccountTest {
         assertTrue(account.isSignedIn());
         assertEquals("ola@example.com", account.email());
         assertEquals("oaiapp_new", session.clientId);
-        assertEquals("gpt-x", session.model);
+        assertEquals("gpt-6-luna", session.lunaModel);
+        assertEquals("gpt-6.1-sol", session.solModel);
+        assertTrue(account.isAvailable(GptModel.LUNA));
+        assertTrue(account.isAvailable(GptModel.SOL));
+        assertEquals("Luna is the default", GptModel.LUNA, account.modelChoice());
         assertEquals("rt", session.refreshToken);
         assertEquals(NOW_MS + 3_600_000, session.accessTokenExpiresAtMs);
         assertEquals(ChatGptOAuth.TOKEN_URL, http.calls.get(0).url);
@@ -82,6 +87,38 @@ public class ChatGptAccountTest {
                 .respond(200, jwt.jwks())
                 .respond(200, "{\"models\":[]}");
         expectFailure(pending, "code=abc&state=" + pending.state + "&client_id=oaiapp_new", "Plus lub Pro");
+    }
+
+    @Test
+    public void accountWithOtherModelsOnlyIsNotGivenASubstitute() throws Exception {
+        ChatGptOAuth.PendingSignIn pending = account.beginSignIn(REDIRECT);
+        String idToken = jwt.sign(TestJwt.claims("oaiapp_new", pending.nonce, NOW_MS / 1000 + 600));
+        http.respond(200, tokenJson(idToken, "chatgpt.tokens.use.direct"))
+                .respond(200, jwt.jwks())
+                .respond(200, "{\"models\":[{\"slug\":\"gpt-6-astra\",\"visibility\":\"list\"}]}");
+        expectFailure(pending, "code=abc&state=" + pending.state + "&client_id=oaiapp_new", "Luna ani GPT Sol");
+    }
+
+    @Test
+    public void accountWithOnlySolSignsInWithLunaMarkedUnavailable() throws Exception {
+        ChatGptOAuth.PendingSignIn pending = account.beginSignIn(REDIRECT);
+        String idToken = jwt.sign(TestJwt.claims("oaiapp_new", pending.nonce, NOW_MS / 1000 + 600));
+        http.respond(200, tokenJson(idToken, "chatgpt.tokens.use.direct"))
+                .respond(200, jwt.jwks())
+                .respond(200, "{\"models\":[{\"slug\":\"gpt-6-sol\",\"visibility\":\"list\"}]}");
+        ChatGptSession session = account.completeSignIn(pending,
+                "code=abc&state=" + pending.state + "&client_id=oaiapp_new");
+        assertEquals("", session.lunaModel);
+        assertEquals("gpt-6-sol", session.solModel);
+        assertFalse(account.isAvailable(GptModel.LUNA));
+        assertTrue(account.isAvailable(GptModel.SOL));
+    }
+
+    @Test
+    public void modelChoiceIsRemembered() {
+        account.setModelChoice(GptModel.SOL);
+        assertEquals(GptModel.SOL, account.modelChoice());
+        assertEquals(GptModel.SOL, store.modelChoice);
     }
 
     @Test
@@ -167,7 +204,7 @@ public class ChatGptAccountTest {
 
     private static ChatGptSession session(long expiresAt) {
         return new ChatGptSession("oaiapp_x", "at", "rt", "it", expiresAt, "sub",
-                "ola@example.com", "gpt-x");
+                "ola@example.com", "gpt-6-luna", "gpt-6.1-sol");
     }
 
     private void expectFailure(ChatGptOAuth.PendingSignIn pending, String query, String fragment) {

@@ -14,6 +14,11 @@ public interface ChatGptSessionStore {
     /** Signs out: forgets the session (the host id stays). */
     void clear();
 
+    /** The user's model pick; {@link GptModel#DEFAULT} until changed. Survives sign-out. */
+    GptModel modelChoice();
+
+    void saveModelChoice(GptModel model);
+
     /** Stable per-install {@code ext_agent_host_id}, created on first use. */
     String hostId();
 }

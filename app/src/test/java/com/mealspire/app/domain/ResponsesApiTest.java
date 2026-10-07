@@ -34,18 +34,54 @@ public class ResponsesApiTest {
         assertEquals(1, root.getJSONArray("input").length());
     }
 
-    @Test
-    public void picksFirstListedModel() throws IOException {
-        assertEquals("gpt-b", ResponsesApi.pickModel("{\"models\":["
-                + "{\"slug\":\"gpt-a\",\"display_name\":\"A\",\"visibility\":\"hide\"},"
-                + "{\"slug\":\"gpt-b\",\"display_name\":\"B\",\"visibility\":\"list\"},"
-                + "{\"slug\":\"gpt-c\",\"display_name\":\"C\",\"visibility\":\"list\"}]}"));
+    private static String catalog(String... slugsAndVisibility) {
+        StringBuilder sb = new StringBuilder("{\"models\":[");
+        for (int i = 0; i < slugsAndVisibility.length; i += 2) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            sb.append("{\"slug\":\"").append(slugsAndVisibility[i])
+                    .append("\",\"display_name\":\"x\",\"visibility\":\"")
+                    .append(slugsAndVisibility[i + 1]).append("\"}");
+        }
+        return sb.append("]}").toString();
     }
 
     @Test
-    public void noListedModelGivesEmpty() throws IOException {
-        assertEquals("", ResponsesApi.pickModel("{\"models\":[]}"));
-        assertEquals("", ResponsesApi.pickModel("{}"));
+    public void resolvesDocumentedLunaAndSolIds() throws IOException {
+        String models = catalog("gpt-6-astra", "list", "gpt-6.1-sol", "list", "gpt-6-luna", "list");
+        assertEquals("gpt-6-luna", ResponsesApi.resolveModel(models, GptModel.LUNA));
+        assertEquals("gpt-6.1-sol", ResponsesApi.resolveModel(models, GptModel.SOL));
+    }
+
+    @Test
+    public void prefersNewerDocumentedSol() throws IOException {
+        assertEquals("gpt-6.1-sol", ResponsesApi.resolveModel(
+                catalog("gpt-6-sol", "list", "gpt-6.1-sol", "list"), GptModel.SOL));
+        assertEquals("gpt-6-sol", ResponsesApi.resolveModel(
+                catalog("gpt-6-sol", "list"), GptModel.SOL));
+    }
+
+    @Test
+    public void picksNewestFamilyMemberFromCatalogWhenNoDocumentedIdListed() throws IOException {
+        assertEquals("gpt-6.2-luna", ResponsesApi.resolveModel(
+                catalog("gpt-5.6-luna", "list", "gpt-6.2-luna", "list"), GptModel.LUNA));
+    }
+
+    @Test
+    public void hiddenOrForeignModelsAreNeverSubstituted() throws IOException {
+        assertEquals("", ResponsesApi.resolveModel(
+                catalog("gpt-6-luna", "hide", "gpt-6-astra", "list", "lunar-x", "list"), GptModel.LUNA));
+        assertEquals("", ResponsesApi.resolveModel(catalog("gpt-6-luna", "list"), GptModel.SOL));
+        assertEquals("", ResponsesApi.resolveModel("{}", GptModel.LUNA));
+    }
+
+    @Test
+    public void lunaIsTheDefault() {
+        assertEquals(GptModel.LUNA, GptModel.DEFAULT);
+        assertEquals(GptModel.LUNA, GptModel.fromName(""));
+        assertEquals(GptModel.LUNA, GptModel.fromName("NIEZNANY"));
+        assertEquals(GptModel.SOL, GptModel.fromName("SOL"));
     }
 
     @Test

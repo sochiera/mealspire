@@ -24,7 +24,7 @@ public class ChatGptSessionStoreRobolectricTest {
     @Test
     public void sessionSurvivesNewStoreInstance() {
         newStore().save(new ChatGptSession("oaiapp_x", "at", "rt", "it", 5L, "sub",
-                "ola@example.com", "gpt-x"));
+                "ola@example.com", "gpt-6-luna", "gpt-6.1-sol"));
         assertEquals("rt", newStore().load().refreshToken);
     }
 
@@ -32,10 +32,19 @@ public class ChatGptSessionStoreRobolectricTest {
     public void clearSignsOutButKeepsHostId() {
         SharedPreferencesChatGptSessionStore store = newStore();
         String hostId = store.hostId();
-        store.save(new ChatGptSession("oaiapp_x", "at", "rt", "it", 5L, "sub", "e", "gpt-x"));
+        store.save(new ChatGptSession("oaiapp_x", "at", "rt", "it", 5L, "sub", "e", "gpt-6-luna", "gpt-6.1-sol"));
         store.clear();
         assertNull(newStore().load());
         assertEquals(hostId, newStore().hostId());
+    }
+
+    @Test
+    public void modelChoiceDefaultsToLunaAndSurvivesSignOut() {
+        SharedPreferencesChatGptSessionStore store = newStore();
+        assertEquals(com.mealspire.app.domain.GptModel.LUNA, store.modelChoice());
+        store.saveModelChoice(com.mealspire.app.domain.GptModel.SOL);
+        store.clear();
+        assertEquals(com.mealspire.app.domain.GptModel.SOL, newStore().modelChoice());
     }
 
     @Test

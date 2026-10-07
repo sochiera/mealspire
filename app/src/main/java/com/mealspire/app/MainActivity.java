@@ -76,6 +76,7 @@ import com.mealspire.app.domain.UserPreferences;
 import com.mealspire.app.domain.VersionInfo;
 import com.mealspire.app.domain.VersionInfoParser;
 import com.mealspire.app.domain.VersionJsonSource;
+import com.mealspire.app.domain.GptModel;
 import com.mealspire.app.domain.IdTokenVerifier;
 import com.mealspire.app.domain.LlmClient;
 import com.mealspire.app.net.HttpUrlTransport;
@@ -157,6 +158,7 @@ public class MainActivity extends Activity {
     private static final int REQ_POST_NOTIFICATIONS = 1001;
     static final String SIGN_IN_DIALOG_TITLE = "Zaloguj się kontem ChatGPT";
     static final String SIGN_IN_MENU_LABEL = "Zaloguj się kontem ChatGPT";
+    static final String MODEL_MENU_PREFIX = "Model AI: ";
     private static final int SIGN_IN_TIMEOUT_MS = 5 * 60 * 1000;
 
     // Test seams (package-private, null in production): replace the network
@@ -591,6 +593,26 @@ public class MainActivity extends Activity {
                 chatGptSignInRunning = false;
             }
         }).start();
+    }
+
+    /** GPT Luna (default) or GPT Sol; a model missing on the account is marked, not swapped. */
+    private void showModelChoiceDialog() {
+        final GptModel[] models = GptModel.values();
+        String[] labels = new String[models.length];
+        for (int i = 0; i < models.length; i++) {
+            labels[i] = models[i].label + (models[i] == GptModel.DEFAULT ? " (domyślny)" : "")
+                    + (chatGptAccount.isAvailable(models[i]) ? "" : " — niedostępny na Twoim koncie");
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Model AI")
+                .setSingleChoiceItems(labels, chatGptAccount.modelChoice().ordinal(),
+                        (dialog, which) -> {
+                            chatGptAccount.setModelChoice(models[which]);
+                            dialog.dismiss();
+                            toast("AI używa teraz modelu " + models[which].label + ".");
+                        })
+                .setNegativeButton("Anuluj", null)
+                .show();
     }
 
     private void signOutOfChatGpt() {
@@ -1402,6 +1424,8 @@ public class MainActivity extends Activity {
         labels.add("Zarządzaj moimi danymi");
         actions.add(this::showManageDialog);
         if (chatGptAccount.isSignedIn()) {
+            labels.add(MODEL_MENU_PREFIX + chatGptAccount.modelChoice().label);
+            actions.add(this::showModelChoiceDialog);
             String email = chatGptAccount.email();
             labels.add(email.isEmpty() ? "Wyloguj z ChatGPT" : "Wyloguj z ChatGPT (" + email + ")");
             actions.add(this::signOutOfChatGpt);

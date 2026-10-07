@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 
 import com.mealspire.app.domain.ChatGptSession;
 import com.mealspire.app.domain.ChatGptSessionStore;
+import com.mealspire.app.domain.GptModel;
 
 import java.util.UUID;
 
@@ -18,6 +19,7 @@ public final class SharedPreferencesChatGptSessionStore implements ChatGptSessio
     static final String PREFS_NAME = "mealspire_chatgpt";
     private static final String KEY_SESSION = "session";
     private static final String KEY_HOST_ID = "host_id";
+    private static final String KEY_MODEL_CHOICE = "model_choice";
 
     private final SharedPreferences sharedPreferences;
 
@@ -40,6 +42,16 @@ public final class SharedPreferencesChatGptSessionStore implements ChatGptSessio
     @Override
     public void clear() {
         sharedPreferences.edit().remove(KEY_SESSION).commit();
+    }
+
+    @Override
+    public GptModel modelChoice() {
+        return GptModel.fromName(sharedPreferences.getString(KEY_MODEL_CHOICE, ""));
+    }
+
+    @Override
+    public void saveModelChoice(GptModel model) {
+        sharedPreferences.edit().putString(KEY_MODEL_CHOICE, model.name()).apply();
     }
 
     @Override

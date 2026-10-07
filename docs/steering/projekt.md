@@ -94,8 +94,12 @@ Wszystkie teksty w UI i promptach są po polsku.
 - **Inferencja**: `ChatGptLlmClient` → `POST /v1/responses` z dozwolonymi
   wyłącznie `model`, `input`, `store:false`, `stream:true` (plan usage nie
   pozwala na `temperature`/`max_output_tokens`); prompt systemowy idzie jako
-  wiadomość `developer`. Model = pierwszy z `GET /v1/models` o
-  `visibility:"list"`, zapisany w sesji. Wymaga planu Plus/Pro.
+  wiadomość `developer`. Model: `GptModel` LUNA (domyślny) / SOL, wybór
+  użytkownika w `ChatGptSessionStore.modelChoice()` („Więcej…” → „Model AI”).
+  Slugi rozwiązywane przy logowaniu z `GET /v1/models` (`visibility:"list"`):
+  najpierw udokumentowane ID (`gpt-6-luna`; `gpt-6.1-sol`, `gpt-6-sol`), potem
+  najnowszy `gpt-N[.M]-luna|sol` z katalogu. Brak modelu = komunikat, **nigdy
+  podmiana na inny model**. Wymaga planu Plus/Pro.
   Docs: https://developers.openai.com/siwc
 - **Aktualizacje**: raz na dobę `UpdateChecker` pobiera `dist/wersja.json`
   z raw.githubusercontent (bez tokenu) i porównuje z `BuildConfig.VERSION_CODE`;

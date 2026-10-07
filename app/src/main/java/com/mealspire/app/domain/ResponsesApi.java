@@ -5,6 +5,8 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Request/response shapes of the OpenAI Responses API as allowed for ChatGPT
@@ -49,23 +51,23 @@ public final class ResponsesApi {
     }
 
     /**
-     * Picks the first model the account may use ({@code visibility == "list"}),
-     * or empty when the plan offers none (e.g. a Free account).
+     * Slug of {@code family} in the account's catalog, among models the account
+     * may use ({@code visibility == "list"}), or empty when the plan lacks it.
      */
-    public static String pickModel(String modelsJson) throws IOException {
+    public static String resolveModel(String modelsJson, GptModel family) throws IOException {
         try {
             JSONArray models = new JSONObject(modelsJson).optJSONArray("models");
-            if (models == null) {
-                return "";
-            }
-            for (int i = 0; i < models.length(); i++) {
-                JSONObject m = models.optJSONObject(i);
-                if (m != null && "list".equals(m.optString("visibility"))
-                        && !m.optString("slug").isEmpty()) {
-                    return m.optString("slug");
+            List<String> listed = new ArrayList<>();
+            if (models != null) {
+                for (int i = 0; i < models.length(); i++) {
+                    JSONObject m = models.optJSONObject(i);
+                    if (m != null && "list".equals(m.optString("visibility"))
+                            && !m.optString("slug").isEmpty()) {
+                        listed.add(m.optString("slug"));
+                    }
                 }
             }
-            return "";
+            return family.resolve(listed);
         } catch (JSONException e) {
             throw new IOException("Nieczytelna lista modeli ChatGPT.", e);
         }
