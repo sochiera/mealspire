@@ -1,0 +1,12 @@
+plugins { id 'application' }
+java { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+application { mainClass = 'com.mealspire.backend.BackendServer' }
+sourceSets.main.java {
+    srcDir '../app/src/main/java'
+    include 'com/mealspire/app/domain/**', 'com/mealspire/app/net/HttpUrlTransport.java', 'com/mealspire/app/backend/*.java', 'com/mealspire/backend/**'
+}
+dependencies {
+    // Android supplies org.json; the standalone JVM needs the same JSON implementation.
+    implementation 'org.json:json:20240303'
+    testImplementation 'junit:junit:4.13.2'
+}

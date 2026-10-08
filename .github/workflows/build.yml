@@ -28,7 +28,7 @@ jobs:
         run: ./gradlew test
 
       - name: Build debug APK package
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleDebug :backend:installDist
 
       - name: Upload debug APK
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
