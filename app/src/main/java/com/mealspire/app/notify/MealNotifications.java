@@ -6,13 +6,13 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Color;
 import android.os.Build;
 
 import com.mealspire.app.MainActivity;
 import com.mealspire.app.R;
 import com.mealspire.app.domain.MealNotificationContent;
 import com.mealspire.app.domain.MealSlot;
+import com.mealspire.app.ui.Ui;
 
 /**
  * Builds and posts the daily meal-reminder notifications and owns the
@@ -55,7 +55,7 @@ public final class MealNotifications {
         // channel, so the coloured launcher icon would degrade to a flat blob.
         Notification notification = builder(context)
                 .setSmallIcon(R.drawable.ic_notification)
-                .setColor(Color.rgb(234, 88, 12))
+                .setColor(Ui.ACCENT)
                 .setContentTitle(content.getTitle())
                 .setContentText(content.getText())
                 .setStyle(new Notification.BigTextStyle().bigText(content.getText()))

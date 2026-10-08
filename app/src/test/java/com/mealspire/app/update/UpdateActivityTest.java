@@ -3,7 +3,6 @@ package com.mealspire.app.update;
 import android.content.Intent;
 import android.content.pm.PackageInstaller;
 import android.provider.Settings;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.test.core.app.ApplicationProvider;
 import com.mealspire.app.domain.VersionInfo;
@@ -22,9 +21,8 @@ public class UpdateActivityTest {
                 new VersionInfo(999, "9.9", "https://example.invalid/update.apk", hash));
     }
     private String message(UpdateActivity activity) {
-        LinearLayout root = (LinearLayout) ((android.view.ViewGroup) activity
-                .findViewById(android.R.id.content)).getChildAt(0);
-        return ((TextView) root.getChildAt(0)).getText().toString();
+        return activity.<TextView>findViewById(com.mealspire.app.R.id.update_message)
+                .getText().toString();
     }
     @org.junit.Before public void resetWorkerGate() {
         RefreshActivity.gate = new java.util.concurrent.CountDownLatch(0);

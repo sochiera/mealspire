@@ -41,7 +41,7 @@ nic nie zasłania pierwszego pytania.
 
 ## Jeden dotyk: pora dnia → kilka propozycji
 
-Na ekranie startowym są trzy przyciski: **Śniadanie / Obiad / Kolacja**. Dotknij
+Na ekranie startowym są trzy kafelki: **Śniadanie / Obiad / Kolacja**. Dotknij
 jeden, a aplikacja od razu pokaże **trzy propozycje** dań. Każda propozycja to
 tylko: nazwa, krótki opis, przybliżony czas i kluczowe składniki — bez czekania
 na cały przepis.
@@ -50,7 +50,11 @@ Przy każdej propozycji masz trzy przyciski:
 
 - **„Pokaż przepis”** — pełny przepis na to danie.
 - **„Lubię to”** / **„Nie lubię”** — jawna ocena, z której AI uczy się Twojego
-  gustu (patrz niżej).
+  gustu (patrz niżej). Dotknięta reakcja zostaje zaznaczona na karcie.
+
+Pełny przepis jest podzielony na czytelne części: składniki jako lista, kroki
+i akapity osobno. Pod przepisem są skróty **„Lista zakupów”** i **„Zapisz
+danie”** (te same akcje co w menu „Więcej”).
 
 Pod propozycjami jest **„Inne propozycje”** — jeden dotyk podsuwa kolejny zestaw,
 więc nie musisz nic odrzucać po kolei.
@@ -169,12 +173,15 @@ dnia losuje kilka dań z wbudowanej puli i z Twojej bazy.
 Aplikacja pyta o liczbę osób **tylko przy pierwszym uruchomieniu**. Potem już
 nigdy nie pyta — pokazuje zapamiętaną wartość jako etykietę „Gotuję dla N osób”
 i dołącza ją do zapytań do AI, więc przepis jest dobrany do wielkości rodziny.
-Liczbę osób można w każdej chwili zmienić w menu **„Więcej…” → „Zmień liczbę
-osób”**. Ustawienie przeżywa obrót ekranu i restart aplikacji.
+Liczbę osób można w każdej chwili zmienić, dotykając tej etykiety albo w menu
+**„Więcej…” → „Zmień liczbę osób”**. Obok jest etykieta trybu: **„Tryb
+offline”** albo **„AI · <model>”** — dotknięcie prowadzi do logowania, adresu
+serwera albo wyboru modelu. Ustawienie przeżywa obrót ekranu i restart aplikacji.
 
 ## Menu „Więcej…”
 
-Aby utrzymać główny ekran prostym, dodatkowe akcje są pod przyciskiem „Więcej…”:
+Aby utrzymać główny ekran prostym, dodatkowe akcje są pod przyciskiem „Więcej”
+(trzy kropki w prawym górnym rogu):
 
 - **Zmień liczbę osób** — zmienia zapamiętaną liczbę osób, dla których gotujesz.
 - **Profil domowników** — zmienia odpowiedzi z quizu startowego (dla kogo

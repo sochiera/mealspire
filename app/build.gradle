@@ -51,6 +51,11 @@ android {
     testOptions {
         unitTests {
             includeAndroidResources = true
+            // Opt-in UI screenshots (UiScreenshotTest): ./gradlew testDebugUnitTest -Pscreenshots
+            all {
+                systemProperty "mealspire.screenshots",
+                        project.hasProperty("screenshots") ? "${buildDir}/screenshots" : ""
+            }
         }
     }
 }

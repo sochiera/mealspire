@@ -11,6 +11,17 @@
 - APK wyjściowy: `app/build/outputs/apk/debug/app-debug.apk` (~80 KB — appka
   nie ma zależności runtime poza platformą).
 
+## Podgląd UI bez emulatora
+
+```bash
+./gradlew testDebugUnitTest -Pscreenshots --tests '*UiScreenshotTest'
+```
+
+Robolectric (grafika natywna) renderuje quiz, ekran startowy, propozycje,
+przepis, baner i ekran aktualizacji oraz ikonę do `app/build/screenshots/*.png`.
+Bez `-Pscreenshots` test jest pomijany. Ścieżka AI nie jest renderowana
+(testy nie wołają sieci).
+
 ## Zbudowana appka w repo — checklist wydania
 
 W `dist/mealspire-debug.apk` trzymamy **aktualny debug APK**, a w

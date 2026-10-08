@@ -10,7 +10,13 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.content.res.ColorStateList;
+import android.graphics.Outline;
+import android.view.View;
+import android.view.ViewOutlineProvider;
 import android.widget.Button;
+import android.widget.ImageView;
+import android.widget.ScrollView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -19,6 +25,7 @@ import com.mealspire.app.domain.VersionInfo;
 import com.mealspire.app.domain.VersionInfoParser;
 import com.mealspire.app.net.HttpVersionJsonFetcher;
 import com.mealspire.app.storage.SharedPreferencesUpdateStateStore;
+import com.mealspire.app.ui.Ui;
 
 /** Foreground, user-initiated update. No exported component or public file URI. */
 public class UpdateActivity extends Activity {
@@ -44,22 +51,52 @@ public class UpdateActivity extends Activity {
         installer = createInstaller();
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
-        int padding = (int) (24 * getResources().getDisplayMetrics().density);
-        layout.setPadding(padding, padding, padding, padding);
-        message = new TextView(this);
-        message.setTextSize(18);
+        layout.setBackgroundColor(Ui.BACKGROUND);
+        layout.setPadding(Ui.dp(this, 20), Ui.dp(this, 28), Ui.dp(this, 20), Ui.dp(this, 24));
+
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(com.mealspire.app.R.drawable.ic_brand_mark);
+        logo.setScaleType(ImageView.ScaleType.FIT_XY);
+        final int corner = Ui.dp(this, 16);
+        logo.setOutlineProvider(new ViewOutlineProvider() {
+            @Override public void getOutline(View view, Outline outline) {
+                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), corner);
+            }
+        });
+        logo.setClipToOutline(true);
+        layout.addView(logo, new LinearLayout.LayoutParams(Ui.dp(this, 56), Ui.dp(this, 56)));
+        layout.addView(Ui.headline(this, "Aktualizacja Mealspire", 26), Ui.marginTop(this, 18));
+
+        LinearLayout card = Ui.card(this);
+        message = Ui.body(this, "");
+        message.setId(com.mealspire.app.R.id.update_message);
+        message.setTextSize(17);
+        card.addView(message, Ui.matchWrap());
         progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progress.setProgressTintList(ColorStateList.valueOf(Ui.ACCENT));
+        progress.setIndeterminateTintList(ColorStateList.valueOf(Ui.ACCENT));
+        progress.setProgressBackgroundTintList(ColorStateList.valueOf(Ui.OUTLINE));
+        card.addView(progress, Ui.marginTop(this, 14));
+        layout.addView(card, Ui.marginTop(this, 18));
+
         retry = new Button(this);
         retry.setText("Spróbuj ponownie");
+        Ui.primary(retry);
         retry.setOnClickListener(v -> requestInstall());
         Button cancel = new Button(this);
         cancel.setText("Wróć do Mealspire");
+        Ui.ghost(cancel);
         cancel.setOnClickListener(v -> finish());
-        layout.addView(message);
-        layout.addView(progress);
-        layout.addView(retry);
-        layout.addView(cancel);
-        setContentView(layout);
+        layout.addView(retry, Ui.marginTop(this, 18));
+        layout.addView(cancel, Ui.marginTop(this, 8));
+        TextView note = Ui.text(this, "Pobrany plik jest sprawdzany (SHA-256), a instalację "
+                + "zawsze potwierdzasz w oknie systemowym. Twoje dane zostają.", 13, Ui.INK_SOFT);
+        layout.addView(note, Ui.marginTop(this, 20));
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setBackgroundColor(Ui.BACKGROUND);
+        scroll.addView(layout);
+        setContentView(scroll);
         if (state != null && state.getBoolean("committed")) {
             committed = true;
             sessionId = state.getInt("session", -1);
