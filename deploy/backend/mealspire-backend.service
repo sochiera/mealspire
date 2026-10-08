@@ -1,0 +1,33 @@
+# Mealspire backend API /v1 (sochiera.pl/mealspire-api/ via nginx TLS).
+# Release dirs: /opt/mealspire/releases/<sha>; /opt/mealspire/current -> active.
+# Rollback: repoint current to the previous release and restart this unit.
+[Unit]
+Description=Mealspire backend API v1 (loopback 127.0.0.1:8794)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mealspire
+Group=mealspire
+Environment=MEALSPIRE_PORT=8794
+Environment=JAVA_HOME=/opt/mealspire/current/runtime
+ExecStart=/opt/mealspire/current/runtime/bin/java -Xmx192m -XX:+ExitOnOutOfMemoryError -cp /opt/mealspire/current/backend/lib/* com.mealspire.backend.BackendServer
+Restart=on-failure
+RestartSec=3
+MemoryMax=400M
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

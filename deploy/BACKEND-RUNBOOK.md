@@ -2,7 +2,7 @@
 
 Host wskazany przez Jana: `ubuntu@51.83.199.206`, klucz lokalny
 `~/.ssh/pbn_vps`. Host obsługuje istniejące usługi i homepage; nie zmieniaj ich.
-Ta karta przygotowuje implementację i PR, bez merge, produkcji i publikacji APK.
+Wdrożenie produkcyjne backendu opisuje sekcja niżej; publikacja APK to osobny proces.
 Dotychczasowy `RUNBOOK.md` dotyczy wydania APK i pozostaje osobnym procesem.
 
 ## Przygotowanie lokalne
@@ -21,8 +21,9 @@ Bez sudo, instalowania pakietów, kontenerów, konfiguracji Nginx i restartów.
 Wymagane: SSH/SCP, Python 3 na VPS, wolne miejsce w /tmp, zgodna architektura x86_64.
 Sprawdź aktualnie `uname -m`, `df -h /tmp`, możliwość wykonania plików w /tmp.
 Przygotuj własne minimalne środowisko Java poleceniem `$JAVA_HOME/bin/jlink
---add-modules java.base,jdk.httpserver --strip-debug --no-header-files
---no-man-pages --output /LOKALNY-KATALOG/runtime`.
+--add-modules java.base,jdk.httpserver,jdk.crypto.ec --strip-debug --no-header-files
+--no-man-pages --output /LOKALNY-KATALOG/runtime`. Na JDK 17 `jdk.crypto.ec`
+jest wymagany: bez niego TLS do OpenAI zawodzi i każde żądanie AI kończy się 502.
 Umieść runtime, backend z installDist i `backend-smoke.py` w jednym archiwum
 (katalogi `runtime`, `backend`, plik `backend-smoke.py`). Nie dołączaj sekretów.
 
@@ -58,7 +59,33 @@ adresu nie zapisuje się. Zgoda/adres/cache nie podlegają backupowi.
 Gust, domownicy, historia, zapisane przepisy i baner aktualizacji APK zachowują
 istniejące magazyny. Cache przepisu w ekranie pozostaje bez ponownego żądania.
 
-## Przyszłe wdrożenie produkcyjne (dopiero po ship-it)
+## Wdrożenie produkcyjne (2026-10-08, main 2fa096f)
+
+Adres w aplikacji: `https://sochiera.pl/mealspire-api` (TLS istniejącego vhostu
+`sochiera.pl`; osobna subdomena wymagałaby nowego rekordu DNS i certyfikatu).
+Pliki w `deploy/backend/`:
+- `mealspire-backend.service` → `/etc/systemd/system/`; użytkownik systemowy
+  `mealspire` (nologin), port 127.0.0.1:8794, utwardzony sandbox, MemoryMax 400M.
+- `mealspire-api-limits.conf` → `/etc/nginx/conf.d/` (limit 30/min na IP, burst 20,
+  4 połączenia na IP).
+- `mealspire-api.conf` → `/etc/nginx/snippets/`, dołączony w vhoście TLS
+  (`/etc/nginx/sites-enabled/pbn`) linią `include` zaraz po `forge.conf`.
+  Body 256 KiB, timeout body 10s, proxy 240s, bez access logu.
+
+Release: archiwum `runtime/` + `backend/` + `REVISION` rozpakowane jako root do
+`/opt/mealspire/releases/<krótki-sha>`; `/opt/mealspire/current` to symlink na
+aktywny release. Nowa wersja: rozpakuj nowy katalog, `ln -sfn` current,
+`systemctl restart mealspire-backend`, sprawdź `/health`, `/v1/catalog` i żądanie
+z fałszywym tokenem (oczekiwane 401 `unauthorized` = TLS do OpenAI działa;
+502 = brak `jdk.crypto.ec` lub awaria upstream).
+
+Rollback backendu: `ln -sfn` current na poprzedni release i restart usługi.
+Wycofanie całości: `systemctl disable --now mealspire-backend`, przywróć
+`/root/nginx-backup-mealspire-20261008/pbn.orig` do `sites-enabled/pbn`, usuń
+oba pliki nginx Mealspire, `nginx -t` i `systemctl reload nginx`.
+Nie dotykaj pozostałych bloków vhostu, usług `ew-web`, `pbn-test-tunnel` ani Dockera.
+
+## Wymagania produkcyjne
 
 Przygotuj osobną usługę/user i katalog wersjonowanych release backendu; nigdy
 nie nadpisuj katalogów homepage/ew/PBN. `MEALSPIRE_PORT` wybiera osobny port
