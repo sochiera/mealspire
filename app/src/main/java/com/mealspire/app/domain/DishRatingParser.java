@@ -75,6 +75,9 @@ public final class DishRatingParser {
             return null;
         }
         String reason = item.optString("powod", item.optString("powód", "")).trim();
+        if (reason.isEmpty()) {
+            return null; // ocena bez jednozdaniowego powodu nie spełnia kontraktu
+        }
         if (reason.length() > MAX_REASON) {
             reason = reason.substring(0, MAX_REASON - 1).trim() + "…";
         }

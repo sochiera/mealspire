@@ -37,8 +37,8 @@ public class DishRatingParserTest {
 
     @Test
     public void clampsScoreToZeroTen() throws Exception {
-        List<DishRating> ratings = parser.parse("{\"oceny\":[{\"danie\":\"A\",\"ocena\":14},"
-                + "{\"danie\":\"B\",\"ocena\":-2}]}");
+        List<DishRating> ratings = parser.parse("{\"oceny\":[{\"danie\":\"A\",\"ocena\":14,\"powod\":\"a\"},"
+                + "{\"danie\":\"B\",\"ocena\":-2,\"powod\":\"b\"}]}");
 
         assertEquals(10, ratings.get(0).getScore());
         assertEquals(0, ratings.get(1).getScore());
@@ -47,7 +47,8 @@ public class DishRatingParserTest {
     @Test
     public void skipsBrokenItemsButKeepsValidOnes() throws Exception {
         List<DishRating> ratings = parser.parse("{\"oceny\":[{\"danie\":\"\",\"ocena\":5},"
-                + "{\"danie\":\"Bez oceny\"},\"tekst\",{\"danie\":\"Zupa\",\"ocena\":6}]}");
+                + "{\"danie\":\"Bez oceny\"},\"tekst\",{\"danie\":\"Bez powodu\",\"ocena\":7},"
+                + "{\"danie\":\"Zupa\",\"ocena\":6,\"powod\":\"Ciepła.\"}]}");
 
         assertEquals(1, ratings.size());
         assertEquals("Zupa", ratings.get(0).getDish());
@@ -58,6 +59,7 @@ public class DishRatingParserTest {
         assertUnreadable("{\"oceny\":[{\"danie\":\"Zupa\",\"ocena\":");
         assertUnreadable("Nie potrafię ocenić tych dań.");
         assertUnreadable("{\"oceny\":[]}");
+        assertUnreadable("{\"oceny\":[{\"danie\":\"Omlet\",\"ocena\":8}]}");
         assertUnreadable("");
         assertUnreadable(null);
     }

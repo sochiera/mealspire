@@ -69,17 +69,20 @@ public final class BackendServer implements AutoCloseable {
         if (!model.matches("gpt-[0-9]+(?:\\.[0-9]+)?-(?:luna|sol)")) throw new ApiError(400, "invalid_model");
         JSONObject request = body.optJSONObject("request");
         if (body.has("request") && request == null) throw new ApiError(400, "invalid_request");
-        JSONObject household = request == null ? body.optJSONObject("household") : request.optJSONObject("household");
-        if ((request != null && request.has("household") && household == null)
+        if ((request != null && request.has("household") && request.optJSONObject("household") == null)
                 || (body.has("household") && body.optJSONObject("household") == null)) throw new ApiError(400, "invalid_diet");
-        if (household != null && household.has("exclusions")) {
-            JSONArray exclusions = household.optJSONArray("exclusions");
-            if (exclusions == null) throw new ApiError(400, "invalid_diet");
-            for (int i=0; i<exclusions.length(); i++) if (!(exclusions.opt(i) instanceof String)) throw new ApiError(400, "invalid_diet");
-        }
-        if (household != null) for (String exclusion : BackendCodec.strings(household.optJSONArray("exclusions"))) {
-            try { DietConstraints.Exclusion.valueOf(exclusion); }
-            catch (IllegalArgumentException e) { throw new ApiError(400, "unsupported_diet"); }
+        // Waliduj każdy obiekt household, którego może użyć endpoint (request.* albo główny).
+        for (JSONObject household : new JSONObject[] { body.optJSONObject("household"), request == null ? null : request.optJSONObject("household") }) {
+            if (household == null) continue;
+            if (household.has("exclusions")) {
+                JSONArray exclusions = household.optJSONArray("exclusions");
+                if (exclusions == null) throw new ApiError(400, "invalid_diet");
+                for (int i=0; i<exclusions.length(); i++) if (!(exclusions.opt(i) instanceof String)) throw new ApiError(400, "invalid_diet");
+            }
+            for (String exclusion : BackendCodec.strings(household.optJSONArray("exclusions"))) {
+                try { DietConstraints.Exclusion.valueOf(exclusion); }
+                catch (IllegalArgumentException e) { throw new ApiError(400, "unsupported_diet"); }
+            }
         }
         if (request != null) mealIndex(request.optString("mealType", "Śniadanie"));
         int count = body.optInt("count", 3); if (count < 1 || count > 6) throw new ApiError(400, "invalid_count");

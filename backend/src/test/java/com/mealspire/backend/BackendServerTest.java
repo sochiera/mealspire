@@ -105,6 +105,9 @@ public class BackendServerTest {
         int before = calls.get();
         assertEquals(400, send("/v1/rate", "{\"model\":\"gpt-6-luna\",\"mealType\":\"Obiad\",\"candidates\":" + many + "]}", "test-access").statusCode());
         assertEquals(401, send("/v1/rate", body, null).statusCode());
+        // Dieta faktycznie używana przez endpoint musi przejść walidację, nawet obok "request".
+        assertEquals(400, send("/v1/rate", body.replace("[\"NO_PORK\"]", "\"NO_PORK\"").replace("{\"model\"", "{\"request\":{},\"model\""), "test-access").statusCode());
+        assertEquals(400, send("/v1/rate", body.replace("NO_PORK", "FUTURE_ALLERGY").replace("{\"model\"", "{\"request\":{},\"model\""), "test-access").statusCode());
         assertEquals(before, calls.get());
     }
     @Test public void androidTaskClientUsesRealHttpForAllOperations() throws Exception {

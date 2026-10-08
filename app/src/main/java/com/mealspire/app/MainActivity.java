@@ -1633,6 +1633,11 @@ public class MainActivity extends Activity {
                     cookbookStore.save(cookbook);
                     preferences = preferences.withLike(entry.getTitle());
                     preferenceStore.save(preferences);
+                    // Dodanie znanego i lubianego dania to jawne „lubię" dla oceny LLM.
+                    reactions = reactions.append(new DishReaction(entry.getTitle(),
+                            DishReaction.describe(entry.getRecipe()), true,
+                            System.currentTimeMillis()));
+                    reactionStore.save(reactions);
                     recordTasteEvent(TasteEvent.Type.IMPORTED, entry.getTitle(),
                             TasteEvent.NO_MEAL);
                     Toast.makeText(MainActivity.this,

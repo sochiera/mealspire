@@ -9,6 +9,8 @@ import android.widget.TextView;
 
 import androidx.test.core.app.ApplicationProvider;
 
+import com.mealspire.app.domain.CookbookEntry;
+import com.mealspire.app.domain.DishImporter;
 import com.mealspire.app.domain.DishReaction;
 import com.mealspire.app.domain.DishReactionLog;
 import com.mealspire.app.storage.SharedPreferencesDishReactionStore;
@@ -17,6 +19,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.shadows.ShadowLooper;
+import org.robolectric.util.ReflectionHelpers;
 
 /**
  * „Lubię to" / „Nie lubię" dopisują jawną reakcję do listy; otwarcie przepisu
@@ -95,5 +99,25 @@ public class DishReactionRecordingRobolectricTest {
         assertEquals(1, reactions.size());
         assertEquals(dish, reactions.all().get(0).getDish());
         assertFalse(reactions.all().get(0).isLiked());
+    }
+
+    @Test
+    public void dodanieZnanegoDaniaToReakcjaLubie() throws Exception {
+        MainActivity activity = Robolectric.buildActivity(MainActivity.class).setup().get();
+        DishImporter importer = input -> new CookbookEntry("Bigos domowy",
+                "Składniki: kapusta, grzyby\n\n1. Duś.", "opis");
+        ReflectionHelpers.setField(activity, "dishImporter", importer);
+
+        ReflectionHelpers.callInstanceMethod(activity, "importKnownDish",
+                ReflectionHelpers.ClassParameter.from(String.class, "Bigos"));
+        for (int i = 0; i < 200 && loadReactions().size() == 0; i++) {
+            Thread.sleep(10);
+            ShadowLooper.idleMainLooper();
+        }
+
+        DishReactionLog reactions = loadReactions();
+        assertEquals(1, reactions.size());
+        assertEquals("Bigos domowy", reactions.all().get(0).getDish());
+        assertTrue(reactions.all().get(0).isLiked());
     }
 }
