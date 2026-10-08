@@ -3,8 +3,10 @@
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="sharedpref" path="mealspire_chatgpt.xml" />
+        <exclude domain="sharedpref" path="mealspire_backend.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="mealspire_chatgpt.xml" />
+        <exclude domain="sharedpref" path="mealspire_backend.xml" />
     </device-transfer>
 </data-extraction-rules>

@@ -22,7 +22,7 @@ public final class DishRatingPromptBuilder {
     }
 
     public String userPrompt(String mealType, List<DishReaction> reactionsNewestFirst,
-                             List<Recipe> candidates, long now) {
+                             List<DishProposal> candidates, long now) {
         StringBuilder sb = new StringBuilder();
         sb.append("Posiłek: ").append(mealType).append(".\n\n");
         if (reactionsNewestFirst.isEmpty()) {
@@ -41,9 +41,9 @@ public final class DishRatingPromptBuilder {
             sb.append('\n');
         }
         sb.append("Kandydaci:\n");
-        for (Recipe candidate : candidates) {
-            sb.append("- ").append(candidate.getTitle());
-            String description = DishReaction.describe(candidate.getDetails());
+        for (DishProposal candidate : candidates) {
+            sb.append("- ").append(candidate.getName());
+            String description = candidate.getDescription();
             if (!description.isEmpty()) {
                 sb.append(" (").append(description).append(')');
             }

@@ -104,8 +104,9 @@ propozycje” nią nie są. „Nie lubię” nie jest zakazem: danie nie znika z
 AI po prostu oceni je (i podobne) niżej. Twarde zakazy to wyłącznie wykluczenia
 diety z profilu domowników.
 
-**Zalogowany kontem ChatGPT** — przy każdym „Śniadanie / Obiad / Kolacja” i
-„Inne propozycje” aplikacja robi **jedno** wywołanie AI: wysyła ograniczoną
+**Zalogowany kontem ChatGPT (i ze skonfigurowanym Serwerem Mealspire)** — przy
+każdym „Śniadanie / Obiad / Kolacja” i „Inne propozycje” aplikacja robi
+**jedno** wywołanie AI przez serwer (`/v1/rate`): wysyła ograniczoną
 listę ostatnich reakcji (nowsze ważą więcej) i kilkunastu kandydatów z
 wbudowanej bazy oraz Twojej bazy dań (nazwa + skład, już przefiltrowanych
 dietą). AI ocenia każdego kandydata od 0 do 10 według smaku, składników i
@@ -317,3 +318,20 @@ Projekt jest udostępniony na licencji **PolyForm Noncommercial License 1.0.0** 
 możesz go używać, modyfikować i rozpowszechniać **za darmo do celów
 niekomercyjnych**. Użycie komercyjne wymaga osobnej zgody autora. Pełny tekst
 znajdziesz w pliku [`LICENSE.md`](LICENSE.md).
+
+## Backend VPS (przygotowanie przed wydaniem)
+
+Nowy klient wykonuje operacje AI przez konfigurowalny serwer HTTPS: „Więcej…”
+→ „Serwer Mealspire”. Po zgodzie serwer otrzymuje krótkotrwały token ChatGPT
+i dane gustu; logowanie i odświeżanie sesji zostają na telefonie. Pusty adres
+włącza offline. Katalog backendu zapisuje się na telefonie; awaria serwera
+nie usuwa cache, przepisów ani polubień. Powiadomienia działają bez sieci.
+
+Katalog, ocena gustu LLM, propozycje, przepisy, zmiany i import obsługuje
+moduł JVM `backend`. Link podczas importu jest traktowany jako opis, bez
+pobierania HTML na VPS. Zmiany promptów i katalogu wymagają redeployu
+backendu; zmiany UI/uprawnień Androida mogą nadal wymagać nowego APK.
+
+[Kontrakt API](docs/design/backend-api.md) i
+[bezpieczny test/wdrożenie OVH](deploy/BACKEND-RUNBOOK.md).
+Przygotowany PR nie uruchamia produkcyjnego API i nie publikuje APK.

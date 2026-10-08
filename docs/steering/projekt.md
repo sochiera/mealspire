@@ -137,3 +137,12 @@ Wszystkie teksty w UI i promptach są po polsku.
   Każde cofnięcie podbija `contentEpoch`. **Nie włączać**
   `android:enableOnBackInvokedCallback` w manifeście — wtedy `onBackPressed()`
   przestaje być wołane.
+
+## Backend VPS
+
+Online MainActivity używa `BackendClient` (operacje `/v1`), a `RecipeService`
+i prompty wykonuje moduł JVM `backend`. Android nie ma nowych zależności.
+Samodzielny JVM korzysta z org.json jako odpowiednika platformowej biblioteki
+Android. Offline, quiz, magazyny i aktualizator pozostają lokalne.
+Kontrakt: `docs/design/backend-api.md`; staging: `deploy/BACKEND-RUNBOOK.md`.
+Przed ship-it brak automatycznie skonfigurowanego endpointu produkcyjnego.

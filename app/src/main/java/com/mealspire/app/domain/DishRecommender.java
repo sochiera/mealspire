@@ -12,9 +12,9 @@ import java.util.Random;
 import java.util.Set;
 
 /**
- * Decyzja „co pokazać" po zalogowaniu: jedno wywołanie LLM ocenia kandydatów
- * względem jawnych reakcji, aplikacja odrzuca naruszenia diety i bierze
- * najwyżej ocenione. Bez logowania, przy błędzie sieci albo złym JSON-ie —
+ * Decyzja „co pokazać" po zalogowaniu: jedno wywołanie LLM (przez backend)
+ * ocenia kandydatów względem jawnych reakcji, aplikacja odrzuca naruszenia
+ * diety i bierze najwyżej ocenione. Bez logowania, przy błędzie sieci albo złym JSON-ie —
  * gotowa pula offline, bez udawania, że oceniał ją model.
  */
 public final class DishRecommender {
@@ -24,15 +24,10 @@ public final class DishRecommender {
     /** Ilu kandydatów model ocenia w jednym wywołaniu. */
     public static final int MAX_CANDIDATES = 12;
 
-    private final LlmClient llmClient;
-    private final DishRatingPromptBuilder promptBuilder;
-    private final DishRatingParser parser;
+    private final DishRater rater;
 
-    public DishRecommender(LlmClient llmClient, DishRatingPromptBuilder promptBuilder,
-                           DishRatingParser parser) {
-        this.llmClient = llmClient;
-        this.promptBuilder = promptBuilder;
-        this.parser = parser;
+    public DishRecommender(DishRater rater) {
+        this.rater = rater;
     }
 
     /** Wynik: przepisy do pokazania i (równolegle) powód od modelu, "" gdy offline. */
@@ -99,10 +94,8 @@ public final class DishRecommender {
         }
         List<DishRating> ratings;
         try {
-            String answer = llmClient.complete(promptBuilder.systemPrompt(),
-                    promptBuilder.userPrompt(mealType, reactions.latestPerDish(MAX_REACTIONS),
-                            candidates, now));
-            ratings = parser.parse(answer);
+            ratings = rater.rate(mealType, reactions.latestPerDish(MAX_REACTIONS),
+                    describe(candidates), diet, now);
         } catch (IOException | RuntimeException e) {
             return fill(new ArrayList<Recipe>(), new ArrayList<String>(), offline, count, true);
         }
@@ -144,6 +137,16 @@ public final class DishRecommender {
             }
             result.add(new DishRating(recipe.getTitle(), rating.getScore(),
                     rating.getReason()));
+        }
+        return result;
+    }
+
+    /** Kandydat do promptu: tylko nazwa i krótki skład, bez pełnego przepisu. */
+    static List<DishProposal> describe(List<Recipe> candidates) {
+        List<DishProposal> result = new ArrayList<>();
+        for (Recipe recipe : candidates) {
+            result.add(new DishProposal(recipe.getTitle(),
+                    DishReaction.describe(recipe.getDetails()), "", null));
         }
         return result;
     }

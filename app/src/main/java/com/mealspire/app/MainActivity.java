@@ -1,5 +1,9 @@
 package com.mealspire.app;
 
+import com.mealspire.app.domain.RecipeOperations;
+import com.mealspire.app.domain.DishImporter;
+import com.mealspire.app.storage.SharedPreferencesBackendStore;
+import com.mealspire.app.backend.BackendClient;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
@@ -25,7 +29,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.mealspire.app.domain.ChatGptAccount;
-import com.mealspire.app.domain.ChatGptLlmClient;
 import com.mealspire.app.domain.ChatGptOAuth;
 import com.mealspire.app.domain.AppSettings;
 import com.mealspire.app.domain.BackNavigation;
@@ -35,8 +38,6 @@ import com.mealspire.app.domain.CookbookStore;
 import com.mealspire.app.domain.DataManager;
 import com.mealspire.app.domain.DietConstraints;
 import com.mealspire.app.domain.DishProposal;
-import com.mealspire.app.domain.DishRatingParser;
-import com.mealspire.app.domain.DishRatingPromptBuilder;
 import com.mealspire.app.domain.DishReaction;
 import com.mealspire.app.domain.DishReactionLog;
 import com.mealspire.app.domain.DishReactionStore;
@@ -44,8 +45,6 @@ import com.mealspire.app.domain.DishRecommender;
 import com.mealspire.app.domain.MealPoolBuilder;
 import com.mealspire.app.domain.HouseholdProfile;
 import com.mealspire.app.domain.HouseholdProfileStore;
-import com.mealspire.app.domain.KnownDishImporter;
-import com.mealspire.app.domain.KnownDishPromptBuilder;
 import com.mealspire.app.domain.LearningStats;
 import com.mealspire.app.domain.LearningStatsStore;
 import com.mealspire.app.domain.BuiltInRecipes;
@@ -58,10 +57,7 @@ import com.mealspire.app.domain.MealHistory;
 import com.mealspire.app.domain.MealHistoryStore;
 import com.mealspire.app.domain.PreferenceStore;
 import com.mealspire.app.domain.Recipe;
-import com.mealspire.app.domain.RecipePromptBuilder;
 import com.mealspire.app.domain.RecipeRequest;
-import com.mealspire.app.domain.RecipeService;
-import com.mealspire.app.domain.RecipeTextParser;
 import com.mealspire.app.domain.DishTagger;
 import com.mealspire.app.domain.FrozenTasteAggregate;
 import com.mealspire.app.domain.MonotonyDetector;
@@ -83,10 +79,8 @@ import com.mealspire.app.domain.VersionInfoParser;
 import com.mealspire.app.domain.VersionJsonSource;
 import com.mealspire.app.domain.GptModel;
 import com.mealspire.app.domain.IdTokenVerifier;
-import com.mealspire.app.domain.LlmClient;
 import com.mealspire.app.net.HttpUrlTransport;
 import com.mealspire.app.net.LoopbackCallbackServer;
-import com.mealspire.app.net.HttpPageFetcher;
 import com.mealspire.app.net.HttpVersionJsonFetcher;
 import com.mealspire.app.notify.MealNotifications;
 import com.mealspire.app.notify.MealReminderScheduler;
@@ -182,7 +176,9 @@ public class MainActivity extends Activity {
     private ChatGptAccount chatGptAccount;
     // Guards against a second browser sign-in while one is waiting for its redirect.
     private volatile boolean chatGptSignInRunning;
-    private RecipeService recipeService;
+    private RecipeOperations recipeService;
+    private SharedPreferencesBackendStore backendStore;
+    private BackendClient backendClient;
     private DishRecommender dishRecommender;
     private PreferenceStore preferenceStore;
     private UserPreferences preferences;
@@ -190,7 +186,7 @@ public class MainActivity extends Activity {
     private MealHistory history;
     private CookbookStore cookbookStore;
     private Cookbook cookbook;
-    private KnownDishImporter dishImporter;
+    private DishImporter dishImporter;
     private DataManager dataManager;
     private HouseholdProfileStore householdProfileStore;
     private HouseholdProfile householdProfile;
@@ -537,17 +533,15 @@ public class MainActivity extends Activity {
         chatGptAccount = new ChatGptAccount(new SharedPreferencesChatGptSessionStore(this),
                 transport, new ChatGptOAuth(new SecureRandom()), new IdTokenVerifier(),
                 System::currentTimeMillis);
-        LlmClient llmClient = new ChatGptLlmClient(chatGptAccount, transport);
-        recipeService = new RecipeService(llmClient, new RecipePromptBuilder(),
-                new RecipeTextParser());
-        dishRecommender = new DishRecommender(llmClient, new DishRatingPromptBuilder(),
-                new DishRatingParser());
-        dishImporter = new KnownDishImporter(llmClient, new HttpPageFetcher(),
-                new KnownDishPromptBuilder(), new RecipeTextParser());
+        backendStore = new SharedPreferencesBackendStore(this);
+        backendClient = new BackendClient(backendStore, chatGptAccount, transport);
+        recipeService = backendClient;
+        dishRecommender = new DishRecommender(backendClient);
+        dishImporter = backendClient;
     }
 
     private boolean isAiAvailable() {
-        return chatGptAccount.isSignedIn();
+        return chatGptAccount.isSignedIn() && !backendStore.baseUrl().isEmpty();
     }
 
     private void offerChatGptSignIn() {
@@ -901,11 +895,8 @@ public class MainActivity extends Activity {
         // From now on the content area belongs to the proposal flow, so back
         // (even while the AI is still thinking) returns to the start screen.
         currentScreen = BackNavigation.Screen.PROPOSALS;
-        if (isAiAvailable()) {
-            generateRatedProposals();
-        } else {
-            generateOfflineProposals();
-        }
+        refreshCatalog(isAiAvailable()
+                ? this::generateRatedProposals : this::generateOfflineProposals);
     }
 
     private void generateOfflineProposals() {
@@ -926,7 +917,7 @@ public class MainActivity extends Activity {
     /** The shared offline pipeline for the current meal, diet-filtered. */
     private List<Recipe> generateOfflineRecipes() {
         return offlineProposalGenerator.generate(
-                BuiltInRecipes.forMeal(currentMealIndex), cookbook, preferences,
+                backendStore.forMeal(currentMealIndex), cookbook, preferences,
                 buildTasteProfile(), PROPOSAL_COUNT, random, history,
                 System.currentTimeMillis(), householdProfile.getDiet());
     }
@@ -952,7 +943,7 @@ public class MainActivity extends Activity {
         final DietConstraints diet = householdProfile.getDiet();
         final long now = System.currentTimeMillis();
         final List<Recipe> candidates = DishRecommender.candidates(
-                mealPoolBuilder.build(BuiltInRecipes.forMeal(currentMealIndex), cookbook,
+                mealPoolBuilder.build(backendStore.forMeal(currentMealIndex), cookbook,
                         preferences, diet),
                 history, now, random);
         final List<Recipe> offline = generateOfflineRecipes();
@@ -1377,7 +1368,7 @@ public class MainActivity extends Activity {
             return;
         }
         if (!isAiAvailable()) {
-            Toast.makeText(this, "Zmiana przepisu wymaga zalogowania kontem ChatGPT.",
+            Toast.makeText(this, "Zmiana przepisu wymaga konta ChatGPT i serwera Mealspire.",
                     Toast.LENGTH_LONG).show();
             return;
         }
@@ -1439,6 +1430,8 @@ public class MainActivity extends Activity {
             labels.add("Lista zakupów");
             actions.add(this::showShoppingList);
         }
+        labels.add("Serwer Mealspire");
+        actions.add(this::showBackendDialog);
         labels.add("Zmień liczbę osób");
         actions.add(() -> showServingsDialog(true));
         labels.add("Profil domowników");
@@ -1463,6 +1456,34 @@ public class MainActivity extends Activity {
                 .setItems(labels.toArray(new String[0]),
                         (dialog, which) -> actions.get(which).run())
                 .show();
+    }
+
+    private void showBackendDialog() {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setHint("https://serwer/mealspire-api");
+        input.setText(backendStore.baseUrl());
+        new AlertDialog.Builder(this).setTitle("Serwer Mealspire")
+                .setMessage("Serwer otrzyma dane gustu i krótkotrwały token dostępu ChatGPT, aby tworzyć dania. Używaj tylko zaufanego serwera. Pusty adres włącza tryb offline.")
+                .setView(input).setNegativeButton("Anuluj", null)
+                .setPositiveButton("Zapisz i zezwól", (dialog, which) -> {
+                    try {
+                        backendStore.configure(input.getText().toString());
+                        contentEpoch++;
+                        refreshCatalog(null);
+                    } catch (IllegalArgumentException e) { Toast.makeText(this, e.getMessage(), Toast.LENGTH_LONG).show(); }
+                }).show();
+    }
+
+    private void refreshCatalog(Runnable after) {
+        if (!backendStore.needsCatalog()) { if (after != null) after.run(); return; }
+        final String endpoint = backendStore.baseUrl();
+        final int epoch = contentEpoch;
+        new Thread(() -> {
+            try { backendStore.cache(endpoint, backendClient.catalog()); }
+            catch (IOException ignored) { /* Last catalog or bootstrap remains available. */ }
+            runOnUiThread(() -> { if (epoch == contentEpoch && after != null) after.run(); });
+        }).start();
     }
 
     // ----- Household profile (answers from the onboarding quiz) ------------
@@ -1579,7 +1600,7 @@ public class MainActivity extends Activity {
 
     private void showAddKnownDishDialog() {
         if (!isAiAvailable()) {
-            Toast.makeText(this, "Dodawanie z linku/opisu wymaga zalogowania kontem ChatGPT.",
+            Toast.makeText(this, "Dodawanie z linku/opisu wymaga konta ChatGPT i serwera Mealspire.",
                     Toast.LENGTH_LONG).show();
             return;
         }

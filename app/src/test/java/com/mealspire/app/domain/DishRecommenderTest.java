@@ -36,8 +36,9 @@ public class DishRecommenderTest {
     }
 
     private final FakeLlm llm = new FakeLlm();
-    private final DishRecommender recommender = new DishRecommender(llm,
-            new DishRatingPromptBuilder(), new DishRatingParser());
+    // Pełny łańcuch jak na backendzie: prompt -> LLM -> parser -> filtr diety.
+    private final DishRecommender recommender = new DishRecommender(new LlmDishRater(llm,
+            new DishRatingPromptBuilder(), new DishRatingParser()));
 
     private final List<Recipe> candidates = Arrays.asList(
             new Recipe("Pierogi ruskie", "Składniki: ziemniaki, twaróg, cebula\n\n1. Ulep."),
@@ -195,5 +196,38 @@ public class DishRecommenderTest {
         for (Recipe recipe : picked) {
             assertFalse(recipe.getTitle().equals("Danie 0"));
         }
+    }
+
+    @Test
+    public void deviceDropsDietViolationEvenWhenServerReturnsIt() {
+        // Serwer widzi tylko skrócony opis; telefon sprawdza dietę na pełnym przepisie.
+        DishRater careless = (meal, reactions, dishes, diet, now) -> Arrays.asList(
+                new DishRating("Schabowy", 10, "Mięsny."), new DishRating("Omlet", 6, "Jajka."));
+        DietConstraints noPork = DietConstraints.of(
+                Collections.singletonList(DietConstraints.Exclusion.NO_PORK));
+
+        DishRecommender.Recommendation result = new DishRecommender(careless).recommend(true,
+                "Obiad", DishReactionLog.empty(), candidates, noPork, offline, 3, NOW);
+
+        for (Recipe recipe : result.getRecipes()) {
+            assertFalse(recipe.getTitle().equals("Schabowy"));
+        }
+        assertEquals("Omlet", result.getRecipes().get(0).getTitle());
+    }
+
+    @Test
+    public void raterReceivesOnlyNameAndShortIngredientsNotFullRecipe() {
+        List<DishProposal> seen = new ArrayList<>();
+        DishRater spy = (meal, reactions, dishes, diet, now) -> {
+            seen.addAll(dishes);
+            return Collections.singletonList(new DishRating("Omlet", 5, "x"));
+        };
+
+        new DishRecommender(spy).recommend(true, "Obiad", DishReactionLog.empty(), candidates,
+                DietConstraints.empty(), offline, 3, NOW);
+
+        assertEquals(candidates.size(), seen.size());
+        assertEquals("Pierogi ruskie", seen.get(0).getName());
+        assertFalse(seen.get(0).getDescription().contains("Ulep"));
     }
 }
