@@ -58,3 +58,9 @@ APK w `dist/wersja.json` (`sha256sum dist/mealspire-debug.apk`).
 - Nie commitować `local.properties`. Aplikacja nie potrzebuje żadnego klucza API
   (AI działa na koncie ChatGPT użytkownika) — nie dodawać kluczy do buildu.
 - README opisuje funkcje użytkownika — aktualizować przy zmianach zachowania.
+
+## Publikacja produkcyjna
+
+Prawdziwy kanał sochiera.pl → Mealspire, przygotowanie podpisanego wydania,
+review/merge, wysyłka na VPS, świeża weryfikacja i wycofanie:
+[`deploy/RUNBOOK.md`](../../deploy/RUNBOOK.md). CI nie publikuje na VPS.
