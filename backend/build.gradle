@@ -1,0 +1,8 @@
+plugins { id 'application' }
+java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
+application { mainClass = 'com.mealspire.backend.Server' }
+sourceSets.main.java.srcDir '../app/src/main/java/com/mealspire/app/domain'
+dependencies {
+    implementation 'org.json:json:20240303'
+    testImplementation 'junit:junit:4.13.2'
+}

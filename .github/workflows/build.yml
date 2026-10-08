@@ -28,7 +28,7 @@ jobs:
         run: ./gradlew test
 
       - name: Build debug APK package
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleDebug :backend:distTar
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
