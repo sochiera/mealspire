@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Mealspire launcher foreground: a clean white bowl on a foot with three steam
-  curls. Geometry is built from arcs and round-capped strokes so every edge is
-  smooth, and the whole mark stays inside the adaptive-icon safe zone
-  (centre ~66dp of the 108dp viewport). White-only, so the same drawable also
-  serves as the Android 13 themed (monochrome) layer.
+  Mealspire launcher foreground: a cream bowl with a fresh herb sprig and a
+  spark of inspiration ("meal" + "inspire"). Everything stays inside the
+  adaptive-icon safe zone (circle of radius 33 around 54,54 in the 108
+  viewport), so no launcher mask clips the mark. The themed icon (Android 13+)
+  uses the one-colour twin, ic_launcher_monochrome.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -12,45 +12,45 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Steam: three curls, the middle one taller -->
+    <!-- Herb sprig: a long leaf to the left, a short one to the right -->
     <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="3.2"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000"
-        android:pathData="M43,26 C40,29.6 46,32.4 43,36" />
+        android:fillColor="#9BCB86"
+        android:pathData="M53,50 C43.5,48.5 37.5,41 39.5,32.5 C48.5,33.5 54.5,40.5 53,50 Z" />
     <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="3.2"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000"
-        android:pathData="M54,21.5 C50.6,25.6 57.4,28.9 54,33 C50.6,37.1 57.4,40.4 54,44.5"
-        android:strokeAlpha="0.9" />
+        android:fillColor="#7DB46A"
+        android:pathData="M55,50 C61.5,47.8 64.8,42.6 63.6,37 C57.6,38 54,43.4 55,50 Z" />
+
+    <!-- Spark -->
     <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="3.2"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000"
-        android:pathData="M65,26 C62,29.6 68,32.4 65,36" />
+        android:fillColor="#FFD58A"
+        android:pathData="M71,27 C71.6,31.4 72.6,32.4 77,33 C72.6,33.6 71.6,34.6 71,39 C70.4,34.6 69.4,33.6 65,33 C69.4,32.4 70.4,31.4 71,27 Z" />
 
     <!-- Rim: a capsule across the top of the bowl -->
     <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="6"
+        android:strokeColor="#FFF4E6"
+        android:strokeWidth="5.5"
         android:strokeLineCap="round"
         android:fillColor="#00000000"
-        android:pathData="M31,45 L77,45" />
+        android:pathData="M31.5,52 L76.5,52" />
 
     <!-- Bowl body: an exact half-circle below the rim -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M30,48 A24,24 0 0 0 78,48 Z" />
+        android:fillColor="#FFF4E6"
+        android:pathData="M31,55 A23,23 0 0 0 77,55 Z" />
+
+    <!-- A warm band across the bowl -->
+    <path
+        android:strokeColor="#F3C9A6"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M37.5,63 L70.5,63" />
 
     <!-- Foot -->
     <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="5"
+        android:strokeColor="#FFF4E6"
+        android:strokeWidth="4.5"
         android:strokeLineCap="round"
         android:fillColor="#00000000"
-        android:pathData="M46,77.5 L62,77.5" />
+        android:pathData="M47,82.5 L61,82.5" />
 </vector>

@@ -26,4 +26,17 @@ public class AppIconTest {
         assertEquals(R.mipmap.ic_launcher, iconRes);
         assertNotNull(context.getResources().getDrawable(iconRes, context.getTheme()));
     }
+
+    /** Android 13+ themed icons need a one-colour layer of their own. */
+    @Test
+    @org.robolectric.annotation.Config(sdk = 33)
+    public void adaptiveIconHasDedicatedMonochromeLayer() {
+        Context context = ApplicationProvider.getApplicationContext();
+        android.graphics.drawable.AdaptiveIconDrawable icon =
+                (android.graphics.drawable.AdaptiveIconDrawable)
+                        context.getDrawable(R.mipmap.ic_launcher);
+
+        assertNotNull(icon.getMonochrome());
+        assertNotNull(icon.getForeground());
+    }
 }
