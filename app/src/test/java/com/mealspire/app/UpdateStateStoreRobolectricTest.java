@@ -30,6 +30,16 @@ public class UpdateStateStoreRobolectricTest {
     }
 
     @Test
+    public void sha256SurvivesRestartAndClearing() {
+        android.content.Context context = androidx.test.core.app.ApplicationProvider.getApplicationContext();
+        SharedPreferencesUpdateStateStore store = new SharedPreferencesUpdateStateStore(context);
+        store.saveLatestKnown(new VersionInfo(999, "9.9", "https://example.invalid/a.apk", "a".repeat(64)));
+        assertEquals("a".repeat(64), new SharedPreferencesUpdateStateStore(context).loadLatestKnown().getSha256());
+        store.saveLatestKnown(null);
+        assertNull(store.loadLatestKnown());
+    }
+
+    @Test
     public void firstReadOfLastCheckSeedsItWithNow() {
         assertEquals(NOW, newStore().loadLastCheckMillis(NOW));
     }

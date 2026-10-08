@@ -69,7 +69,7 @@ public class UpdateBannerRobolectricTest {
     }
 
     @Test
-    public void tappingTheBannerOpensTheApkUrl() {
+    public void tappingTheBannerOpensTheInAppUpdater() {
         store().saveLatestKnown(new VersionInfo(999, "9.9", APK_URL));
         MainActivity activity = launch();
 
@@ -77,8 +77,8 @@ public class UpdateBannerRobolectricTest {
 
         Intent started = Shadows.shadowOf(activity).getNextStartedActivity();
         assertNotNull("Klik w baner powinien odpalić intent", started);
-        assertEquals(Intent.ACTION_VIEW, started.getAction());
-        assertEquals(APK_URL, started.getData().toString());
+        assertEquals("com.mealspire.app.update.UpdateActivity", started.getComponent().getClassName());
+        assertEquals(APK_URL, started.getStringExtra("url"));
     }
 
     @Test

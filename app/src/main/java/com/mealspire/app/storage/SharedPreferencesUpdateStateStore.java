@@ -13,6 +13,7 @@ import com.mealspire.app.domain.VersionInfo;
 public final class SharedPreferencesUpdateStateStore implements UpdateStateStore {
 
     private static final String PREFS_NAME = "mealspire_update_state";
+    private static final String KEY_SHA256 = "latest_sha256";
     private static final String KEY_LAST_CHECK = "last_check_millis";
     private static final String KEY_LATEST_CODE = "latest_version_code";
     private static final String KEY_LATEST_NAME = "latest_version_name";
@@ -48,18 +49,18 @@ public final class SharedPreferencesUpdateStateStore implements UpdateStateStore
         if (code <= 0 || name == null || apkUrl == null) {
             return null;
         }
-        return new VersionInfo(code, name, apkUrl);
+        return new VersionInfo(code, name, apkUrl, sharedPreferences.getString(KEY_SHA256, ""));
     }
 
     @Override
     public void saveLatestKnown(VersionInfo info) {
         SharedPreferences.Editor editor = sharedPreferences.edit();
         if (info == null) {
-            editor.remove(KEY_LATEST_CODE)
+            editor.remove(KEY_SHA256).remove(KEY_LATEST_CODE)
                     .remove(KEY_LATEST_NAME)
                     .remove(KEY_LATEST_APK_URL);
         } else {
-            editor.putInt(KEY_LATEST_CODE, info.getVersionCode())
+            editor.putString(KEY_SHA256, info.getSha256()).putInt(KEY_LATEST_CODE, info.getVersionCode())
                     .putString(KEY_LATEST_NAME, info.getVersionName())
                     .putString(KEY_LATEST_APK_URL, info.getApkUrl());
         }

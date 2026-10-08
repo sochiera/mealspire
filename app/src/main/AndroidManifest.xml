@@ -2,6 +2,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Codzienne powiadomienia z propozycjami (8/12/18). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Przeplanowanie alarmów po restarcie telefonu. -->
@@ -29,6 +30,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity android:name=".update.UpdateActivity" android:exported="false"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" />
 
         <!-- Wyzwalany alarmami o 8/12/18; buduje i wysyła powiadomienie. -->
         <receiver

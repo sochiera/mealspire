@@ -483,17 +483,9 @@ public class MainActivity extends Activity {
                 + " — dotknij, aby pobrać");
         banner.setTextSize(15);
         styleTonalButton(banner);
-        final String apkUrl = latest.getApkUrl();
-        banner.setOnClickListener(v -> openDownloadUrl(apkUrl));
+        banner.setOnClickListener(v -> startActivity(
+                com.mealspire.app.update.UpdateActivity.intent(this, latest)));
         contentContainer.addView(banner, 0, matchWrap());
-    }
-
-    private void openDownloadUrl(String apkUrl) {
-        try {
-            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(apkUrl)));
-        } catch (android.content.ActivityNotFoundException e) {
-            toast("Nie udało się otworzyć linku do pobrania.");
-        }
     }
 
     /** Opens the meal carried by a tapped reminder notification, if any. */

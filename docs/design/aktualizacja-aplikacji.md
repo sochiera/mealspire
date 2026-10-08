@@ -1,6 +1,6 @@
 # Aktualizacja aplikacji: analiza, design, taski
 
-Stan: **Faza 0 i Faza 1 zaimplementowane** (TDD). Faza 2 w backlogu.
+Stan: **Fazy 0–2 zaimplementowane**. Faza 2 oczekuje review i zgody na wydanie; `dist/` nadal zawiera APK Fazy 1.
 Data: 2026-07-05.
 
 Zrealizowane: wspólny keystore + `signingConfig` (T1), `versionCode 2`/`1.1`
@@ -348,7 +348,69 @@ równolegle, T6 wymaga T3–T5, T7 zamyka całość. Każdy task kończy się zi
   (mechanizm w skrócie), odśwież `dist/` + `wersja.json` finalnym buildem.
   DoD: `ReleaseConsistencyTest` zielony, dokumenty spójne ze stanem kodu.
 
-- [ ] **(Backlog) T8 — Faza 2: pobieranie w aplikacji + `PackageInstaller`**
-  Dopiero po zebraniu doświadczeń z Fazy 1. Zakres opisany w Poziomie B;
-  wymaga `REQUEST_INSTALL_PACKAGES`, pola `sha256` w `wersja.json`
-  i decyzji, czy obsługujemy globalny przełącznik na Androidzie 6–7.
+- [x] **T8 — Faza 2: pobieranie w aplikacji + `PackageInstaller`**
+  Implementacja przygotowana do review; wydanie dopiero po ship-it.
+  `REQUEST_INSTALL_PACKAGES`, SHA-256 i globalny przełącznik Androida 6–7
+  są obsługiwane (szczegóły poniżej).
+
+
+## Faza 2 — pobieranie i instalacja w aplikacji (2026-10-08)
+
+Przed każdą próbą pobrania ponownie czytamy metadane z kanału aktualizacji,
+ponieważ APK pod adresem na main może być nowsze niż zapamiętany hash.
+Kliknięcie banera otwiera prywatną `update/UpdateActivity`. Android 8+ wymaga
+zgody na instalowanie aplikacji dla Mealspire; Android 6–7 używa globalnego
+przełącznika „Nieznane źródła”. Odmowa nie pobiera pliku, można ponowić próbę.
+Po powrocie z ustawień zgoda jest sprawdzana ponownie, bez zaufania do resultCode.
+
+`PackageUpdateInstaller` pobiera HTTPS z timeoutami 15 s i najwyżej pięcioma
+przekierowaniami (każde również HTTPS). Bajty trafiają bezpośrednio do prywatnej
+sesji `PackageInstaller`, bez plików publicznych i bez ContentProvider.
+`VerifiedApkTransfer` ogranicza rozmiar do 100 MiB, raportuje postęp i wymaga
+zgodności SHA-256 oraz długości, jeśli serwer ją podał. Niekompletna lub błędna
+sesja jest porzucana. Wyjście podczas pobierania przerywa pracę i sprząta sesję.
+System sprawdza podpis i poprawność APK; kod nie usuwa aplikacji ani jej danych.
+
+Zakończona sesja jest zatwierdzana dopiero po weryfikacji; system nadal wymaga
+potwierdzenia użytkownika. Callback kieruje do nieeksportowanej Activity,
+`PendingIntent` jest mutable na API 31+ (wymóg commit dla target 35).
+API 35 deleguje prawo otwarcia Activity dla wyniku instalacji. Zobacz
+[PackageInstaller.Session](https://developer.android.com/reference/android/content/pm/PackageInstaller.Session)
+i [Activity security](https://developer.android.com/guide/components/activities/secure-bal).
+Anulowanie i błędy instalatora mają widoczny komunikat i możliwość ponowienia.
+Obrót nie odtwarza ekranu; wynik instalatora może otworzyć go po śmierci procesu.
+Na Androidzie 8+ ponowne otwarcie usuwa nieaktywne, niezatwierdzone sesje
+pozostałe po śmierci procesu; na Androidzie 6–7 wygaszanie takich sesji zostaje
+systemowi (API `isSealed` jest dostępne dopiero od 26).
+Pobieranie nie działa jako usługa w tle: po zabiciu procesu trzeba je ponowić.
+
+`sha256` jest przechowywane z metadanymi w SharedPreferences. Parser nadal
+czyta starsze metadane bez hash, ale instalacja takiego wydania jest blokowana.
+Do `dist/wersja.json` dodano hash **istniejącego** APK 1.2/code 3. Nie zmieniono
+APK, keystore ani numerów wydania. Przed ship-it nie publikujemy nowego APK;
+CI buduje PR lokalnie na runnerze, upload artefaktu jest wyłącznie na push main.
+Wydanie musi później podbić numer, odświeżyć APK i jego hash razem.
+
+Testy używają pamięciowych strumieni i fałszywego HTTP, bez sieci/produkcji.
+Smoke na prawdziwym urządzeniu (zgoda → download → potwierdzenie → upgrade
+z zachowaniem danych) pozostaje wymaganym sprawdzeniem przed wydaniem.
+
+
+### Weryfikacja przygotowania do review
+
+- `JAVA_HOME=/home/jan/.local/opt/jdk-17 ./gradlew test assembleDebug`: PASS,
+  484 testy debug + 484 release, zero pominiętych i błędów (22,35 s).
+- `lintDebug`: FAIL na sześciu istniejących błędach NewApi w
+  ExplorationPlanner, RecentlyShownFilter i TasteProfiler. Osobny czysty
+  checkout `origin/main` @ `fb05314` odtworzył dokładnie te same sześć błędów;
+  nowy updater nie dodaje błędów lint.
+- Niezależne review Claude Sonnet: dwie rundy, 2m29,54s i 59,74s.
+  Poprawiono odświeżenie metadanych, filtr sesji (także opóźnione callbacki
+  po końcowym wyniku), odtwarzanie potwierdzenia i anulowanie przed commit.
+  Druga runda potwierdziła główne poprawki; ostatnią uwagę o callbacku przy
+  braku bieżącej sesji zamknięto guardem i testem regresji.
+- Nie wykonano upgrade na urządzeniu: `adb devices` nie wykazało urządzeń,
+  a lokalny SDK nie ma emulatora. To ograniczenie testów JVM; rzeczywistego
+  systemowego potwierdzenia i zachowania danych po upgrade nie potwierdzono.
+- Brak skonfigurowanego środowiska serwerowego/testowego dla tej natywnej
+  aplikacji. Bez deployu, merge, odczytu produkcji i publikacji nowego APK.

@@ -310,6 +310,15 @@ Taki plik można skopiować na telefon i otworzyć, ale telefon może poprosić 
 
 ### Aktualizacja zainstalowanej aplikacji
 
+Aplikacja sprawdza nowe wydania raz na dobę. Baner na ekranie startowym otwiera
+pobieranie z postępem w Mealspire. Przy pierwszym użyciu zezwól Mealspire na
+instalowanie aplikacji w ustawieniach systemowych (Android 6–7: „Nieznane
+źródła”), wróć do aplikacji i potwierdź instalację w oknie Androida.
+Pobrany plik jest sprawdzany przed instalacją; błędy i anulowanie pozwalają
+ponowić próbę. Wyjście podczas pobierania je anuluje.
+Ten mechanizm znajdzie się w następnym wydaniu APK; paczka 1.2 w `dist/`
+korzysta jeszcze z przeglądarki.
+
 Od wersji **1.1** wszystkie wydania są podpisane tym samym kluczem, więc nowszy
 APK instaluje się **po wierzchu** starego — polubienia, profil i książka
 kucharska zostają na miejscu.
