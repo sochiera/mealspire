@@ -58,6 +58,21 @@ public final class BackendCodec {
         String name = o.getString("name"); if (name.trim().isEmpty()) throw new JSONException("Empty proposal");
         return new DishProposal(name, o.optString("description"), o.optString("time"), strings(o.optJSONArray("ingredients")));
     }
+    public static JSONObject reaction(DishReaction r) throws JSONException {
+        return new JSONObject().put("dish", r.getDish()).put("description", r.getDescription())
+                .put("liked", r.isLiked()).put("time", r.getTimeMillis());
+    }
+    public static DishReaction reaction(JSONObject o) throws JSONException {
+        String dish = o.getString("dish"); if (dish.trim().isEmpty() || dish.length() > 200) throw new JSONException("Bad reaction");
+        return new DishReaction(dish, o.optString("description"), o.getBoolean("liked"), o.getLong("time"));
+    }
+    public static JSONObject rating(DishRating r) throws JSONException {
+        return new JSONObject().put("dish", r.getDish()).put("score", r.getScore()).put("reason", r.getReason());
+    }
+    public static DishRating rating(JSONObject o) throws JSONException {
+        String dish = o.getString("dish"); if (dish.trim().isEmpty()) throw new JSONException("Empty rating");
+        return new DishRating(dish, o.getInt("score"), o.optString("reason"));
+    }
     public static Recipe[][] catalog(JSONObject o) throws JSONException {
         JSONArray meals = o.getJSONArray("meals"); if (meals.length() != 3) throw new JSONException("Invalid catalog");
         Recipe[][] result = new Recipe[3][];

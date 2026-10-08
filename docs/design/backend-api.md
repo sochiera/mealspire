@@ -19,6 +19,7 @@ zmiana ich zachowania online wymaga tylko nowego release backendu.
 | POST /v1/modify | recipe, instruction, household | recipe |
 | POST /v1/import | input | recipe, source |
 | POST /v1/taste | request | taste: {profile: maks. 4 zdania} |
+| POST /v1/rate | mealType, household, reactions[] (≤30), candidates[] (1–12) | ratings: {dish, score 0–10, reason} |
 
 Każdy POST ma `apiVersion:1` (brak oznacza v1), `model` (slug wybranego Luna/Sol
 z katalogu konta) i Authorization: Bearer access token. Każda odpowiedź,
@@ -39,6 +40,13 @@ Cache oceny gustu ogranicza powtórne inferencje. Server waliduje dietę i
 uzupełnia brakujące propozycje bez kolejnego wywołania LLM; gotowy przepis
 naruszający dietę zwraca 422. Nieznane wykluczenie diety zwraca 400,
 aby nigdy nie zignorować wymagania nowszego klienta.
+
+`/v1/rate` to jedyne wywołanie LLM przy propozycjach zalogowanej aplikacji
+(od wersji z ocenami dań): reactions {dish, description, liked, time},
+candidates {name, description ≤500 znaków — sam skład, bez pełnego przepisu}.
+Serwer zwraca tylko oceny podanych kandydatów, bez naruszeń diety; telefon
+filtruje dietę ponownie na pełnym przepisie i bierze 3 najwyżej ocenione.
+Nieczytelny JSON modelu → 502 `invalid_rating_response`; klient wraca do puli offline.
 
 Przykład POST /v1/recipe (bez nagłówka z rzeczywistym tokenem):
 

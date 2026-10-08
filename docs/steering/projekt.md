@@ -32,8 +32,7 @@ Wszystkie teksty w UI i promptach są po polsku.
   rozstrzyga jeden wymiar gustu; opcja „Żadne z tych" nie zapisuje nic).
   Odpowiedzi 1–4 → `HouseholdProfile` (wpływa na prompty przez
   `RecipeRequest.getHouseholdProfile()`, także na „Zmień przepis"), wybory dań
-  → zwykłe polubienia (celowo 3, nie 5 — AI nie ma przejmować propozycji po
-  samym quizie). Rundy losowane są **po** pytaniu o dietę i ją respektują;
+  → zwykłe polubienia i reakcje „lubię" na liście reakcji. Rundy losowane są **po** pytaniu o dietę i ją respektują;
   zmiana diety przez „Cofnij" przelosowuje rundy (`ensureOnboardingRounds`).
   Wybory rund trzymane są w `onboardingPicks` i zapisywane dopiero na końcu
   quizu, żeby „Cofnij" + inny wybór **podmieniał** polubienie, a nie dokładał
@@ -51,26 +50,27 @@ Wszystkie teksty w UI i promptach są po polsku.
   (`ProposalValidator` — łamiące dietę propozycje zastępuje pula offline).
   Nie podlegają wygaszaniu; maskują też wyuczony profil w `TasteContextBuilder`.
 
-- **Uczenie gustu** (pełny design: `docs/design/agent-gustu.md`): w UI nadal
-  tylko pozytywnie — nie pytamy, czego użytkownik nie lubi. Pod spodem
-  append-only dziennik `TasteEvent` (lajk/import/pokaż przepis/wybór z quizu
-  + ciche, słabe negatywy: reroll, widziane-niewybrane), z którego liczony
-  jest `TasteModel`: wymiary baza/kuchnia/charakter (`DishTagger`, słownikowo,
-  bez AI), wygaszanie z półokresem 60 dni, profile per slot posiłku, sufit
-  ujemny −1. Nadmiar dziennika (>400) zwija `TasteEventCompactor` do
-  zamrożonego agregatu (model wychodzi identyczny — pilnuje test
-  równoważności). Do promptu idzie skompresowany `TasteContext` (top wartości
-  wymiarów + max 8 przykładów), nie surowa lista polubień. **Reguła 2+1**:
-  `ExplorationPlanner` wybiera cel eksploracji (trzecia propozycja celowo poza
-  gustem), `MonotonyDetector` dokłada „unikaj dominującej bazy". Propozycja
-  eksploracyjna **nigdy** nie dostaje sygnałów ujemnych — nie karzemy własnych
-  eksperymentów. Liczniki lokalne (`LearningStats`, acceptance/reroll rate,
-  odsetek nieotagowanych dań AI) w „Zarządzaj moimi danymi → Statystyki
-  uczenia"; zero telemetrii.
-- **AI dopiero po nauce**: świeża instalacja proponuje z wbudowanej puli
-  (`BuiltInRecipes`, ~60 dań). AI przejmuje propozycje dopiero po ≥5
-  polubieniach (`PersonalizationReadiness.MIN_LIKED_DISHES`). Inne funkcje AI
-  (pełny przepis, „Zmień przepis", import z linku) działają od razu po zalogowaniu kontem ChatGPT.
+- **Decyzja „co pokazać" = jedna ocena LLM** (`DishRecommender`). Jedyne
+  wejście uczenia to `DishReactionLog`: jawne reakcje „Lubię to" / „Nie lubię"
+  (nazwa, krótki skład, lubię/nie lubię, czas; wybory z quizu jako „lubię";
+  polubienia sprzed listy przenoszone raz w `onCreate`). „Pokaż przepis" i
+  „Inne propozycje" **nie są** oceną. „Nie lubię" nie jest zakazem — nie
+  trafia do `UserPreferences.dislikes`. Po zalogowaniu: kandydaci = pula
+  (`MealPoolBuilder`, już po diecie) → shuffle → `RecentlyShownFilter` → max
+  `MAX_CANDIDATES`; **jedno** wywołanie `DishRatingPromptBuilder` (max
+  `MAX_REACTIONS` najnowszych reakcji, po jednej na danie, z wiekiem) → JSON
+  `{"oceny":[{danie, ocena 0–10, powod}]}` (`DishRatingParser`) → odrzucenie
+  nazw spoza kandydatów i naruszeń diety → 3 najwyższe z powodem na karcie,
+  braki dopełnia pula offline. Pusta lista reakcji = ocena po popularności.
+  Bez logowania LLM nie jest wołany; zły JSON / sieć → offline + toast, bez
+  crasha. Brak progu „5 polubień" i reguły 2+1 — `TasteModel`/`TasteProfiler`
+  nie wybierają kart zalogowanego użytkownika (zostają: `TasteProfiler` w
+  offline'owym `VariedMealPicker`, dziennik `TasteEvent` w kontekście promptu
+  pełnego przepisu/„Zmień przepis"). „Wyczyść reakcje" czyści listę
+  (`DataManager.clearPreferences`). Zero telemetrii.
+- **Pełny przepis**: kandydaci pochodzą z katalogu, więc przepis po wybraniu
+  karty jest od razu (bez drugiego wywołania AI). „Zmień przepis" i import
+  dania działają od razu po zalogowaniu kontem ChatGPT.
 - **Wspólny pipeline offline** (`OfflineProposalGenerator`): pula → shuffle →
   filtr „ostatnio pokazane" (3 dni) → `VariedMealPicker` (max 1 wybór wg gustu,
   reszta różnorodna). Używany przez ekran i przez powiadomienia — nie rozjeżdżać.

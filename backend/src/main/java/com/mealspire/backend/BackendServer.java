@@ -27,7 +27,7 @@ public final class BackendServer implements AutoCloseable {
         CachedTaste(JSONObject value) { json = value.toString(); expires = System.currentTimeMillis() + 900000; }
     }
     private final Map<String, CachedTaste> tasteCache = new LinkedHashMap<>();
-    private static final Set<String> POST_PATHS = Set.of("/v1/proposals", "/v1/recipe", "/v1/modify", "/v1/import", "/v1/taste");
+    private static final Set<String> POST_PATHS = Set.of("/v1/proposals", "/v1/recipe", "/v1/modify", "/v1/import", "/v1/taste", "/v1/rate");
     public BackendServer(InetSocketAddress address, ClientFactory factory) throws IOException {
         if (!address.getAddress().isLoopbackAddress()) throw new IOException("Bind only to loopback; use a TLS reverse proxy.");
         this.factory = factory; server = HttpServer.create(address, 32);
@@ -69,17 +69,20 @@ public final class BackendServer implements AutoCloseable {
         if (!model.matches("gpt-[0-9]+(?:\\.[0-9]+)?-(?:luna|sol)")) throw new ApiError(400, "invalid_model");
         JSONObject request = body.optJSONObject("request");
         if (body.has("request") && request == null) throw new ApiError(400, "invalid_request");
-        JSONObject household = request == null ? body.optJSONObject("household") : request.optJSONObject("household");
-        if ((request != null && request.has("household") && household == null)
+        if ((request != null && request.has("household") && request.optJSONObject("household") == null)
                 || (body.has("household") && body.optJSONObject("household") == null)) throw new ApiError(400, "invalid_diet");
-        if (household != null && household.has("exclusions")) {
-            JSONArray exclusions = household.optJSONArray("exclusions");
-            if (exclusions == null) throw new ApiError(400, "invalid_diet");
-            for (int i=0; i<exclusions.length(); i++) if (!(exclusions.opt(i) instanceof String)) throw new ApiError(400, "invalid_diet");
-        }
-        if (household != null) for (String exclusion : BackendCodec.strings(household.optJSONArray("exclusions"))) {
-            try { DietConstraints.Exclusion.valueOf(exclusion); }
-            catch (IllegalArgumentException e) { throw new ApiError(400, "unsupported_diet"); }
+        // Waliduj każdy obiekt household, którego może użyć endpoint (request.* albo główny).
+        for (JSONObject household : new JSONObject[] { body.optJSONObject("household"), request == null ? null : request.optJSONObject("household") }) {
+            if (household == null) continue;
+            if (household.has("exclusions")) {
+                JSONArray exclusions = household.optJSONArray("exclusions");
+                if (exclusions == null) throw new ApiError(400, "invalid_diet");
+                for (int i=0; i<exclusions.length(); i++) if (!(exclusions.opt(i) instanceof String)) throw new ApiError(400, "invalid_diet");
+            }
+            for (String exclusion : BackendCodec.strings(household.optJSONArray("exclusions"))) {
+                try { DietConstraints.Exclusion.valueOf(exclusion); }
+                catch (IllegalArgumentException e) { throw new ApiError(400, "unsupported_diet"); }
+            }
         }
         if (request != null) mealIndex(request.optString("mealType", "Śniadanie"));
         int count = body.optInt("count", 3); if (count < 1 || count > 6) throw new ApiError(400, "invalid_count");
@@ -133,6 +136,29 @@ public final class BackendServer implements AutoCloseable {
                 HouseholdProfile household = new HouseholdProfileSerializer().fromJson(body.optJSONObject("household") == null ? "{}" : body.getJSONObject("household").toString());
                 Recipe recipe = service.modifyRecipe(BackendCodec.recipe(body.getJSONObject("recipe")), body.getString("instruction"), household);
                 requireDiet(recipe, household.getDiet()); return out.put("recipe", BackendCodec.recipe(recipe));
+            }
+            case "/v1/rate": {
+                // Jedno wywołanie: „osoba z tymi reakcjami — czy polubi te dania?". Dieta filtruje wynik.
+                String meal = body.getString("mealType"); mealIndex(meal);
+                HouseholdProfile household = new HouseholdProfileSerializer().fromJson(body.optJSONObject("household") == null ? "{}" : body.getJSONObject("household").toString());
+                JSONArray r = body.optJSONArray("reactions"), c = body.getJSONArray("candidates");
+                if (c.length() == 0 || c.length() > DishRecommender.MAX_CANDIDATES || (r != null && r.length() > DishRecommender.MAX_REACTIONS))
+                    throw new ApiError(400, "invalid_request");
+                List<DishReaction> reactions = new ArrayList<>();
+                for (int i=0; r != null && i<r.length(); i++) reactions.add(BackendCodec.reaction(r.getJSONObject(i)));
+                List<DishProposal> candidates = new ArrayList<>();
+                for (int i=0; i<c.length(); i++) {
+                    JSONObject o = c.getJSONObject(i); String name = o.getString("name");
+                    if (name.isBlank() || name.length() > 200 || o.optString("description").length() > 500) throw new ApiError(400, "invalid_request");
+                    candidates.add(new DishProposal(name, o.optString("description"), "", null));
+                }
+                List<DishRating> ratings;
+                try { ratings = new LlmDishRater(llm, new DishRatingPromptBuilder(), new DishRatingParser())
+                        .rate(meal, reactions, candidates, household.getDiet(), body.optLong("now", System.currentTimeMillis())); }
+                catch (ApiError e) { throw e; }
+                catch (IOException e) { if (e.getMessage() != null && e.getMessage().startsWith("Nieczytelna")) throw new ApiError(502, "invalid_rating_response"); throw e; }
+                JSONArray out2 = new JSONArray(); for (DishRating rating : ratings) out2.put(BackendCodec.rating(rating));
+                return out.put("ratings", out2);
             }
             case "/v1/import": {
                 // Do not fetch arbitrary user URLs on the VPS (SSRF). LLM receives URL as description only.

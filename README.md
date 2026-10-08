@@ -22,8 +22,8 @@ przyciski, na każdym kroku widoczny przycisk **„Pomiń"**):
 5. Trzy **kontrastowe** rundy **„Które danie najbardziej Ci pasuje?"** — każda
    runda rozstrzyga co innego (mięso/ryba/bezmięsne, zupa/zapiekane/świeże,
    polskie/śródziemnomorskie/azjatyckie), więc każdy wybór uczy maksymalnie
-   dużo. Wybór zapisuje się jako zwykłe polubienie (to 3 z 5 polubień
-   potrzebnych, by AI przejęło propozycje — resztę douczy normalne używanie),
+   dużo. Wybór zapisuje się jako reakcja „lubię” na liście, z której AI
+   ocenia kolejne dania (resztę douczy normalne używanie),
    a **„Żadne z tych"** uczciwie nie zapisuje nic. Rundy respektują wykluczenia
    z pytania 2.
 
@@ -46,10 +46,11 @@ jeden, a aplikacja od razu pokaże **trzy propozycje** dań. Każda propozycja t
 tylko: nazwa, krótki opis, przybliżony czas i kluczowe składniki — bez czekania
 na cały przepis.
 
-Przy każdej propozycji masz dwa przyciski:
+Przy każdej propozycji masz trzy przyciski:
 
-- **„Pokaż przepis”** — dopiero teraz powstaje pełny przepis na to danie.
-- **„Lubię to”** — uczysz aplikację swojej kuchni (patrz niżej).
+- **„Pokaż przepis”** — pełny przepis na to danie.
+- **„Lubię to”** / **„Nie lubię”** — jawna ocena, z której AI uczy się Twojego
+  gustu (patrz niżej).
 
 Pod propozycjami jest **„Inne propozycje”** — jeden dotyk podsuwa kolejny zestaw,
 więc nie musisz nic odrzucać po kolei.
@@ -60,17 +61,16 @@ na ekran startowy, a dopiero z ekranu startowego zamyka aplikację. Przepis
 otwarty **spoza propozycji** (np. danie dodane z linku/opisu) wraca od razu na
 ekran startowy — nie ma propozycji, do których można by wrócić.
 
-Bez zalogowania kontem ChatGPT (albo zanim aplikacja zdąży się czegoś o Tobie nauczyć — patrz
-niżej) działa offline: losuje dania z **wbudowanej puli** (blisko 60 prostych,
+Bez zalogowania kontem ChatGPT działa offline: losuje dania z **wbudowanej puli** (blisko 60 prostych,
 codziennych dań: śniadania, obiady, kolacje) i z Twojej bazy. Dania są celowo
 proste, do zrobienia z tego, co zwykle jest w kuchni — a tam, gdzie naturalnie
 pasują dodatki (owsianka, płatki, tosty…), są one opcją do dopisania, a nie
 osobnym, bardziej skomplikowanym daniem.
 
-Gdy jesteś zalogowany kontem ChatGPT **i** aplikacja ma już wystarczająco dużo
-polubień, propozycje i przepisy zaczyna tworzyć model GPT z Twojego planu
-ChatGPT (domyślnie GPT Luna, do przełączenia na GPT Sol; OpenAI Responses API) — może przy tym **sięgnąć po danie z Twojej bazy** albo
-**wymyślić zupełnie nowe**.
+Gdy jesteś zalogowany kontem ChatGPT, te same dania (wbudowana pula + Twoja baza)
+**ocenia** model GPT z Twojego planu ChatGPT (domyślnie GPT Luna, do
+przełączenia na GPT Sol; OpenAI Responses API, `store:false`) — pokazane są trzy
+najlepiej dopasowane do Twoich reakcji, z krótkim powodem.
 
 ## Codzienne powiadomienia z propozycjami (8 / 12 / 18)
 
@@ -95,32 +95,33 @@ plik, a system instaluje nową wersję **po wierzchu** starej — bez utraty dan
 (od wersji 1.1 wszystkie wydania są podpisane tym samym kluczem). Brak internetu
 niczego nie psuje — baner po prostu się nie pokazuje, a aplikacja działa dalej.
 
-## Najpierw wbudowana baza, AI dopiero gdy ma z czego wnioskować
+## Jak aplikacja dobiera dania: „lubisz Y — czy polubisz Z?”
 
-Świeża instalacja nie ma żadnych danych o Twoim guście, więc na start aplikacja
-**zawsze** proponuje z wbudowanej bazy prostych dań — nawet jeśli jesteś
-zalogowany kontem ChatGPT. Dopiero gdy polubisz co najmniej **5 dań** (czyli `TasteProfiler`
-ma z czego realnie zbudować profil gustu), aplikacja przełącza się na
-personalizowane propozycje AI, które potrafią też wymyślać zupełnie nowe dania.
-Próg pilnuje `PersonalizationReadiness`. Inne funkcje AI (pełny przepis na
-żądanie, „Zmień przepis”, dodawanie dania z linku/opisu) działają niezależnie od
-tego progu — dotyczy on tylko automatycznych propozycji na start.
+Pod każdą propozycją i przepisem są przyciski **„Lubię to”** i **„Nie lubię”**.
+Każde dotknięcie dopisuje do jednej, lokalnej listy reakcji: nazwę dania, krótki
+skład, lubię/nie lubię i czas. Tylko to jest oceną — „Pokaż przepis” i „Inne
+propozycje” nią nie są. „Nie lubię” nie jest zakazem: danie nie znika z puli,
+AI po prostu oceni je (i podobne) niżej. Twarde zakazy to wyłącznie wykluczenia
+diety z profilu domowników.
 
-## Aplikacja uczy się Twojej kuchni (przede wszystkim pozytywnie)
+**Zalogowany kontem ChatGPT (i ze skonfigurowanym Serwerem Mealspire)** — przy
+każdym „Śniadanie / Obiad / Kolacja” i „Inne propozycje” aplikacja robi
+**jedno** wywołanie AI przez serwer (`/v1/rate`): wysyła ograniczoną
+listę ostatnich reakcji (nowsze ważą więcej) i kilkunastu kandydatów z
+wbudowanej bazy oraz Twojej bazy dań (nazwa + skład, już przefiltrowanych
+dietą). AI ocenia każdego kandydata od 0 do 10 według smaku, składników i
+sposobu przygotowania i podaje jednozdaniowy powód. Aplikacja jeszcze raz
+odrzuca naruszenia diety i pokazuje **3 najwyżej ocenione dania razem z
+powodem** („Dlaczego: …”). Pełny przepis jest od razu, po wybraniu karty. Przy
+pustej liście reakcji AI ocenia kandydatów po popularności.
 
-Aplikacja **nigdy nie pyta, czego nie lubisz** — dotknięcie „Lubię to” dodaje
-danie do ulubionych i to jest główny sygnał gustu. Oprócz tego cicho obserwuje
-zachowanie: „Pokaż przepis” liczy się jako zainteresowanie, dodanie własnego
-dania jak mocne polubienie, a „Inne propozycje” i pominięte dania to tylko
-**delikatna** korekta (kilka odrzuceń niczego nie „banuje" — twarde zakazy to
-wyłącznie wykluczenia diety z profilu). Z tych sygnałów aplikacja buduje
-lokalny **profil gustu w wymiarach** (główny składnik, styl kuchni, charakter
-dania, osobno per pora posiłku), w którym świeże wybory ważą więcej niż stare —
-gust może płynąć. Do AI trafia krótki, skompresowany profil i garść ostatnio
-polubionych dań, a nie cała historia. Przy trzech propozycjach obowiązuje
-reguła **2+1**: dwie w Twój gust, jedna celowo inna — żeby propozycje nie
-zwęziły się do trzech dań w kółko. Wszystko liczy się wyłącznie na telefonie;
-podgląd: **„Więcej…” → „Zarządzaj moimi danymi” → „Statystyki uczenia”**.
+**Bez logowania, bez sieci albo gdy AI zwróci nieczytelną odpowiedź** —
+propozycje pochodzą z lokalnej puli offline (z uwzględnieniem polubień), bez
+powodu i bez udawania, że oceniało je AI. Aplikacja się nie wysypuje.
+
+Lista reakcji zostaje na telefonie (zero telemetrii); wyczyścisz ją w
+**„Więcej…” → „Zarządzaj moimi danymi” → „Wyczyść reakcje (lubię / nie
+lubię)”**. Polubienia sprzed tej wersji są przenoszone na listę jednorazowo.
 
 ## Zmiana przepisu (zamienniki przez AI)
 
@@ -188,7 +189,7 @@ Aby utrzymać główny ekran prostym, dodatkowe akcje są pod przyciskiem „Wi�
   strony), zapisze je w Twojej bazie i oznaczy jako lubiane — dzięki temu trafia
   do puli podpowiedzi. Wymaga zalogowania kontem ChatGPT.
 - **Zarządzaj moimi danymi** — przejrzyj i usuwaj pojedyncze dania z bazy oraz
-  wyczyść preferencje, historię podpowiedzi lub całą bazę. Masz pełną kontrolę
+  wyczyść reakcje lubię/nie lubię, historię podpowiedzi lub całą bazę. Masz pełną kontrolę
   nad tym, co aplikacja o Tobie pamięta.
 
 ## Urozmaicenie — codziennie nowy zestaw, powroty po jakimś czasie
@@ -200,34 +201,17 @@ więc każdy dzień przynosi inny zestaw zamiast tych samych kilku dań w kółk
 te 3 dni miną, danie samo "wraca" do puli — nic nie znika na stałe. Jeśli
 świeżych dań zabrakłoby (bardzo mała baza albo bardzo częste odświeżanie),
 podpowie się najdawniej pokazane danie zamiast pustej listy — więc powtórka
-zdarza się od czasu do czasu, ale nie od razu. Generowanie z AI dostaje
-dodatkowo listę ostatnich dań z prośbą o coś innego.
+zdarza się od czasu do czasu, ale nie od razu. Tak samo dobierani są kandydaci
+do oceny przez AI.
 
-## Uczenie się preferencji (tylko polubienia)
+## Tryb offline: profil z polubień
 
-Przy każdej propozycji oraz przy pokazanym przepisie jest przycisk „Lubię to”.
-Twoje polubienia są zapamiętywane (przeżywają obrót ekranu i ponowne uruchomienie
-aplikacji) i przy kolejnych pomysłach z AI są przekazywane do modelu, żeby
-podpowiadał dania w podobnym duchu. Aplikacja **nie zapamiętuje nic negatywnie** —
-jeśli pomysł Ci nie pasuje, po prostu poproś o „Inne propozycje”.
-
-### Podpowiada nie tylko to, co już lubisz — i nie zapętla się na jednym
-
-Aplikacja nie ogranicza się do dań, które już polubiłeś. Z Twoich polubień
-wyciąga **cechy wspólne** — powracające składniki i słowa-klucze (np. *kurczak*,
-*kasza*, *feta*) — i na tej podstawie podsuwa również **nowe** dania, które mają z
-nimi coś wspólnego (podobne składniki, technika, charakter). Profil gustu buduje
-`TasteProfiler` na podstawie nazw polubionych dań oraz — jeśli są znane — ich
-składników (z Twojej bazy i z wbudowanej puli).
-
-Gust to jednak tylko **wskazówka, nie reguła**. Jeśli polubisz np. trzy dania z
-kurczakiem, aplikacja **nie będzie proponować samego kurczaka**:
-
-- **AI** dostaje wyraźną prośbę o różnorodność — najlepiej każda z propozycji z
-  innym głównym składnikiem i przynajmniej jedna zupełnie nowa, inna niż zwykle.
-- **Offline** `VariedMealPicker` bierze najwyżej **jedną** propozycję „pod gust",
-  a pozostałe dobiera losowo — więc dania pasujące do Twoich upodobań się
-  pojawiają, ale obok nich zawsze jest coś innego.
+Bez logowania aplikacja nie pyta AI. Z polubionych dań `TasteProfiler` wyciąga
+powracające składniki i słowa-klucze, a `VariedMealPicker` bierze najwyżej
+**jedną** propozycję „pod gust”, resztę losując — więc obok dań w Twoim stylu
+zawsze jest coś innego. Ten profil służy wyłącznie trybowi offline (ekran bez
+logowania, fallback i powiadomienia); po zalogowaniu o tym, co pokazać,
+decyduje jedna ocena AI opisana wyżej.
 
 ## Jak uruchomić w Android Studio
 

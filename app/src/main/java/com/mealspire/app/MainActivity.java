@@ -38,6 +38,11 @@ import com.mealspire.app.domain.CookbookStore;
 import com.mealspire.app.domain.DataManager;
 import com.mealspire.app.domain.DietConstraints;
 import com.mealspire.app.domain.DishProposal;
+import com.mealspire.app.domain.DishReaction;
+import com.mealspire.app.domain.DishReactionLog;
+import com.mealspire.app.domain.DishReactionStore;
+import com.mealspire.app.domain.DishRecommender;
+import com.mealspire.app.domain.MealPoolBuilder;
 import com.mealspire.app.domain.HouseholdProfile;
 import com.mealspire.app.domain.HouseholdProfileStore;
 import com.mealspire.app.domain.LearningStats;
@@ -46,7 +51,6 @@ import com.mealspire.app.domain.BuiltInRecipes;
 import com.mealspire.app.domain.ContrastiveDishSampler;
 import com.mealspire.app.domain.IngredientExtractor;
 import com.mealspire.app.domain.OfflineProposalGenerator;
-import com.mealspire.app.domain.PersonalizationReadiness;
 import com.mealspire.app.domain.PortionSize;
 import com.mealspire.app.domain.ProposalValidator;
 import com.mealspire.app.domain.MealHistory;
@@ -55,7 +59,6 @@ import com.mealspire.app.domain.PreferenceStore;
 import com.mealspire.app.domain.Recipe;
 import com.mealspire.app.domain.RecipeRequest;
 import com.mealspire.app.domain.DishTagger;
-import com.mealspire.app.domain.ExplorationPlanner;
 import com.mealspire.app.domain.FrozenTasteAggregate;
 import com.mealspire.app.domain.MonotonyDetector;
 import com.mealspire.app.domain.TasteContextBuilder;
@@ -83,6 +86,7 @@ import com.mealspire.app.notify.MealNotifications;
 import com.mealspire.app.notify.MealReminderScheduler;
 import com.mealspire.app.storage.SharedPreferencesAppSettings;
 import com.mealspire.app.storage.SharedPreferencesCookbookStore;
+import com.mealspire.app.storage.SharedPreferencesDishReactionStore;
 import com.mealspire.app.storage.SharedPreferencesHouseholdProfileStore;
 import com.mealspire.app.storage.SharedPreferencesMealHistoryStore;
 import com.mealspire.app.storage.SharedPreferencesPreferenceStore;
@@ -175,6 +179,7 @@ public class MainActivity extends Activity {
     private RecipeOperations recipeService;
     private SharedPreferencesBackendStore backendStore;
     private BackendClient backendClient;
+    private DishRecommender dishRecommender;
     private PreferenceStore preferenceStore;
     private UserPreferences preferences;
     private MealHistoryStore historyStore;
@@ -191,12 +196,9 @@ public class MainActivity extends Activity {
     private FrozenTasteAggregate tasteAggregate;
     private LearningStatsStore learningStatsStore;
     private LearningStats learningStats;
-    // Titles (lowercase) of the deliberately-exploratory AI proposals in the
-    // current trio. Tracked by title, not index — the validator may drop an
-    // earlier AI proposal and shift the experiment to another slot, and it must
-    // still never carry negative signals (the system does not punish its own
-    // experiments).
-    private final java.util.Set<String> exploratoryDishes = new java.util.HashSet<>();
+    // Jawne reakcje lubię/nie lubię — jedyne wejście oceny gustu przez LLM.
+    private DishReactionStore reactionStore;
+    private DishReactionLog reactions;
     // Implicit signals fire once per trio: the first opened recipe decides the
     // SHOWN_NOT_CHOSEN losers, the first engagement bumps the stats, and each
     // dish counts as "viewed" at most once (re-opening must not inflate taste).
@@ -206,13 +208,12 @@ public class MainActivity extends Activity {
     private final DishTagger dishTagger = new DishTagger();
     private final TasteContextBuilder tasteContextBuilder = new TasteContextBuilder();
     private final TasteEventCompactor tasteEventCompactor = new TasteEventCompactor();
-    private final ExplorationPlanner explorationPlanner = new ExplorationPlanner();
     private final MonotonyDetector monotonyDetector = new MonotonyDetector();
     private final OfflineProposalGenerator offlineProposalGenerator = new OfflineProposalGenerator();
     private final ProposalValidator proposalValidator = new ProposalValidator();
     private final IngredientExtractor ingredientExtractor = new IngredientExtractor();
     private final TasteProfiler tasteProfiler = new TasteProfiler();
-    private final PersonalizationReadiness personalizationReadiness = new PersonalizationReadiness();
+    private final MealPoolBuilder mealPoolBuilder = new MealPoolBuilder();
     private final UpdateChecker updateChecker = new UpdateChecker();
     private final VersionInfoParser versionInfoParser = new VersionInfoParser();
     private UpdateStateStore updateStateStore;
@@ -221,6 +222,8 @@ public class MainActivity extends Activity {
     // The proposals currently on offer and (for the offline flow) their recipes.
     private List<DishProposal> proposals = new ArrayList<>();
     private List<Recipe> proposalRecipes = new ArrayList<>();
+    // Jednozdaniowe uzasadnienie modelu dla każdej propozycji ("" = offline).
+    private List<String> proposalReasons = new ArrayList<>();
     // The full recipe currently open, or null while the proposal list is shown.
     private Recipe currentRecipe;
     // Whether the open recipe was reached from the proposal list; a recipe from
@@ -258,7 +261,10 @@ public class MainActivity extends Activity {
         history = historyStore.load();
         cookbookStore = new SharedPreferencesCookbookStore(this);
         cookbook = cookbookStore.load();
-        dataManager = new DataManager(preferenceStore, historyStore, cookbookStore);
+        reactionStore = new SharedPreferencesDishReactionStore(this);
+        reactions = reactionStore.load();
+        dataManager = new DataManager(preferenceStore, historyStore, cookbookStore,
+                reactionStore);
         householdProfileStore = new SharedPreferencesHouseholdProfileStore(this);
         householdProfile = householdProfileStore.load();
         appSettings = new SharedPreferencesAppSettings(this);
@@ -274,6 +280,12 @@ public class MainActivity extends Activity {
         if (migrated != tasteEvents) {
             tasteEvents = migrated;
             tasteEventStore.save(tasteEvents);
+        }
+        // Polubienia sprzed listy reakcji przechodzą do niej raz, przy aktualizacji.
+        if (reactions.isEmpty() && !preferences.getLikes().isEmpty()) {
+            reactions = DishReactionLog.fromLikes(preferences.getLikes(),
+                    BuiltInRecipes.detailsByTitle(cookbook), System.currentTimeMillis());
+            reactionStore.save(reactions);
         }
 
         ScrollView scrollView = new ScrollView(this);
@@ -524,6 +536,7 @@ public class MainActivity extends Activity {
         backendStore = new SharedPreferencesBackendStore(this);
         backendClient = new BackendClient(backendStore, chatGptAccount, transport);
         recipeService = backendClient;
+        dishRecommender = new DishRecommender(backendClient);
         dishImporter = backendClient;
     }
 
@@ -835,14 +848,19 @@ public class MainActivity extends Activity {
 
     /** Persists the quiz dish picks as ordinary likes, one per answered round. */
     private void saveOnboardingPicks() {
+        java.util.Map<String, String> detailsByTitle = BuiltInRecipes.detailsByTitle(cookbook);
         for (String pick : onboardingPicks) {
             if (pick != null) {
+                reactions = reactions.append(new DishReaction(pick,
+                        DishReaction.describe(detailsByTitle.get(pick)), true,
+                        System.currentTimeMillis()));
                 preferences = preferences.withLike(pick);
                 recordTasteEvent(TasteEvent.Type.ONBOARDING_PICK, pick,
                         TasteEvent.NO_MEAL);
             }
         }
         preferenceStore.save(preferences);
+        reactionStore.save(reactions);
     }
 
     // ----- Meal selection + proposals -------------------------------------
@@ -865,10 +883,9 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * Offer a fresh set of proposals for the current meal. Even with AI available,
-     * a fresh install has nothing to draw conclusions from yet, so it sticks to the
-     * bundled catalogue until the user has liked enough dishes for the AI to have
-     * a real taste profile to work from.
+     * Offer a fresh set of proposals for the current meal. Signed in, one LLM call
+     * rates catalogue candidates against the explicit like/dislike list (empty
+     * list = popularity); otherwise the offline pool, never pretending to be AI.
      */
     private void generateProposals() {
         if (currentMealIndex < 0) {
@@ -878,18 +895,14 @@ public class MainActivity extends Activity {
         // From now on the content area belongs to the proposal flow, so back
         // (even while the AI is still thinking) returns to the start screen.
         currentScreen = BackNavigation.Screen.PROPOSALS;
-        if (isAiAvailable() && personalizationReadiness.isReady(preferences)) {
-            generateAiProposals();
-        } else {
-            refreshCatalog(this::generateOfflineProposals);
-        }
+        refreshCatalog(isAiAvailable()
+                ? this::generateRatedProposals : this::generateOfflineProposals);
     }
 
     private void generateOfflineProposals() {
         // Shared offline pipeline: pool -> shuffle -> at most one taste-led pick,
         // the rest kept varied (so liking three chicken dishes does not turn every
         // suggestion into chicken).
-        exploratoryDishes.clear();
         List<Recipe> chosen = generateOfflineRecipes();
 
         List<DishProposal> newProposals = new ArrayList<>();
@@ -898,7 +911,7 @@ public class MainActivity extends Activity {
             newProposals.add(proposalFromRecipe(recipe));
             newRecipes.add(recipe);
         }
-        showProposals(newProposals, newRecipes);
+        showProposals(newProposals, newRecipes, null);
     }
 
     /** The shared offline pipeline for the current meal, diet-filtered. */
@@ -919,59 +932,47 @@ public class MainActivity extends Activity {
         return proposalValidator.proposalFromRecipe(recipe);
     }
 
-    private void generateAiProposals() {
-        final ExplorationPlanner.ExplorationGoal explorationGoal = planExploration();
-        final RecipeRequest request = buildRequest(explorationGoal);
+    /**
+     * Jedno wywołanie LLM: kandydaci z katalogu (już po diecie) oceniani
+     * względem listy reakcji; pokazujemy 3 najwyżej ocenione z powodem.
+     * Sieć, zły JSON czy wylogowanie po drodze kończą się pulą offline.
+     */
+    private void generateRatedProposals() {
+        final String mealType = MEAL_TYPES[currentMealIndex];
+        final DishReactionLog reactionSnapshot = reactions;
+        final DietConstraints diet = householdProfile.getDiet();
+        final long now = System.currentTimeMillis();
+        final List<Recipe> candidates = DishRecommender.candidates(
+                mealPoolBuilder.build(backendStore.forMeal(currentMealIndex), cookbook,
+                        preferences, diet),
+                history, now, random);
+        final List<Recipe> offline = generateOfflineRecipes();
         final int epoch = contentEpoch;
         setMealButtonsEnabled(false);
-        showHint("Szukam pomysłów…");
+        showHint("Dobieram dania do Twojego gustu…");
         new Thread(() -> {
-            try {
-                if (backendStore.needsCatalog()) {
-                    String endpoint = backendStore.baseUrl();
-                    try { backendStore.cache(endpoint, backendClient.catalog()); } catch (IOException ignored) {}
+            final DishRecommender.Recommendation recommendation = dishRecommender.recommend(
+                    isAiAvailable(), mealType, reactionSnapshot, candidates, diet, offline,
+                    PROPOSAL_COUNT, now);
+            runOnUiThread(() -> {
+                setMealButtonsEnabled(true);
+                if (epoch != contentEpoch) {
+                    return; // the user moved on; don't stomp the new content
                 }
-                final List<DishProposal> result =
-                        recipeService.proposeDishes(request, PROPOSAL_COUNT);
-                runOnUiThread(() -> {
-                    setMealButtonsEnabled(true);
-                    if (epoch != contentEpoch) {
-                        return; // the user moved on; don't stomp the new content
-                    }
-                    // Distrust-by-default: drop proposals that break the diet
-                    // (or duplicate each other) and top the set back up from
-                    // the diet-filtered offline pool.
-                    ProposalValidator.Result vetted = proposalValidator.validate(
-                            result, householdProfile.getDiet(),
-                            generateOfflineRecipes(), PROPOSAL_COUNT);
-                    if (vetted.getProposals().isEmpty()) {
-                        showHint("Nie udało się wymyślić dań. Spróbuj ponownie.");
-                        return;
-                    }
-                    // Remember which of the model's answers were the deliberate
-                    // experiments (last one, or last two in the thin-slot 1+2
-                    // mode) — by title, so validator substitutions cannot shift
-                    // negative signals onto them.
-                    exploratoryDishes.clear();
-                    if (explorationGoal != null) {
-                        int from = explorationGoal.isBroad() ? 1 : PROPOSAL_COUNT - 1;
-                        for (int i = from; i < result.size() && i < PROPOSAL_COUNT; i++) {
-                            exploratoryDishes.add(result.get(i).getName().toLowerCase());
-                        }
-                    }
-                    showProposals(vetted.getProposals(), vetted.getRecipes());
-                });
-            } catch (IOException e) {
-                final String message = e.getMessage();
-                runOnUiThread(() -> {
-                    setMealButtonsEnabled(true);
-                    if (epoch != contentEpoch) {
-                        return;
-                    }
-                    generateOfflineProposals();
-                    showHint(message != null ? message : "Korzystam z propozycji offline.");
-                });
-            }
+                if (recommendation.getRecipes().isEmpty()) {
+                    showHint("Brak dań pasujących do diety. Dodaj własne danie.");
+                    return;
+                }
+                List<DishProposal> newProposals = new ArrayList<>();
+                for (Recipe recipe : recommendation.getRecipes()) {
+                    newProposals.add(proposalFromRecipe(recipe));
+                }
+                showProposals(newProposals, new ArrayList<>(recommendation.getRecipes()),
+                        recommendation.getReasons());
+                if (recommendation.isFailed()) {
+                    toast("AI nie oceniło dań — pokazuję propozycje offline.");
+                }
+            });
         }).start();
     }
 
@@ -981,19 +982,7 @@ public class MainActivity extends Activity {
                 detailsByTitle, System.currentTimeMillis());
     }
 
-    /** Cel eksploracji dla bieżącego posiłku (null = model nic jeszcze nie wie). */
-    private ExplorationPlanner.ExplorationGoal planExploration() {
-        return explorationPlanner.plan(
-                currentTasteModel(BuiltInRecipes.detailsByTitle(cookbook)),
-                householdProfile.getDiet(), currentMealIndex, random);
-    }
-
-    /** Żądanie bez eksploracji — dla pobrania pełnego przepisu, gdzie 2+1 nie gra. */
     private RecipeRequest buildRequest() {
-        return buildRequest(null);
-    }
-
-    private RecipeRequest buildRequest(ExplorationPlanner.ExplorationGoal exploration) {
         final String mealType = MEAL_TYPES[currentMealIndex];
         List<String> fragments = new ArrayList<>();
         String portionFragment = PortionSize.promptFragment(appSettings.loadDefaultServings());
@@ -1012,16 +1001,16 @@ public class MainActivity extends Activity {
                 .withTasteContext(tasteContextBuilder.build(
                         currentTasteModel(detailsByTitle), tasteEvents,
                         householdProfile.getDiet(), currentMealIndex)
-                        .withExploration(exploration == null
-                                ? "" : exploration.promptSentence())
                         .withAntiMonotony(monotonyDetector.detect(
                                 history.recentTitles(MonotonyDetector.WINDOW),
                                 detailsByTitle)));
     }
 
-    private void showProposals(List<DishProposal> newProposals, List<Recipe> newRecipes) {
+    private void showProposals(List<DishProposal> newProposals, List<Recipe> newRecipes,
+                               List<String> reasons) {
         proposals = newProposals;
         proposalRecipes = newRecipes;
+        proposalReasons = reasons == null ? new ArrayList<String>() : reasons;
         currentRecipe = null;
         trioChoiceRecorded = false;
         trioEngagementCounted = false;
@@ -1108,6 +1097,16 @@ public class MainActivity extends Activity {
             card.addView(body, marginTop(6));
         }
 
+        String reason = index < proposalReasons.size() ? proposalReasons.get(index) : "";
+        if (!reason.isEmpty()) {
+            TextView why = new TextView(this);
+            why.setText("Dlaczego: " + reason);
+            why.setTextSize(14);
+            why.setTextColor(COLOR_INK_BODY);
+            why.setTypeface(null, Typeface.ITALIC);
+            card.addView(why, marginTop(6));
+        }
+
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
         card.addView(actions, marginTop(10));
@@ -1119,8 +1118,18 @@ public class MainActivity extends Activity {
         like.setText("Lubię to");
         like.setTextSize(15);
         styleTonalButton(like);
-        like.setOnClickListener(v -> likeProposal(index));
+        like.setOnClickListener(v -> reactToProposal(index, true));
         actions.addView(like, equalWidthRowItem());
+
+        Button dislike = new Button(this);
+        if (index == 0) {
+            dislike.setId(R.id.dislike_button);
+        }
+        dislike.setText("Nie lubię");
+        dislike.setTextSize(15);
+        styleGhostButton(dislike);
+        dislike.setOnClickListener(v -> reactToProposal(index, false));
+        actions.addView(dislike, equalWidthRowItem());
 
         Button show = new Button(this);
         if (index == 0) {
@@ -1135,17 +1144,9 @@ public class MainActivity extends Activity {
         return card;
     }
 
-    /** Czy danie w bieżącej trójce jest celowym eksperymentem systemu. */
-    private boolean isExploratory(String dish) {
-        return dish != null && exploratoryDishes.contains(dish.toLowerCase());
-    }
-
-    /** „Inne propozycje" = słaby negatyw dla trójki; eksperyment systemu nie płaci. */
+    /** „Inne propozycje" = słaby negatyw dla trójki w offline'owym modelu gustu (nie reakcja). */
     private void recordTrioRerolled() {
         for (DishProposal proposal : proposals) {
-            if (isExploratory(proposal.getName())) {
-                continue;
-            }
             recordTasteEvent(TasteEvent.Type.REROLLED, proposal.getName(),
                     currentMealIndex, false);
         }
@@ -1153,13 +1154,16 @@ public class MainActivity extends Activity {
         learningStatsStore.save(learningStats);
     }
 
-    private void likeProposal(int index) {
+    private void reactToProposal(int index, boolean liked) {
         if (index < 0 || index >= proposals.size()) {
             return;
         }
         markTrioEngaged();
-        String dish = proposals.get(index).getName();
-        rememberLike(dish, isExploratory(dish));
+        DishProposal proposal = proposals.get(index);
+        Recipe recipe = index < proposalRecipes.size() ? proposalRecipes.get(index) : null;
+        String description = recipe != null
+                ? DishReaction.describe(recipe.getDetails()) : DishReaction.describe(proposal);
+        rememberReaction(proposal.getName(), description, liked);
     }
 
     /** Reveal the full recipe for a proposal: instant offline, fetched for AI. */
@@ -1174,15 +1178,15 @@ public class MainActivity extends Activity {
         // per dish per trio, so browsing back and forth does not inflate taste...
         if (viewedInTrio.add(chosenDish.toLowerCase())) {
             recordTasteEvent(TasteEvent.Type.RECIPE_VIEWED, chosenDish,
-                    currentMealIndex, isExploratory(chosenDish));
+                    currentMealIndex, false);
         }
         // ...and the first choice in a trio marks the other dishes as "lost the
-        // comparison" — relative learning, the exploratory experiments exempted.
+        // comparison" — relative learning for the offline taste model.
         if (!trioChoiceRecorded) {
             trioChoiceRecorded = true;
             for (int i = 0; i < proposals.size(); i++) {
                 String other = proposals.get(i).getName();
-                if (i == index || isExploratory(other)) {
+                if (i == index) {
                     continue;
                 }
                 recordTasteEvent(TasteEvent.Type.SHOWN_NOT_CHOSEN, other,
@@ -1276,8 +1280,18 @@ public class MainActivity extends Activity {
         like.setText("Lubię to");
         like.setTextSize(16);
         stylePrimaryButton(like);
-        like.setOnClickListener(v -> rememberLike(recipe.getTitle()));
+        like.setOnClickListener(v -> rememberReaction(recipe.getTitle(),
+                DishReaction.describe(recipe.getDetails()), true));
         actions.addView(like, equalWidthRowItem());
+
+        Button dislike = new Button(this);
+        dislike.setId(R.id.dislike_button);
+        dislike.setText("Nie lubię");
+        dislike.setTextSize(16);
+        styleGhostButton(dislike);
+        dislike.setOnClickListener(v -> rememberReaction(recipe.getTitle(),
+                DishReaction.describe(recipe.getDetails()), false));
+        actions.addView(dislike, equalWidthRowItem());
 
         if (isAiAvailable()) {
             Button change = new Button(this);
@@ -1301,20 +1315,27 @@ public class MainActivity extends Activity {
         contentContainer.addView(back, marginTop(12));
     }
 
-    // ----- Likes-only learning --------------------------------------------
+    // ----- Explicit reactions ---------------------------------------------
 
-    private void rememberLike(String dish) {
-        rememberLike(dish, false);
-    }
-
-    private void rememberLike(String dish, boolean exploratory) {
+    /**
+     * Dopisuje jawną reakcję do listy (wejście oceny przez LLM). Polubienie
+     * zasila też offline'owy fallback; „Nie lubię" nie jest zakazem — danie
+     * nie znika z puli, model po prostu oceni je i podobne niżej.
+     */
+    private void rememberReaction(String dish, String description, boolean liked) {
         if (dish == null || dish.trim().isEmpty()) {
             return;
         }
-        preferences = preferences.withLike(dish);
-        preferenceStore.save(preferences);
-        recordTasteEvent(TasteEvent.Type.LIKED, dish, currentMealIndex, exploratory);
-        Toast.makeText(this, "Zapamiętane — lubisz: " + dish, Toast.LENGTH_SHORT).show();
+        reactions = reactions.append(new DishReaction(dish, description, liked,
+                System.currentTimeMillis()));
+        reactionStore.save(reactions);
+        if (liked) {
+            preferences = preferences.withLike(dish);
+            preferenceStore.save(preferences);
+            recordTasteEvent(TasteEvent.Type.LIKED, dish, currentMealIndex, false);
+        }
+        Toast.makeText(this, (liked ? "Zapamiętane — lubisz: " : "Zapamiętane — nie lubisz: ")
+                + dish, Toast.LENGTH_SHORT).show();
     }
 
     private void recordTasteEvent(TasteEvent.Type type, String dish, int mealIndex) {
@@ -1612,6 +1633,11 @@ public class MainActivity extends Activity {
                     cookbookStore.save(cookbook);
                     preferences = preferences.withLike(entry.getTitle());
                     preferenceStore.save(preferences);
+                    // Dodanie znanego i lubianego dania to jawne „lubię" dla oceny LLM.
+                    reactions = reactions.append(new DishReaction(entry.getTitle(),
+                            DishReaction.describe(entry.getRecipe()), true,
+                            System.currentTimeMillis()));
+                    reactionStore.save(reactions);
                     recordTasteEvent(TasteEvent.Type.IMPORTED, entry.getTitle(),
                             TasteEvent.NO_MEAL);
                     Toast.makeText(MainActivity.this,
@@ -1641,17 +1667,18 @@ public class MainActivity extends Activity {
 
         labels.add("Pokaż i usuń dania z bazy");
         actions.add(this::showCookbookDialog);
-        labels.add("Wyczyść polubione dania");
+        labels.add("Wyczyść reakcje (lubię / nie lubię)");
         actions.add(() -> {
             dataManager.clearPreferences();
             preferences = UserPreferences.empty();
+            reactions = DishReactionLog.empty();
             // Dziennik gustu też — inaczej „zapomniane" polubienia wróciłyby
             // do propozycji bocznymi drzwiami przez model gustu.
             tasteEvents = TasteEventLog.empty();
             tasteEventStore.save(tasteEvents);
             tasteAggregate = FrozenTasteAggregate.empty();
             tasteEventStore.saveAggregate(tasteAggregate);
-            toast("Wyczyszczono polubione dania.");
+            toast("Wyczyszczono reakcje na dania.");
         });
         labels.add("Wyczyść historię podpowiedzi");
         actions.add(() -> {

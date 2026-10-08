@@ -10,16 +10,27 @@ public final class DataManager {
     private final PreferenceStore preferenceStore;
     private final MealHistoryStore historyStore;
     private final CookbookStore cookbookStore;
+    private final DishReactionStore reactionStore;
 
     public DataManager(PreferenceStore preferenceStore, MealHistoryStore historyStore,
                        CookbookStore cookbookStore) {
+        this(preferenceStore, historyStore, cookbookStore, null);
+    }
+
+    public DataManager(PreferenceStore preferenceStore, MealHistoryStore historyStore,
+                       CookbookStore cookbookStore, DishReactionStore reactionStore) {
         this.preferenceStore = preferenceStore;
         this.historyStore = historyStore;
         this.cookbookStore = cookbookStore;
+        this.reactionStore = reactionStore;
     }
 
+    /** Czyści polubienia i listę reakcji lubię/nie lubię — jedno „zapomnij gust". */
     public void clearPreferences() {
         preferenceStore.save(UserPreferences.empty());
+        if (reactionStore != null) {
+            reactionStore.save(DishReactionLog.empty());
+        }
     }
 
     public void clearHistory() {

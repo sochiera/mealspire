@@ -7,7 +7,7 @@ import java.net.URI;
 import java.util.*;
 
 /** Task-level HTTP client. OAuth, refresh tokens and APK updates stay on the device. */
-public final class BackendClient implements RecipeOperations, DishImporter {
+public final class BackendClient implements RecipeOperations, DishImporter, DishRater {
     public interface Configuration { String baseUrl(); }
     private final Configuration configuration;
     private final ChatGptAccount account;
@@ -82,5 +82,21 @@ public final class BackendClient implements RecipeOperations, DishImporter {
             Recipe recipe = BackendCodec.recipe(response.getJSONObject("recipe"));
             return new CookbookEntry(recipe.getTitle(), recipe.getDetails(), response.optString("source", "opis"));
         } catch (JSONException e) { throw new IOException("Nieprawidłowy import backendu.", e); }
+    }
+    @Override public List<DishRating> rate(String mealType, List<DishReaction> reactions, List<DishProposal> candidates,
+                                           DietConstraints diet, long now) throws IOException {
+        try {
+            JSONArray r = new JSONArray(), c = new JSONArray();
+            for (DishReaction reaction : reactions) r.put(BackendCodec.reaction(reaction));
+            for (DishProposal candidate : candidates) c.put(new JSONObject().put("name", candidate.getName())
+                    .put("description", candidate.getDescription()));
+            JSONObject household = new JSONObject(new HouseholdProfileSerializer().toJson(
+                    HouseholdProfile.empty().withDiet(diet == null ? DietConstraints.empty() : diet)));
+            JSONArray a = call("/v1/rate", new JSONObject().put("mealType", mealType).put("now", now)
+                    .put("household", household).put("reactions", r).put("candidates", c)).getJSONArray("ratings");
+            List<DishRating> result = new ArrayList<>();
+            for (int i=0; i<a.length(); i++) result.add(BackendCodec.rating(a.getJSONObject(i)));
+            return result;
+        } catch (JSONException e) { throw new IOException("Nieprawidłowe oceny backendu.", e); }
     }
 }

@@ -72,4 +72,22 @@ public class DataManagerTest {
         assertTrue(history.load().recentTitles(10).isEmpty());
         assertTrue(cookbook.load().getEntries().isEmpty());
     }
+
+    private static class FakeReactionStore implements DishReactionStore {
+        DishReactionLog value = DishReactionLog.empty();
+        public DishReactionLog load() { return value; }
+        public void save(DishReactionLog log) { value = log; }
+    }
+
+    @Test
+    public void clearPreferencesAlsoClearsReactionList() {
+        FakeReactionStore reactions = new FakeReactionStore();
+        reactions.value = DishReactionLog.empty()
+                .append(new DishReaction("Pierogi", "twaróg", false, 1L));
+        DataManager withReactions = new DataManager(prefs, history, cookbook, reactions);
+
+        withReactions.clearPreferences();
+
+        assertTrue(reactions.load().isEmpty());
+    }
 }
