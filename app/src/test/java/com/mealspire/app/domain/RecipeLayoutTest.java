@@ -37,6 +37,18 @@ public class RecipeLayoutTest {
     }
 
     @Test
+    public void przecinkiDziesiętneNieZmieniająIlościSkładników() {
+        List<RecipeLayout.Block> blocks = RecipeLayout.parse(
+                "Składniki: 1,5 l mleka, 0,5 kg mąki, sól,cukier.");
+
+        assertBlock(blocks.get(1), RecipeLayout.Type.ITEM, "1,5 l mleka");
+        assertBlock(blocks.get(2), RecipeLayout.Type.ITEM, "0,5 kg mąki");
+        assertBlock(blocks.get(3), RecipeLayout.Type.ITEM, "sól");
+        assertBlock(blocks.get(4), RecipeLayout.Type.ITEM, "cukier");
+        assertEquals(5, blocks.size());
+    }
+
+    @Test
     public void innaKrótkaEtykietaToNagłówekZAkapitem() {
         List<RecipeLayout.Block> blocks = RecipeLayout.parse(
                 "Dodatki (opcjonalnie, do wyboru): jabłko, banan, cynamon");

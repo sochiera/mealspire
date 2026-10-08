@@ -106,7 +106,7 @@ public final class RecipeLayout {
         return colon;
     }
 
-    /** Splits "a, b (c, d), e." on commas outside parentheses, dropping the final dot. */
+    /** Splits ingredient separators, preserving decimal commas and parenthesized text. */
     private static List<String> splitItems(String text) {
         List<String> items = new ArrayList<>();
         StringBuilder current = new StringBuilder();
@@ -118,7 +118,10 @@ public final class RecipeLayout {
             } else if (c == ')' && depth > 0) {
                 depth--;
             }
-            if (c == ',' && depth == 0) {
+            boolean decimalComma = c == ',' && i > 0 && i + 1 < text.length()
+                    && Character.isDigit(text.charAt(i - 1))
+                    && Character.isDigit(text.charAt(i + 1));
+            if (c == ',' && depth == 0 && !decimalComma) {
                 addItem(items, current.toString());
                 current.setLength(0);
             } else {
