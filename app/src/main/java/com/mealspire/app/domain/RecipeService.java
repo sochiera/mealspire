@@ -6,7 +6,7 @@ import java.io.IOException;
  * Coordinates recipe generation: builds prompts, calls the LLM client, and
  * parses the answer into a {@link Recipe}. Holds no Android dependencies.
  */
-public final class RecipeService {
+public class RecipeService {
 
     private final LlmClient client;
     private final RecipePromptBuilder promptBuilder;

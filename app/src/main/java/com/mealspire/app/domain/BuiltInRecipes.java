@@ -269,6 +269,9 @@ public final class BuiltInRecipes {
             }
     };
 
+    private static volatile Recipe[][] cached;
+    public static void useCachedCatalog(Recipe[][] catalog) { cached = catalog; }
+    private static Recipe[][] active() { return cached == null ? MEALS : cached; }
     private BuiltInRecipes() {
     }
 
@@ -279,7 +282,7 @@ public final class BuiltInRecipes {
 
     /** The bundled recipes for the given meal index (0=breakfast, 1=lunch, 2=dinner). */
     public static Recipe[] forMeal(int mealIndex) {
-        return MEALS[mealIndex];
+        return active()[mealIndex].clone();
     }
 
     /**
@@ -288,7 +291,7 @@ public final class BuiltInRecipes {
      */
     public static Map<String, String> detailsByTitle(Cookbook cookbook) {
         Map<String, String> detailsByTitle = new LinkedHashMap<>();
-        for (Recipe[] meal : MEALS) {
+        for (Recipe[] meal : active()) {
             for (Recipe recipe : meal) {
                 detailsByTitle.put(recipe.getTitle(), recipe.getDetails());
             }

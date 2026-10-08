@@ -8,7 +8,7 @@ import java.io.IOException;
  * name and produce a concise recipe. Network access is behind {@link PageFetcher}
  * and {@link LlmClient} so this orchestration is fully unit-testable.
  */
-public final class KnownDishImporter {
+public class KnownDishImporter {
 
     private static final String SOURCE_DESCRIPTION = "opis";
 

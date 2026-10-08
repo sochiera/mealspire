@@ -136,3 +136,17 @@ Wszystkie teksty w UI i promptach są po polsku.
   Każde cofnięcie podbija `contentEpoch`. **Nie włączać**
   `android:enableOnBackInvokedCallback` w manifeście — wtedy `onBackPressed()`
   przestaje być wołane.
+
+## Backend v1 (od powłoki 1.3)
+
+Powyższe opisy lokalnego profilowania i promptów dotyczą ścieżki offline oraz
+historii implementacji. Online `BackendRecipeService` i `BackendDishImporter`
+wysyłają dane domenowe do VPS; `backend/Operations` dobiera prompty, ocenia gust
+przez LLM i generuje wyniki. APK nie dobiera promptów online. Backend używa
+wspólnych czystych klas domenowych jako źródeł, bez zależności od Androida.
+Katalog JSON może być podmieniony na VPS bez zmiany APK. Telefon trzyma jego
+ostatnią poprawną kopię oraz wbudowaną pulę na pierwsze uruchomienie offline.
+Login/OAuth/refresh i wybór modelu są nadal lokalne. Token dostępowy przepływa
+przez VPS bez zapisu. Kontrakt, izolacja usług i redeploy: `backend/RUNBOOK.md`.
+Sprawdzaj również testy backendu przez `./gradlew test`; dystrybucja serwera to
+`:backend:distTar`, niezależna od APK.

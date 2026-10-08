@@ -47,6 +47,7 @@ public final class MealReminderReceiver extends BroadcastReceiver {
             return;
         }
 
+        new com.mealspire.app.storage.BackendCatalogCache(context).load();
         UserPreferences preferences = new SharedPreferencesPreferenceStore(context).load();
         Cookbook cookbook = new SharedPreferencesCookbookStore(context).load();
         SharedPreferencesMealHistoryStore historyStore =

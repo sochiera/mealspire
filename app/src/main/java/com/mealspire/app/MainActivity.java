@@ -25,7 +25,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.mealspire.app.domain.ChatGptAccount;
-import com.mealspire.app.domain.ChatGptLlmClient;
 import com.mealspire.app.domain.ChatGptOAuth;
 import com.mealspire.app.domain.AppSettings;
 import com.mealspire.app.domain.BackNavigation;
@@ -78,7 +77,6 @@ import com.mealspire.app.domain.VersionInfoParser;
 import com.mealspire.app.domain.VersionJsonSource;
 import com.mealspire.app.domain.GptModel;
 import com.mealspire.app.domain.IdTokenVerifier;
-import com.mealspire.app.domain.LlmClient;
 import com.mealspire.app.net.HttpUrlTransport;
 import com.mealspire.app.net.LoopbackCallbackServer;
 import com.mealspire.app.net.HttpPageFetcher;
@@ -254,6 +252,9 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         buildLlmClients();
+        com.mealspire.app.storage.BackendCatalogCache catalogCache = new com.mealspire.app.storage.BackendCatalogCache(this);
+        catalogCache.load();
+        new Thread(() -> catalogCache.refresh(BuildConfig.BACKEND_URL)).start();
         preferenceStore = new SharedPreferencesPreferenceStore(this);
         preferences = preferenceStore.load();
         historyStore = new SharedPreferencesMealHistoryStore(this);
@@ -531,11 +532,10 @@ public class MainActivity extends Activity {
         chatGptAccount = new ChatGptAccount(new SharedPreferencesChatGptSessionStore(this),
                 transport, new ChatGptOAuth(new SecureRandom()), new IdTokenVerifier(),
                 System::currentTimeMillis);
-        LlmClient llmClient = new ChatGptLlmClient(chatGptAccount, transport);
-        recipeService = new RecipeService(llmClient, new RecipePromptBuilder(),
-                new RecipeTextParser());
-        dishImporter = new KnownDishImporter(llmClient, new HttpPageFetcher(),
-                new KnownDishPromptBuilder(), new RecipeTextParser());
+        com.mealspire.app.domain.BackendApi api = new com.mealspire.app.domain.BackendApi(
+                chatGptAccount, transport, BuildConfig.BACKEND_URL);
+        recipeService = new com.mealspire.app.domain.BackendRecipeService(api);
+        dishImporter = new com.mealspire.app.domain.BackendDishImporter(api);
     }
 
     private boolean isAiAvailable() {
@@ -931,8 +931,7 @@ public class MainActivity extends Activity {
     }
 
     private void generateAiProposals() {
-        final ExplorationPlanner.ExplorationGoal explorationGoal = planExploration();
-        final RecipeRequest request = buildRequest(explorationGoal);
+        final RecipeRequest request = buildRequest();
         final int epoch = contentEpoch;
         setMealButtonsEnabled(false);
         showHint("Szukam pomysłów…");
@@ -960,22 +959,21 @@ public class MainActivity extends Activity {
                     // mode) — by title, so validator substitutions cannot shift
                     // negative signals onto them.
                     exploratoryDishes.clear();
-                    if (explorationGoal != null) {
-                        int from = explorationGoal.isBroad() ? 1 : PROPOSAL_COUNT - 1;
-                        for (int i = from; i < result.size() && i < PROPOSAL_COUNT; i++) {
-                            exploratoryDishes.add(result.get(i).getName().toLowerCase());
+                    if (recipeService instanceof com.mealspire.app.domain.BackendRecipeService) {
+                        for (String name : ((com.mealspire.app.domain.BackendRecipeService) recipeService).exploratoryDishes()) {
+                            exploratoryDishes.add(name.toLowerCase());
                         }
                     }
                     showProposals(vetted.getProposals(), vetted.getRecipes());
                 });
             } catch (IOException e) {
-                final String message = e.getMessage();
                 runOnUiThread(() -> {
                     setMealButtonsEnabled(true);
                     if (epoch != contentEpoch) {
                         return;
                     }
-                    showHint(message != null ? message : "Spróbuj ponownie za chwilę.");
+                    generateOfflineProposals();
+                    Toast.makeText(this, "Backend niedostępny — propozycje offline.", Toast.LENGTH_SHORT).show();
                 });
             }
         }).start();
@@ -1010,19 +1008,8 @@ public class MainActivity extends Activity {
         if (knownDishes.size() > 10) {
             knownDishes = knownDishes.subList(0, 10);
         }
-        java.util.Map<String, String> detailsByTitle =
-                BuiltInRecipes.detailsByTitle(cookbook);
         return new RecipeRequest(mealType, preferences, history.recentTitles(8),
-                fragments, knownDishes, buildTasteProfile().getAffinities(),
-                householdProfile)
-                .withTasteContext(tasteContextBuilder.build(
-                        currentTasteModel(detailsByTitle), tasteEvents,
-                        householdProfile.getDiet(), currentMealIndex)
-                        .withExploration(exploration == null
-                                ? "" : exploration.promptSentence())
-                        .withAntiMonotony(monotonyDetector.detect(
-                                history.recentTitles(MonotonyDetector.WINDOW),
-                                detailsByTitle)));
+                fragments, knownDishes, java.util.Collections.emptyList(), householdProfile);
     }
 
     private void showProposals(List<DishProposal> newProposals, List<Recipe> newRecipes) {

@@ -119,7 +119,7 @@ dania, osobno per pora posiłku), w którym świeże wybory ważą więcej niż 
 gust może płynąć. Do AI trafia krótki, skompresowany profil i garść ostatnio
 polubionych dań, a nie cała historia. Przy trzech propozycjach obowiązuje
 reguła **2+1**: dwie w Twój gust, jedna celowo inna — żeby propozycje nie
-zwęziły się do trzech dań w kółko. Wszystko liczy się wyłącznie na telefonie;
+zwęziły się do trzech dań w kółko. W trybie offline profil liczy się na telefonie; online gust ocenia LLM na VPS;
 podgląd: **„Więcej…” → „Zarządzaj moimi danymi” → „Statystyki uczenia”**.
 
 ## Zmiana przepisu (zamienniki przez AI)
@@ -144,10 +144,10 @@ oficjalne „Sign in with ChatGPT” od OpenAI:
 Technicznie: OAuth 2.0 Authorization Code + PKCE z dynamiczną rejestracją
 klienta (ścieżka dla aplikacji open source), przekierowanie na
 `http://127.0.0.1:PORT/callback` obsługiwane przez aplikację na czas logowania.
-Nie istnieje żaden sekret klienta. Tokeny (dostępowy ważny godzinę, odświeżający
-30 dni, odnawiany przy każdym użyciu) są tylko w prywatnym magazynie aplikacji
-i są **wyłączone z kopii zapasowej Androida**. Zapytania idą do OpenAI Responses
-API i są liczone z limitu Twojego planu, nie z czyjegokolwiek klucza.
+Nie istnieje żaden sekret klienta. Tokeny są przechowywane w prywatnym magazynie aplikacji i są **wyłączone
+z kopii zapasowej Androida**. Refresh token pozostaje na telefonie; token
+dostępowy jest przekazywany przez HTTPS do VPS na czas operacji AI. Zapytania
+idą przez backend do OpenAI Responses API i są liczone z limitu Twojego planu, nie z czyjegokolwiek klucza.
 
 **Model AI**: domyślnie **GPT Luna** (szybki i oszczędny dla limitów planu).
 W **„Więcej…” → „Model AI: …”** możesz przełączyć na **GPT Sol** (mocniejszy,
@@ -325,3 +325,18 @@ Projekt jest udostępniony na licencji **PolyForm Noncommercial License 1.0.0** 
 możesz go używać, modyfikować i rozpowszechniać **za darmo do celów
 niekomercyjnych**. Użycie komercyjne wymaga osobnej zgody autora. Pełny tekst
 znajdziesz w pliku [`LICENSE.md`](LICENSE.md).
+
+## Backend VPS (zmiana architektury)
+
+Operacje online korzystają z API v1 na VPS: ocena gustu przez LLM, propozycje,
+przepisy, zmiany i import oraz katalog. Logowanie ChatGPT, dane lokalne, cache,
+offline i baner aktualizacji pozostają w Androidzie. Token dostępowy jest
+przekazywany przez HTTPS do backendu na czas żądania; refresh token zostaje na
+telefonie. Opisy powyżej dotyczące liczenia wyłącznie na telefonie odnoszą się
+od tej wersji do trybu offline. Import URL nie pobiera strony — najlepiej podać
+opis dania. Katalog odświeża się po dobie i jest dostępny offline po restarcie.
+
+Backend nie jest jeszcze wdrożony. Po jednorazowej aktualizacji powłoki zmiany
+promptów, generowania i katalogu można dostarczać redeployem zgodnego API bez
+nowego APK. Instrukcja izolowanego uruchomienia na wskazanym VPS i rollback:
+[backend/RUNBOOK.md](backend/RUNBOOK.md).
