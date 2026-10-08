@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launcher icon flattened for in-app use (header logo, update screen).
+     Negative insets crop the adaptive-icon padding so the mark fills the tile. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/ic_launcher_background" />
+    <item
+        android:drawable="@drawable/ic_launcher_foreground"
+        android:left="-8dp"
+        android:top="-8dp"
+        android:right="-8dp"
+        android:bottom="-8dp" />
+</layer-list>

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Mealspire launcher background: warm terracotta with a soft "glow" built from
-  layered circles (no <gradient>, which vectors support only from API 24 and
-  the app ships with minSdk 23).
+  Mealspire launcher background: deep terracotta with a soft light from the
+  upper left, built from layered circles (no <gradient>: vectors support it
+  only from API 24, the app ships with minSdk 23).
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -10,21 +10,20 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Base -->
     <path
-        android:fillColor="#EF6C1A"
+        android:fillColor="@color/ms_icon_base"
         android:pathData="M0,0 L108,0 L108,108 L0,108 Z" />
 
-    <!-- Warm glow, upper-left -->
+    <!-- Light, upper-left -->
     <path
-        android:fillColor="#F5822E"
-        android:pathData="M34,28 m-78,0 a78,78 0 1,0 156,0 a78,78 0 1,0 -156,0" />
+        android:fillColor="@color/ms_icon_glow"
+        android:pathData="M30,26 m-74,0 a74,74 0 1,0 148,0 a74,74 0 1,0 -148,0" />
     <path
-        android:fillColor="#F99344"
-        android:pathData="M24,16 m-46,0 a46,46 0 1,0 92,0 a46,46 0 1,0 -92,0" />
+        android:fillColor="@color/ms_icon_glow_inner"
+        android:pathData="M22,14 m-42,0 a42,42 0 1,0 84,0 a42,42 0 1,0 -84,0" />
 
-    <!-- Deep shade, lower-right corner -->
+    <!-- Shade, lower-right corner -->
     <path
-        android:fillColor="#E25C10"
-        android:pathData="M122,126 m-58,0 a58,58 0 1,0 116,0 a58,58 0 1,0 -116,0" />
+        android:fillColor="@color/ms_icon_shade"
+        android:pathData="M124,128 m-56,0 a56,56 0 1,0 112,0 a56,56 0 1,0 -112,0" />
 </vector>

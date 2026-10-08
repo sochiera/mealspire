@@ -113,6 +113,22 @@ Wszystkie teksty w UI i promptach są po polsku.
   Przy wydaniu podbijaj `versionCode`/`versionName` i `dist/wersja.json` razem —
   pilnuje `ReleaseConsistencyTest`. Pełny design: `docs/design/aktualizacja-aplikacji.md`.
 
+## Wygląd UI
+
+- Cały wygląd (paleta, typografia, przyciski, karty, chipy) jest w
+  `ui/Ui.java`; `MainActivity` i `UpdateActivity` tylko składają widoki.
+  Paleta ma odpowiednik w `res/values/colors.xml` (motyw, dialogi, ikona) —
+  zmieniaj oba miejsca razem. Pary tekst/tło trzymają kontrast WCAG AA.
+- Dialogi (`AlertDialog`) dostają wygląd z `AppTheme.Dialog` w `styles.xml`.
+- Tekst przepisu dzieli na bloki czysta klasa `domain/RecipeLayout`
+  (nagłówki, składniki, kroki); powitanie wg godziny — `domain/DayGreeting`.
+- Ikona: adaptacyjna (`ic_launcher_background` + `ic_launcher_foreground`,
+  wszystko w strefie bezpiecznej r=33 w siatce 108) i osobna
+  `ic_launcher_monochrome` dla ikon tematycznych Androida 13+. Ikona
+  powiadomienia (`ic_notification`) to ta sama sylwetka, biała.
+- Podgląd ekranów bez emulatora: `UiScreenshotTest` (opt-in, patrz
+  `budowanie.md`).
+
 ## Pułapki w UI (naprawione — nie regresować)
 
 - `MainActivity.contentEpoch`: każda asynchroniczna odpowiedź (propozycje AI,

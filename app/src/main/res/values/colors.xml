@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Mealspire palette; mirrors com.mealspire.app.ui.Ui (programmatic views). -->
+<resources>
+    <color name="ms_background">#FBF6F0</color>
+    <color name="ms_surface">#FFFFFF</color>
+    <color name="ms_ink">#2B211A</color>
+    <color name="ms_ink_body">#4A3E33</color>
+    <color name="ms_accent">#C84B14</color>
+    <color name="ms_accent_deep">#9A3412</color>
+    <color name="ms_ripple">#26C84B14</color>
+    <color name="ms_icon_base">#C84B14</color>
+    <color name="ms_icon_glow">#D65B22</color>
+    <color name="ms_icon_glow_inner">#E06A2E</color>
+    <color name="ms_icon_shade">#B23F10</color>
+</resources>

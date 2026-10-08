@@ -10,20 +10,30 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
+import android.graphics.Outline;
 import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.RippleDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
+import android.text.style.BulletSpan;
+import android.text.style.ForegroundColorSpan;
+import android.text.style.RelativeSizeSpan;
+import android.text.style.StyleSpan;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewOutlineProvider;
 import android.text.TextUtils;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -36,6 +46,7 @@ import com.mealspire.app.domain.Cookbook;
 import com.mealspire.app.domain.CookbookEntry;
 import com.mealspire.app.domain.CookbookStore;
 import com.mealspire.app.domain.DataManager;
+import com.mealspire.app.domain.DayGreeting;
 import com.mealspire.app.domain.DietConstraints;
 import com.mealspire.app.domain.DishProposal;
 import com.mealspire.app.domain.DishReaction;
@@ -57,6 +68,7 @@ import com.mealspire.app.domain.MealHistory;
 import com.mealspire.app.domain.MealHistoryStore;
 import com.mealspire.app.domain.PreferenceStore;
 import com.mealspire.app.domain.Recipe;
+import com.mealspire.app.domain.RecipeLayout;
 import com.mealspire.app.domain.RecipeRequest;
 import com.mealspire.app.domain.DishTagger;
 import com.mealspire.app.domain.FrozenTasteAggregate;
@@ -94,6 +106,7 @@ import com.mealspire.app.storage.SharedPreferencesLearningStatsStore;
 import com.mealspire.app.storage.SharedPreferencesChatGptSessionStore;
 import com.mealspire.app.storage.SharedPreferencesTasteEventStore;
 import com.mealspire.app.storage.SharedPreferencesUpdateStateStore;
+import com.mealspire.app.ui.Ui;
 
 import java.io.IOException;
 import java.security.SecureRandom;
@@ -111,22 +124,14 @@ import java.util.concurrent.Executor;
  * likes when suggesting the next, equally simple, everyday dishes.
  */
 public class MainActivity extends Activity {
-    // Warm palette shared by the whole UI (programmatic views, no XML layouts).
-    // Keep in sync with values/styles.xml (dialog accent) and the launcher icon.
-    private static final int COLOR_BACKGROUND = Color.rgb(255, 247, 237);
-    private static final int COLOR_SURFACE = Color.WHITE;
-    private static final int COLOR_OUTLINE = Color.rgb(243, 222, 195);
-    private static final int COLOR_INK = Color.rgb(67, 56, 45);
-    private static final int COLOR_INK_BODY = Color.rgb(80, 68, 54);
-    private static final int COLOR_INK_SOFT = Color.rgb(120, 104, 86);
-    private static final int COLOR_ACCENT = Color.rgb(234, 88, 12);
-    private static final int COLOR_ACCENT_DEEP = Color.rgb(154, 52, 18);
-    private static final int COLOR_ACCENT_SOFT = Color.rgb(255, 237, 213);
-    private static final int RIPPLE_ON_ACCENT = Color.argb(64, 255, 255, 255);
-    private static final int RIPPLE_ON_LIGHT = Color.argb(38, 234, 88, 12);
-    private static final int BUTTON_CORNER_DP = 24;
+    // Look and feel (palette, buttons, cards) lives in ui/Ui; this class only
+    // decides what goes on screen.
 
     private static final String[] MEAL_TYPES = {"Śniadanie", "Obiad", "Kolacja"};
+    // "Pomysły na …" — the meal in the accusative, for section headers.
+    private static final String[] MEAL_ACCUSATIVE = {"śniadanie", "obiad", "kolację"};
+    private static final int[] MEAL_ICONS = {R.drawable.ic_meal_breakfast,
+            R.drawable.ic_meal_lunch, R.drawable.ic_meal_dinner};
     private static final int PROPOSAL_COUNT = 3;
     private static final int MAX_SERVINGS = 12;
     // Odpowiedzi profilu domowników — wspólne dla quizu startowego i dialogów
@@ -168,7 +173,11 @@ public class MainActivity extends Activity {
     static Executor updateCheckExecutorOverride;
 
     private final Random random = new Random();
-    private TextView servingsLabel;
+    private Button servingsLabel;
+    private Button aiChip;
+    private TextView greeting;
+    // Greeting, chips and meal tiles: hidden while the first-launch quiz runs.
+    private LinearLayout homeSection;
     private Button[] mealButtons;
     private LinearLayout contentContainer;
     private Button moreButton;
@@ -289,39 +298,44 @@ public class MainActivity extends Activity {
         }
 
         ScrollView scrollView = new ScrollView(this);
-        scrollView.setBackgroundColor(COLOR_BACKGROUND);
+        scrollView.setBackgroundColor(Ui.BACKGROUND);
+        scrollView.setFillViewport(true);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(24), dp(32), dp(24), dp(32));
+        root.setPadding(dp(20), dp(12), dp(20), dp(32));
         scrollView.addView(root);
 
-        TextView title = new TextView(this);
-        title.setText("Mealspire");
-        title.setTextSize(34);
-        title.setTextColor(COLOR_INK);
-        title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        title.setGravity(Gravity.CENTER_HORIZONTAL);
-        root.addView(title, matchWrap());
+        root.addView(buildHeader(), matchWrap());
 
-        TextView subtitle = new TextView(this);
-        subtitle.setText("Na co masz dziś ochotę?");
-        subtitle.setTextSize(16);
-        subtitle.setTextColor(Color.rgb(92, 78, 62));
-        subtitle.setGravity(Gravity.CENTER_HORIZONTAL);
-        root.addView(subtitle, marginTop(8));
+        homeSection = new LinearLayout(this);
+        homeSection.setOrientation(LinearLayout.VERTICAL);
+        root.addView(homeSection, marginTop(20));
 
-        servingsLabel = new TextView(this);
+        greeting = Ui.text(this, "", 15, Ui.INK_SOFT);
+        homeSection.addView(greeting, matchWrap());
+        homeSection.addView(Ui.headline(this, "Na co masz dziś ochotę?", 28), marginTop(2));
+
+        // Household context at a glance; each chip opens its setting.
+        LinearLayout chips = Ui.row(this);
+        homeSection.addView(chips, marginTop(14));
+        servingsLabel = new Button(this);
         servingsLabel.setId(R.id.servings_label);
-        servingsLabel.setTextSize(15);
-        servingsLabel.setTextColor(COLOR_INK_SOFT);
-        servingsLabel.setGravity(Gravity.CENTER_HORIZONTAL);
-        root.addView(servingsLabel, marginTop(6));
+        Ui.chip(servingsLabel, false);
+        servingsLabel.setOnClickListener(v -> showServingsDialog(true));
+        chips.addView(servingsLabel, Ui.wrap());
+        aiChip = new Button(this);
+        aiChip.setOnClickListener(v -> onAiChipTapped());
+        LinearLayout.LayoutParams aiChipParams = Ui.wrap();
+        aiChipParams.leftMargin = dp(8);
+        chips.addView(aiChip, aiChipParams);
 
-        // One tap to pick the meal — replaces the old picker + generate button.
-        LinearLayout mealRow = new LinearLayout(this);
-        mealRow.setOrientation(LinearLayout.HORIZONTAL);
-        root.addView(mealRow, marginTop(20));
+        // One tap to pick the meal — three tiles, each with its time-of-day glyph.
+        LinearLayout mealRow = Ui.row(this);
+        LinearLayout.LayoutParams mealRowParams = marginTop(20);
+        mealRowParams.leftMargin = -dp(5);
+        mealRowParams.rightMargin = -dp(5);
+        homeSection.addView(mealRow, mealRowParams);
 
         int[] mealIds = {R.id.meal_breakfast_button, R.id.meal_lunch_button, R.id.meal_dinner_button};
         mealButtons = new Button[MEAL_TYPES.length];
@@ -330,27 +344,20 @@ public class MainActivity extends Activity {
             Button button = new Button(this);
             button.setId(mealIds[i]);
             button.setText(MEAL_TYPES[i]);
-            button.setTextSize(16);
-            styleTonalButton(button);
+            button.setTextSize(15);
             button.setOnClickListener(v -> selectMeal(index));
             mealButtons[i] = button;
-            mealRow.addView(button, equalWidthRowItem());
+            styleMealTile(i, false);
+            mealRow.addView(button, Ui.weighted(this, 10));
         }
 
         contentContainer = new LinearLayout(this);
         contentContainer.setOrientation(LinearLayout.VERTICAL);
-        root.addView(contentContainer, marginTop(20));
-
-        moreButton = new Button(this);
-        moreButton.setId(R.id.more_button);
-        moreButton.setText("Więcej…");
-        moreButton.setTextSize(16);
-        styleGhostButton(moreButton);
-        moreButton.setOnClickListener(view -> showMoreMenu());
-        root.addView(moreButton, marginTop(24));
+        root.addView(contentContainer, marginTop(24));
 
         setContentView(scrollView);
         updateServingsLabel();
+        updateAiChip();
 
         if (appSettings.isOnboardingDone()) {
             showStartScreen();
@@ -367,6 +374,100 @@ public class MainActivity extends Activity {
         MealNotifications.ensureChannel(this);
         new MealReminderScheduler().scheduleAll(this);
         handleMealIntent(getIntent());
+    }
+
+    /** App bar: logo, wordmark and the overflow ("Więcej") button. */
+    private View buildHeader() {
+        LinearLayout header = Ui.row(this);
+
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.drawable.ic_brand_mark);
+        logo.setScaleType(ImageView.ScaleType.FIT_XY);
+        logo.setOutlineProvider(new ViewOutlineProvider() {
+            @Override
+            public void getOutline(View view, Outline outline) {
+                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), dp(11));
+            }
+        });
+        logo.setClipToOutline(true);
+        logo.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        header.addView(logo, new LinearLayout.LayoutParams(dp(36), dp(36)));
+
+        TextView wordmark = Ui.headline(this, "Mealspire", 22);
+        LinearLayout.LayoutParams wordmarkParams = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        wordmarkParams.leftMargin = dp(12);
+        header.addView(wordmark, wordmarkParams);
+
+        moreButton = new Button(this);
+        moreButton.setId(R.id.more_button);
+        moreButton.setContentDescription("Więcej");
+        Drawable dots = tinted(R.drawable.ic_more, Ui.INK_BODY);
+        dots.setBounds(0, 0, dp(24), dp(24));
+        moreButton.setCompoundDrawables(dots, null, null, null);
+        moreButton.setBackground(new RippleDrawable(
+                ColorStateList.valueOf(Ui.RIPPLE_ON_LIGHT), null, Ui.circle(Color.WHITE)));
+        moreButton.setPadding(dp(12), dp(12), dp(12), dp(12));
+        moreButton.setMinWidth(0);
+        moreButton.setMinimumWidth(0);
+        moreButton.setMinHeight(0);
+        moreButton.setMinimumHeight(0);
+        moreButton.setStateListAnimator(null);
+        moreButton.setOnClickListener(view -> showMoreMenu());
+        header.addView(moreButton, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        return header;
+    }
+
+    /** A vector icon in {@code color}, mutated so shared drawables stay untouched. */
+    private Drawable tinted(int drawableRes, int color) {
+        Drawable drawable = getDrawable(drawableRes).mutate();
+        drawable.setTint(color);
+        return drawable;
+    }
+
+    /** Meal tile: glyph over label; the picked meal flips to filled terracotta. */
+    private void styleMealTile(int index, boolean selected) {
+        Button tile = mealButtons[index];
+        int fill = selected ? Ui.ACCENT : Ui.SURFACE;
+        int ink = selected ? Color.WHITE : Ui.INK;
+        tile.setBackground(new RippleDrawable(
+                ColorStateList.valueOf(selected ? Ui.RIPPLE_ON_ACCENT : Ui.RIPPLE_ON_LIGHT),
+                Ui.outlined(this, fill, selected ? Ui.ACCENT : Ui.OUTLINE, 20),
+                Ui.rounded(this, Color.WHITE, 20)));
+        tile.setTextColor(ink);
+        tile.setAllCaps(false);
+        tile.setStateListAnimator(null);
+        tile.setElevation(selected ? dp(2) : 0f);
+        tile.setTypeface(Ui.MEDIUM);
+        Drawable icon = tinted(MEAL_ICONS[index], selected ? Color.WHITE : Ui.ACCENT);
+        tile.setCompoundDrawablesWithIntrinsicBounds(null, icon, null, null);
+        tile.setCompoundDrawablePadding(dp(8));
+        tile.setPadding(dp(4), dp(18), dp(4), dp(16));
+    }
+
+    /** Chip under the greeting: AI on the user's ChatGPT account, or offline. */
+    private void updateAiChip() {
+        boolean ai = isAiAvailable();
+        String label;
+        if (ai) {
+            label = "AI · " + chatGptAccount.modelChoice().label;
+        } else if (chatGptAccount.isSignedIn()) {
+            label = "AI · brak serwera";
+        } else {
+            label = "Tryb offline";
+        }
+        aiChip.setText(label);
+        Ui.chip(aiChip, ai);
+    }
+
+    private void onAiChipTapped() {
+        if (!chatGptAccount.isSignedIn()) {
+            offerChatGptSignIn();
+        } else if (backendStore.baseUrl().isEmpty()) {
+            showBackendDialog();
+        } else {
+            showModelChoiceDialog();
+        }
     }
 
     /**
@@ -435,8 +536,27 @@ public class MainActivity extends Activity {
         highlightSelectedMeal();
         setMealButtonsEnabled(true);
         currentScreen = BackNavigation.Screen.START;
-        showHint("Wybierz porę dnia, a podsunę kilka prostych pomysłów.");
+        greeting.setText(DayGreeting.forHour(
+                java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)));
+        showWelcome();
         maybeShowUpdateBanner();
+    }
+
+    /** Start-screen empty state: what the app does and how it learns. */
+    private void showWelcome() {
+        contentContainer.removeAllViews();
+        LinearLayout card = Ui.card(this);
+        card.setBackground(Ui.rounded(this, Ui.SURFACE_MUTED, Ui.CARD_CORNER_DP));
+        card.setElevation(0f);
+        card.addView(Ui.headline(this, "Trzy proste pomysły na jedno dotknięcie", 19),
+                matchWrap());
+        card.addView(Ui.body(this, "Wybierz porę dnia, a podsunę dania, które łatwo "
+                + "ugotować z tego, co zwykle jest w domu."), marginTop(8));
+        TextView learning = Ui.callout(this, "„Lubię to” i „Nie lubię” uczą Mealspire "
+                + "Waszego gustu — z każdą reakcją propozycje trafiają lepiej.",
+                Ui.HERB_SOFT, Ui.HERB);
+        card.addView(learning, marginTop(14));
+        contentContainer.addView(card, matchWrap());
     }
 
     /**
@@ -492,10 +612,19 @@ public class MainActivity extends Activity {
         banner.setText("Dostępna nowa wersja " + latest.getVersionName()
                 + " — dotknij, aby pobrać");
         banner.setTextSize(15);
-        styleTonalButton(banner);
+        Ui.tonal(banner);
+        banner.setBackground(new RippleDrawable(ColorStateList.valueOf(Ui.RIPPLE_ON_LIGHT),
+                Ui.rounded(this, Ui.ACCENT_SOFT, 16), Ui.rounded(this, Color.WHITE, 16)));
+        banner.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        banner.setPadding(dp(18), dp(14), dp(18), dp(14));
+        banner.setCompoundDrawablesWithIntrinsicBounds(
+                tinted(R.drawable.ic_download, Ui.ACCENT_DEEP), null, null, null);
+        banner.setCompoundDrawablePadding(dp(12));
         banner.setOnClickListener(v -> startActivity(
                 com.mealspire.app.update.UpdateActivity.intent(this, latest)));
-        contentContainer.addView(banner, 0, matchWrap());
+        LinearLayout.LayoutParams params = matchWrap();
+        params.bottomMargin = dp(16);
+        contentContainer.addView(banner, 0, params);
     }
 
     /** Opens the meal carried by a tapped reminder notification, if any. */
@@ -580,6 +709,7 @@ public class MainActivity extends Activity {
                 String query = server.awaitCallbackQuery(SIGN_IN_TIMEOUT_MS);
                 final String email = chatGptAccount.completeSignIn(pending, query).email;
                 runOnUiThread(() -> {
+                    updateAiChip();
                     // Refresh the open recipe so the AI-only "Zmień przepis" button appears.
                     if (currentRecipe != null) {
                         showFullRecipe(currentRecipe);
@@ -610,6 +740,7 @@ public class MainActivity extends Activity {
                 .setSingleChoiceItems(labels, chatGptAccount.modelChoice().ordinal(),
                         (dialog, which) -> {
                             chatGptAccount.setModelChoice(models[which]);
+                            updateAiChip();
                             dialog.dismiss();
                             toast("AI używa teraz modelu " + models[which].label + ".");
                         })
@@ -618,7 +749,10 @@ public class MainActivity extends Activity {
     }
 
     private void signOutOfChatGpt() {
-        new Thread(chatGptAccount::signOut).start();
+        new Thread(() -> {
+            chatGptAccount.signOut();
+            runOnUiThread(this::updateAiChip);
+        }).start();
         // Refresh the open recipe so the AI-only "Zmień przepis" button disappears.
         if (currentRecipe != null) {
             showFullRecipe(currentRecipe);
@@ -643,7 +777,8 @@ public class MainActivity extends Activity {
         onboardingRoundsDietKey = null;
         onboardingStep = 0;
         setMealButtonsEnabled(false);
-        setEnabledWithFade(moreButton, false);
+        homeSection.setVisibility(View.GONE);
+        Ui.setEnabledWithFade(moreButton, false);
         renderOnboardingStep();
     }
 
@@ -670,18 +805,21 @@ public class MainActivity extends Activity {
     private void renderOnboardingStep() {
         contentContainer.removeAllViews();
 
-        TextView progress = new TextView(this);
-        progress.setText("Pytanie " + (onboardingStep + 1) + " z " + ONBOARDING_STEPS);
-        progress.setTextSize(15);
-        progress.setTextColor(COLOR_INK_SOFT);
-        contentContainer.addView(progress, matchWrap());
+        if (onboardingStep == 0) {
+            contentContainer.addView(Ui.overline(this, "Poznajmy się"), matchWrap());
+            contentContainer.addView(Ui.body(this, "Kilka krótkich pytań, żeby pierwsze "
+                    + "propozycje od razu pasowały. Każde możesz pominąć."), marginTop(6));
+        }
+        contentContainer.addView(buildQuizProgress(),
+                marginTop(onboardingStep == 0 ? 18 : 4));
 
-        TextView question = new TextView(this);
+        TextView progress = Ui.text(this,
+                "Pytanie " + (onboardingStep + 1) + " z " + ONBOARDING_STEPS, 14, Ui.INK_SOFT);
+        contentContainer.addView(progress, marginTop(10));
+
+        TextView question = Ui.headline(this, "", 24);
         question.setId(R.id.onboarding_question);
-        question.setTextSize(22);
-        question.setTextColor(COLOR_INK);
-        question.setTypeface(null, Typeface.BOLD);
-        contentContainer.addView(question, marginTop(8));
+        contentContainer.addView(question, marginTop(4));
 
         switch (onboardingStep) {
             case 0:
@@ -696,29 +834,33 @@ public class MainActivity extends Activity {
                 break;
             case 1:
                 question.setText("Czego nie jadacie?");
-                TextView dietNote = new TextView(this);
-                dietNote.setText("Tego nigdy nie zaproponuję. Możesz zaznaczyć kilka "
-                        + "odpowiedzi albo nic.");
-                dietNote.setTextSize(15);
-                dietNote.setTextColor(COLOR_INK_SOFT);
+                TextView dietNote = Ui.text(this, "Tego nigdy nie zaproponuję. Możesz "
+                        + "zaznaczyć kilka odpowiedzi albo nic.", 15, Ui.INK_SOFT);
                 contentContainer.addView(dietNote, marginTop(6));
+                LinearLayout dietCard = Ui.card(this);
+                dietCard.setElevation(0f);
+                dietCard.setPadding(dp(8), dp(6), dp(16), dp(6));
                 for (final DietConstraints.Exclusion exclusion
                         : DietConstraints.Exclusion.values()) {
                     CheckBox dietBox = new CheckBox(this);
                     dietBox.setText(exclusion.label());
-                    dietBox.setTextSize(18);
-                    dietBox.setTextColor(COLOR_INK);
+                    dietBox.setTextSize(17);
+                    dietBox.setTextColor(Ui.INK);
+                    dietBox.setButtonTintList(ColorStateList.valueOf(Ui.ACCENT));
+                    dietBox.setMinHeight(dp(52));
+                    dietBox.setPadding(dp(8), 0, 0, 0);
                     dietBox.setChecked(householdProfile.getDiet().getExclusions()
                             .contains(exclusion));
                     dietBox.setOnCheckedChangeListener((view, checked) ->
                             toggleExclusion(exclusion, checked));
-                    contentContainer.addView(dietBox, marginTop(8));
+                    dietCard.addView(dietBox, matchWrap());
                 }
+                contentContainer.addView(dietCard, marginTop(16));
                 Button dietNext = new Button(this);
                 dietNext.setId(R.id.onboarding_next_button);
                 dietNext.setText("Dalej");
-                dietNext.setTextSize(18);
-                stylePrimaryButton(dietNext);
+                dietNext.setTextSize(17);
+                Ui.primary(dietNext);
                 dietNext.setOnClickListener(v -> advanceOnboarding());
                 contentContainer.addView(dietNext, marginTop(16));
                 break;
@@ -763,7 +905,7 @@ public class MainActivity extends Activity {
                 none.setId(R.id.onboarding_option_none);
                 none.setText("Żadne z tych");
                 none.setTextSize(16);
-                styleGhostButton(none);
+                Ui.outlinedButton(none);
                 none.setOnClickListener(v -> {
                     onboardingPicks[roundIndex] = null;
                     advanceOnboarding();
@@ -776,12 +918,26 @@ public class MainActivity extends Activity {
         skip.setId(R.id.onboarding_skip_button);
         skip.setText("Pomiń");
         skip.setTextSize(16);
-        styleGhostButton(skip);
+        Ui.ghost(skip);
         skip.setOnClickListener(v -> endOnboarding());
-        contentContainer.addView(skip, marginTop(24));
+        contentContainer.addView(skip, marginTop(20));
     }
 
-    /** One big, readable answer button; index picks the stable test id. */
+    /** Segmented progress bar: one segment per quiz step, done ones filled. */
+    private View buildQuizProgress() {
+        LinearLayout bar = Ui.row(this);
+        for (int i = 0; i < ONBOARDING_STEPS; i++) {
+            View segment = new View(this);
+            segment.setBackground(Ui.rounded(this,
+                    i <= onboardingStep ? Ui.ACCENT : Ui.OUTLINE, 3));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(6), 1f);
+            params.leftMargin = i == 0 ? 0 : dp(4);
+            bar.addView(segment, params);
+        }
+        return bar;
+    }
+
+    /** One big, readable answer card; index picks the stable test id. */
     private void addOnboardingOption(int index, String label, final Runnable action) {
         Button option = new Button(this);
         int[] optionIds = {R.id.onboarding_option_1, R.id.onboarding_option_2,
@@ -790,11 +946,13 @@ public class MainActivity extends Activity {
             option.setId(optionIds[index - 1]);
         }
         option.setText(label);
-        option.setTextSize(18);
-        styleChoiceButton(option);
-        option.setPadding(dp(16), dp(14), dp(16), dp(14));
+        option.setTextSize(17);
+        Ui.choice(option);
+        Drawable chevron = tinted(R.drawable.ic_chevron, Ui.ACCENT);
+        option.setCompoundDrawablesWithIntrinsicBounds(null, null, chevron, null);
+        option.setCompoundDrawablePadding(dp(12));
         option.setOnClickListener(v -> action.run());
-        contentContainer.addView(option, marginTop(12));
+        contentContainer.addView(option, marginTop(10));
     }
 
     /** The single place a profile change is kept and persisted. */
@@ -834,7 +992,8 @@ public class MainActivity extends Activity {
         appSettings.markOnboardingDone();
         onboardingStep = -1;
         saveOnboardingPicks();
-        setEnabledWithFade(moreButton, true);
+        homeSection.setVisibility(View.VISIBLE);
+        Ui.setEnabledWithFade(moreButton, true);
         showStartupPrompts();
         if (pendingMealIndex >= 0) {
             int meal = pendingMealIndex;
@@ -873,12 +1032,7 @@ public class MainActivity extends Activity {
 
     private void highlightSelectedMeal() {
         for (int i = 0; i < mealButtons.length; i++) {
-            // The picked meal flips to the filled primary look; the rest stay tonal.
-            if (i == currentMealIndex) {
-                stylePrimaryButton(mealButtons[i]);
-            } else {
-                styleTonalButton(mealButtons[i]);
-            }
+            styleMealTile(i, i == currentMealIndex);
         }
     }
 
@@ -949,7 +1103,7 @@ public class MainActivity extends Activity {
         final List<Recipe> offline = generateOfflineRecipes();
         final int epoch = contentEpoch;
         setMealButtonsEnabled(false);
-        showHint("Dobieram dania do Twojego gustu…");
+        showLoading("Dobieram dania do Waszego gustu…");
         new Thread(() -> {
             final DishRecommender.Recommendation recommendation = dishRecommender.recommend(
                     isAiAvailable(), mealType, reactionSnapshot, candidates, diet, offline,
@@ -1053,83 +1207,72 @@ public class MainActivity extends Activity {
     private void renderProposals() {
         currentScreen = BackNavigation.Screen.PROPOSALS;
         contentContainer.removeAllViews();
+        if (currentMealIndex >= 0) {
+            contentContainer.addView(Ui.overline(this,
+                    "Pomysły na " + MEAL_ACCUSATIVE[currentMealIndex]), matchWrap());
+        }
         for (int i = 0; i < proposals.size(); i++) {
-            contentContainer.addView(buildProposalCard(i), marginTop(i == 0 ? 0 : 12));
+            contentContainer.addView(buildProposalCard(i), marginTop(i == 0 ? 10 : 14));
         }
 
         Button refresh = new Button(this);
         refresh.setId(R.id.refresh_button);
         refresh.setText("Inne propozycje");
         refresh.setTextSize(16);
-        styleTonalButton(refresh);
+        Ui.tonal(refresh);
+        refresh.setCompoundDrawablesWithIntrinsicBounds(
+                tinted(R.drawable.ic_refresh, Ui.ACCENT_DEEP), null, null, null);
+        refresh.setCompoundDrawablePadding(dp(8));
         refresh.setOnClickListener(v -> {
             recordTrioRerolled();
             generateProposals();
         });
-        contentContainer.addView(refresh, marginTop(16));
+        LinearLayout.LayoutParams refreshParams = Ui.wrap();
+        refreshParams.topMargin = dp(18);
+        refreshParams.gravity = Gravity.CENTER_HORIZONTAL;
+        contentContainer.addView(refresh, refreshParams);
     }
 
     private View buildProposalCard(int index) {
         DishProposal proposal = proposals.get(index);
 
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(outlined(COLOR_SURFACE, 20));
-        card.setElevation(dp(1));
-        card.setPadding(dp(18), dp(16), dp(18), dp(16));
+        LinearLayout card = Ui.card(this);
 
-        TextView name = new TextView(this);
+        LinearLayout titleRow = Ui.row(this);
+        titleRow.setGravity(Gravity.TOP);
+        card.addView(titleRow, matchWrap());
+
+        TextView badge = Ui.text(this, String.valueOf(index + 1), 14, Ui.ACCENT_DEEP);
+        badge.setTypeface(Ui.MEDIUM);
+        badge.setGravity(Gravity.CENTER);
+        badge.setBackground(Ui.circle(Ui.ACCENT_SOFT));
+        LinearLayout.LayoutParams badgeParams = new LinearLayout.LayoutParams(dp(28), dp(28));
+        badgeParams.rightMargin = dp(12);
+        badgeParams.topMargin = dp(1);
+        titleRow.addView(badge, badgeParams);
+
+        TextView name = Ui.headline(this, proposal.getName(), 20);
         if (index == 0) {
             name.setId(R.id.recipe_title); // first card title is the testable anchor
         }
-        name.setText(proposal.getName());
-        name.setTextSize(20);
-        name.setTextColor(COLOR_INK);
-        name.setTypeface(null, Typeface.BOLD);
-        card.addView(name, matchWrap());
+        titleRow.addView(name, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         String summary = proposal.summary();
         if (!summary.isEmpty()) {
-            TextView body = new TextView(this);
-            body.setText(summary);
-            body.setTextSize(15);
-            body.setTextColor(COLOR_INK_BODY);
-            card.addView(body, marginTop(6));
+            TextView body = Ui.text(this, summary, 15, Ui.INK_BODY);
+            body.setLineSpacing(dp(2), 1.0f);
+            card.addView(body, marginTop(8));
         }
 
         String reason = index < proposalReasons.size() ? proposalReasons.get(index) : "";
         if (!reason.isEmpty()) {
-            TextView why = new TextView(this);
-            why.setText("Dlaczego: " + reason);
-            why.setTextSize(14);
-            why.setTextColor(COLOR_INK_BODY);
-            why.setTypeface(null, Typeface.ITALIC);
-            card.addView(why, marginTop(6));
+            SpannableStringBuilder why = new SpannableStringBuilder("Dlaczego: ");
+            why.setSpan(new StyleSpan(Typeface.BOLD), 0, why.length(),
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            why.append(reason);
+            card.addView(Ui.callout(this, why, Ui.HERB_SOFT, Ui.HERB), marginTop(12));
         }
-
-        LinearLayout actions = new LinearLayout(this);
-        actions.setOrientation(LinearLayout.HORIZONTAL);
-        card.addView(actions, marginTop(10));
-
-        Button like = new Button(this);
-        if (index == 0) {
-            like.setId(R.id.like_button);
-        }
-        like.setText("Lubię to");
-        like.setTextSize(15);
-        styleTonalButton(like);
-        like.setOnClickListener(v -> reactToProposal(index, true));
-        actions.addView(like, equalWidthRowItem());
-
-        Button dislike = new Button(this);
-        if (index == 0) {
-            dislike.setId(R.id.dislike_button);
-        }
-        dislike.setText("Nie lubię");
-        dislike.setTextSize(15);
-        styleGhostButton(dislike);
-        dislike.setOnClickListener(v -> reactToProposal(index, false));
-        actions.addView(dislike, equalWidthRowItem());
 
         Button show = new Button(this);
         if (index == 0) {
@@ -1137,11 +1280,63 @@ public class MainActivity extends Activity {
         }
         show.setText("Pokaż przepis");
         show.setTextSize(15);
-        stylePrimaryButton(show);
+        Ui.primary(show);
         show.setOnClickListener(v -> openRecipe(index));
-        actions.addView(show, equalWidthRowItem());
+        card.addView(show, marginTop(14));
+
+        LinearLayout reactions = Ui.row(this);
+        LinearLayout.LayoutParams reactionsParams = marginTop(8);
+        reactionsParams.leftMargin = -dp(4);
+        reactionsParams.rightMargin = -dp(4);
+        card.addView(reactions, reactionsParams);
+
+        final Button like = new Button(this);
+        if (index == 0) {
+            like.setId(R.id.like_button);
+        }
+        like.setText("Lubię to");
+        like.setTextSize(15);
+        reactions.addView(like, Ui.weighted(this, 8));
+
+        final Button dislike = new Button(this);
+        if (index == 0) {
+            dislike.setId(R.id.dislike_button);
+        }
+        dislike.setText("Nie lubię");
+        dislike.setTextSize(15);
+        reactions.addView(dislike, Ui.weighted(this, 8));
+
+        styleReactionPair(like, dislike, null);
+        like.setOnClickListener(v -> {
+            reactToProposal(index, true);
+            styleReactionPair(like, dislike, true);
+        });
+        dislike.setOnClickListener(v -> {
+            reactToProposal(index, false);
+            styleReactionPair(like, dislike, false);
+        });
 
         return card;
+    }
+
+    /**
+     * Like/dislike pair; once tapped, the given reaction stays marked (herb
+     * green tick for "lubię", muted fill for "nie lubię") so the tap is visible.
+     */
+    private void styleReactionPair(Button like, Button dislike, Boolean liked) {
+        if (Boolean.TRUE.equals(liked)) {
+            Ui.confirmed(like);
+        } else {
+            Ui.outlinedButton(like);
+        }
+        like.setText(Boolean.TRUE.equals(liked) ? "Lubię to ✓" : "Lubię to");
+        Ui.outlinedButton(dislike);
+        if (Boolean.FALSE.equals(liked)) {
+            dislike.setBackground(Ui.rounded(this, Ui.SURFACE_MUTED, Ui.PILL_CORNER_DP));
+            dislike.setTextColor(Ui.INK);
+        }
+        like.setGravity(Gravity.CENTER);
+        dislike.setGravity(Gravity.CENTER);
     }
 
     /** „Inne propozycje" = słaby negatyw dla trójki w offline'owym modelu gustu (nie reakcja). */
@@ -1206,7 +1401,7 @@ public class MainActivity extends Activity {
         // fetch returns to the proposals (and the bumped epoch drops the answer).
         currentScreen = BackNavigation.Screen.RECIPE;
         final int epoch = contentEpoch;
-        showHint("Przygotowuję przepis…");
+        showLoading("Przygotowuję przepis…");
         new Thread(() -> {
             try {
                 final Recipe recipe = recipeService.generateRecipeFor(dishName, request);
@@ -1255,53 +1450,77 @@ public class MainActivity extends Activity {
         currentScreen = BackNavigation.Screen.RECIPE;
         contentContainer.removeAllViews();
 
-        TextView name = new TextView(this);
+        contentContainer.addView(Ui.overline(this, currentMealIndex >= 0
+                ? MEAL_TYPES[currentMealIndex] + " · przepis" : "Przepis"), matchWrap());
+
+        TextView name = Ui.headline(this, recipe.getTitle(), 27);
         name.setId(R.id.recipe_title);
-        name.setText(recipe.getTitle());
-        name.setTextSize(24);
-        name.setTextColor(COLOR_INK);
-        name.setTypeface(null, Typeface.BOLD);
-        contentContainer.addView(name, matchWrap());
+        contentContainer.addView(name, marginTop(4));
 
-        TextView details = new TextView(this);
+        LinearLayout card = Ui.card(this);
+        TextView details = Ui.body(this, formatRecipe(recipe.getDetails()));
         details.setId(R.id.recipe_details);
-        details.setText(recipe.getDetails());
-        details.setTextSize(17);
+        details.setTextSize(16);
         details.setLineSpacing(dp(4), 1.0f);
-        details.setTextColor(COLOR_INK_BODY);
-        contentContainer.addView(details, marginTop(12));
+        details.setTextIsSelectable(true);
+        card.addView(details, matchWrap());
+        contentContainer.addView(card, marginTop(16));
 
-        LinearLayout actions = new LinearLayout(this);
-        actions.setOrientation(LinearLayout.HORIZONTAL);
-        contentContainer.addView(actions, marginTop(16));
+        LinearLayout actions = Ui.row(this);
+        LinearLayout.LayoutParams actionsParams = marginTop(16);
+        actionsParams.leftMargin = -dp(4);
+        actionsParams.rightMargin = -dp(4);
+        contentContainer.addView(actions, actionsParams);
 
         Button like = new Button(this);
         like.setId(R.id.like_button);
         like.setText("Lubię to");
         like.setTextSize(16);
-        stylePrimaryButton(like);
-        like.setOnClickListener(v -> rememberReaction(recipe.getTitle(),
-                DishReaction.describe(recipe.getDetails()), true));
-        actions.addView(like, equalWidthRowItem());
+        Ui.primary(like);
+        like.setOnClickListener(v -> {
+            rememberReaction(recipe.getTitle(), DishReaction.describe(recipe.getDetails()), true);
+            Ui.confirmed(like);
+            like.setText("Lubię to ✓");
+        });
+        actions.addView(like, Ui.weighted(this, 8));
 
         Button dislike = new Button(this);
         dislike.setId(R.id.dislike_button);
         dislike.setText("Nie lubię");
         dislike.setTextSize(16);
-        styleGhostButton(dislike);
+        Ui.outlinedButton(dislike);
         dislike.setOnClickListener(v -> rememberReaction(recipe.getTitle(),
                 DishReaction.describe(recipe.getDetails()), false));
-        actions.addView(dislike, equalWidthRowItem());
+        actions.addView(dislike, Ui.weighted(this, 8));
 
         if (isAiAvailable()) {
             Button change = new Button(this);
             change.setId(R.id.change_button);
             change.setText("Zmień przepis");
             change.setTextSize(16);
-            styleTonalButton(change);
+            Ui.tonal(change);
             change.setOnClickListener(v -> showModifyRecipeDialog());
-            actions.addView(change, equalWidthRowItem());
+            contentContainer.addView(change, marginTop(10));
         }
+
+        // Kitchen helpers, also under "Więcej" — here they are one tap away.
+        LinearLayout tools = Ui.row(this);
+        LinearLayout.LayoutParams toolsParams = marginTop(10);
+        toolsParams.leftMargin = -dp(4);
+        toolsParams.rightMargin = -dp(4);
+        contentContainer.addView(tools, toolsParams);
+        Button shopping = new Button(this);
+        shopping.setText("Lista zakupów");
+        shopping.setTextSize(15);
+        Ui.outlinedButton(shopping);
+        shopping.setOnClickListener(v -> showShoppingList());
+        tools.addView(shopping, Ui.weighted(this, 8));
+        Button save = new Button(this);
+        save.setText("Zapisz danie");
+        save.setTextSize(15);
+        Ui.outlinedButton(save);
+        save.setOnClickListener(v -> saveCurrentToCookbook());
+        tools.addView(save, Ui.weighted(this, 8));
 
         // The button mirrors the system back button exactly (one shared path),
         // so a recipe that has no proposals to return to goes to the start screen.
@@ -1310,9 +1529,61 @@ public class MainActivity extends Activity {
         back.setText(recipeFromProposals && !proposals.isEmpty()
                 ? "Wróć do propozycji" : "Wróć");
         back.setTextSize(16);
-        styleGhostButton(back);
+        Ui.ghost(back);
         back.setOnClickListener(v -> onBackPressed());
         contentContainer.addView(back, marginTop(12));
+    }
+
+    /**
+     * Recipe text as readable blocks ({@link RecipeLayout}): small caps
+     * headings, bulleted ingredients, numbered steps. Falls back to the raw
+     * text when nothing could be parsed.
+     */
+    private CharSequence formatRecipe(String text) {
+        List<RecipeLayout.Block> blocks = RecipeLayout.parse(text);
+        if (blocks.isEmpty()) {
+            return text;
+        }
+        SpannableStringBuilder out = new SpannableStringBuilder();
+        RecipeLayout.Type previous = null;
+        for (RecipeLayout.Block block : blocks) {
+            if (out.length() > 0) {
+                boolean tight = block.getType() == RecipeLayout.Type.ITEM
+                        && (previous == RecipeLayout.Type.ITEM
+                        || previous == RecipeLayout.Type.HEADING);
+                out.append(tight ? "\n" : "\n\n");
+            }
+            int start = out.length();
+            switch (block.getType()) {
+                case HEADING:
+                    out.append(block.getText().toUpperCase());
+                    out.setSpan(new StyleSpan(Typeface.BOLD), start, out.length(),
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    out.setSpan(new ForegroundColorSpan(Ui.ACCENT_DEEP), start, out.length(),
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    out.setSpan(new RelativeSizeSpan(0.8f), start, out.length(),
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    break;
+                case ITEM:
+                    out.append(block.getText());
+                    out.setSpan(new BulletSpan(dp(10), Ui.ACCENT), start, out.length(),
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    break;
+                case STEP:
+                    out.append(block.getNumber()).append(".  ");
+                    out.setSpan(new StyleSpan(Typeface.BOLD), start, out.length(),
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    out.setSpan(new ForegroundColorSpan(Ui.ACCENT), start, out.length(),
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    out.append(block.getText());
+                    break;
+                default:
+                    out.append(block.getText());
+                    break;
+            }
+            previous = block.getType();
+        }
+        return out;
     }
 
     // ----- Explicit reactions ---------------------------------------------
@@ -1392,7 +1663,7 @@ public class MainActivity extends Activity {
         final Recipe base = currentRecipe;
         contentEpoch++;
         final int epoch = contentEpoch;
-        showHint("Zmieniam przepis…");
+        showLoading("Zmieniam przepis…");
         new Thread(() -> {
             try {
                 final Recipe revised = recipeService.modifyRecipe(base, instruction,
@@ -1469,6 +1740,7 @@ public class MainActivity extends Activity {
                 .setPositiveButton("Zapisz i zezwól", (dialog, which) -> {
                     try {
                         backendStore.configure(input.getText().toString());
+                        updateAiChip();
                         contentEpoch++;
                         refreshCatalog(null);
                     } catch (IllegalArgumentException e) { Toast.makeText(this, e.getMessage(), Toast.LENGTH_LONG).show(); }
@@ -1623,7 +1895,7 @@ public class MainActivity extends Activity {
         }
         contentEpoch++;
         final int epoch = contentEpoch;
-        showHint("Dodaję do bazy…");
+        showLoading("Dodaję do bazy…");
         new Thread(() -> {
             try {
                 final CookbookEntry entry = dishImporter.importDish(input);
@@ -1796,81 +2068,36 @@ public class MainActivity extends Activity {
 
     // ----- Shared helpers --------------------------------------------------
 
-    /** A rounded rectangle in {@code fill}, the building block of the theme. */
-    private GradientDrawable rounded(int fill, int cornerDp) {
-        GradientDrawable shape = new GradientDrawable();
-        shape.setColor(fill);
-        shape.setCornerRadius(dp(cornerDp));
-        return shape;
-    }
-
-    /** Rounded rectangle with a hairline outline (cards, choice buttons). */
-    private GradientDrawable outlined(int fill, int cornerDp) {
-        GradientDrawable shape = rounded(fill, cornerDp);
-        shape.setStroke(Math.max(1, dp(1)), COLOR_OUTLINE);
-        return shape;
-    }
-
-    /** Shared button chrome: pill background with a ripple, no platform skin. */
-    private void styleButton(Button button, int fill, int textColor, int ripple) {
-        button.setBackground(new RippleDrawable(ColorStateList.valueOf(ripple),
-                rounded(fill, BUTTON_CORNER_DP), rounded(Color.WHITE, BUTTON_CORNER_DP)));
-        button.setTextColor(textColor);
-        button.setAllCaps(false);
-        button.setStateListAnimator(null);
-        button.setElevation(0f);
-        button.setMinHeight(dp(48));
-        button.setPadding(dp(18), dp(12), dp(18), dp(12));
-    }
-
-    /** The one main action on a screen: filled terracotta, white bold label. */
-    private void stylePrimaryButton(Button button) {
-        styleButton(button, COLOR_ACCENT, Color.WHITE, RIPPLE_ON_ACCENT);
-        button.setTypeface(null, Typeface.BOLD);
-    }
-
-    /** Secondary actions: soft peach fill with deep-terracotta label. */
-    private void styleTonalButton(Button button) {
-        styleButton(button, COLOR_ACCENT_SOFT, COLOR_ACCENT_DEEP, RIPPLE_ON_LIGHT);
-        button.setTypeface(null, Typeface.NORMAL);
-    }
-
-    /** Quiet actions ("Pomiń", "Wróć", "Więcej…"): label only, bounded ripple. */
-    private void styleGhostButton(Button button) {
-        styleButton(button, Color.TRANSPARENT, COLOR_ACCENT_DEEP, RIPPLE_ON_LIGHT);
-        button.setTypeface(null, Typeface.NORMAL);
-    }
-
-    /** Quiz answers: white card-like buttons with dark text, easy to scan. */
-    private void styleChoiceButton(Button button) {
-        button.setBackground(new RippleDrawable(ColorStateList.valueOf(RIPPLE_ON_LIGHT),
-                outlined(COLOR_SURFACE, 16), rounded(Color.WHITE, 16)));
-        button.setTextColor(COLOR_INK);
-        button.setAllCaps(false);
-        button.setStateListAnimator(null);
-        button.setElevation(dp(1));
-    }
-
-    /** Shows a single informational line in the content area (no recipe yet). */
+    /** A single informational message in the content area (empty diet pool, errors). */
     private void showHint(String text) {
         contentContainer.removeAllViews();
-        TextView hint = new TextView(this);
-        hint.setText(text);
+        TextView hint = Ui.callout(this, text, Ui.SURFACE_MUTED, Ui.INK_BODY);
         hint.setTextSize(16);
-        hint.setTextColor(COLOR_INK_SOFT);
+        hint.setPadding(dp(18), dp(16), dp(18), dp(16));
         contentContainer.addView(hint, matchWrap());
+    }
+
+    /** Waiting for the server/AI: a spinner card, so the wait reads as work. */
+    private void showLoading(String text) {
+        contentContainer.removeAllViews();
+        LinearLayout card = Ui.card(this);
+        card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        ProgressBar spinner = new ProgressBar(this);
+        spinner.setIndeterminateTintList(ColorStateList.valueOf(Ui.ACCENT));
+        card.addView(spinner, new LinearLayout.LayoutParams(dp(28), dp(28)));
+        TextView label = Ui.text(this, text, 16, Ui.INK_BODY);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        labelParams.leftMargin = dp(14);
+        card.addView(label, labelParams);
+        contentContainer.addView(card, matchWrap());
     }
 
     private void setMealButtonsEnabled(boolean enabled) {
         for (Button button : mealButtons) {
-            setEnabledWithFade(button, enabled);
+            Ui.setEnabledWithFade(button, enabled);
         }
-    }
-
-    /** Custom-drawn buttons have no platform disabled state, so fade them. */
-    private static void setEnabledWithFade(View view, boolean enabled) {
-        view.setEnabled(enabled);
-        view.setAlpha(enabled ? 1f : 0.45f);
     }
 
     private void recordChosen(String dishTitle) {
@@ -1885,28 +2112,15 @@ public class MainActivity extends Activity {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
     }
 
-    private LinearLayout.LayoutParams equalWidthRowItem() {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        params.leftMargin = dp(4);
-        params.rightMargin = dp(4);
-        return params;
-    }
-
     private LinearLayout.LayoutParams matchWrap() {
-        return new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-        );
+        return Ui.matchWrap();
     }
 
     private LinearLayout.LayoutParams marginTop(int topDp) {
-        LinearLayout.LayoutParams params = matchWrap();
-        params.topMargin = dp(topDp);
-        return params;
+        return Ui.marginTop(this, topDp);
     }
 
     private int dp(int value) {
-        return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
+        return Ui.dp(this, value);
     }
 }

@@ -14,6 +14,7 @@
     <item name="back_button" type="id" />
     <item name="more_button" type="id" />
     <item name="update_banner" type="id" />
+    <item name="update_message" type="id" />
     <item name="onboarding_question" type="id" />
     <item name="onboarding_option_1" type="id" />
     <item name="onboarding_option_2" type="id" />

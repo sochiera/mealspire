@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Status-bar (small) notification icon: the Mealspire bowl drawn in pure white,
-  because Android renders small icons from the alpha channel only — a coloured
-  launcher icon there degrades to a flat blob. Tinted via Notification.setColor.
+  Status-bar (small) notification icon: the Mealspire bowl, sprig and spark in
+  pure white, because Android renders small icons from the alpha channel only.
+  Tinted via Notification.setColor.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
@@ -10,44 +10,37 @@
     android:viewportWidth="24"
     android:viewportHeight="24">
 
-    <!-- Steam -->
+    <!-- Sprig -->
     <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="1.5"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000"
-        android:pathData="M8.6,3.6 C7.6,4.8 9.6,5.7 8.6,6.9" />
+        android:fillColor="#FFFFFF"
+        android:pathData="M11.6,10 C8.6,9.6 6.6,7.2 7.2,4.4 C10.2,4.8 12.1,7 11.6,10 Z" />
     <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="1.5"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000"
-        android:pathData="M12,2.4 C11,3.6 13,4.5 12,5.7 C11,6.9 13,7.8 12,9" />
+        android:fillColor="#FFFFFF"
+        android:pathData="M12.4,10 C14.6,9.3 15.7,7.5 15.3,5.6 C13.3,5.9 12.1,7.8 12.4,10 Z" />
+
+    <!-- Spark -->
     <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="1.5"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000"
-        android:pathData="M15.4,3.6 C14.4,4.8 16.4,5.7 15.4,6.9" />
+        android:fillColor="#FFFFFF"
+        android:pathData="M18.6,2.2 C18.8,3.7 19.2,4.1 20.7,4.3 C19.2,4.5 18.8,4.9 18.6,6.4 C18.4,4.9 18,4.5 16.5,4.3 C18,4.1 18.4,3.7 18.6,2.2 Z" />
 
     <!-- Rim -->
     <path
         android:strokeColor="#FFFFFF"
-        android:strokeWidth="2.4"
+        android:strokeWidth="2.2"
         android:strokeLineCap="round"
         android:fillColor="#00000000"
-        android:pathData="M6.4,11.4 L17.6,11.4" />
+        android:pathData="M4.6,11.4 L19.4,11.4" />
 
     <!-- Bowl body -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M6,12.6 A6,6 0 0 0 18,12.6 Z" />
+        android:pathData="M4.4,12.6 A7.6,7.6 0 0 0 19.6,12.6 Z" />
 
     <!-- Foot -->
     <path
         android:strokeColor="#FFFFFF"
-        android:strokeWidth="2"
+        android:strokeWidth="1.9"
         android:strokeLineCap="round"
         android:fillColor="#00000000"
-        android:pathData="M10.2,20.4 L13.8,20.4" />
+        android:pathData="M9.8,21.6 L14.2,21.6" />
 </vector>
