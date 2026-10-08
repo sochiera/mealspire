@@ -104,6 +104,15 @@ public class ReleaseConsistencyTest {
     }
 
     @Test
+    public void sha256MatchesPublishedApk() throws Exception {
+        byte[] bytes = Files.readAllBytes(new File(repoRoot(), "dist/mealspire-debug.apk").toPath());
+        StringBuilder hash = new StringBuilder();
+        for (byte b : java.security.MessageDigest.getInstance("SHA-256").digest(bytes))
+            hash.append(String.format("%02x", b & 255));
+        assertEquals(hash.toString(), versionJson().getString("sha256"));
+    }
+
+    @Test
     public void apkInDistExists() {
         assertTrue("dist/mealspire-debug.apk is missing — refresh it after building",
                 new File(repoRoot(), "dist/mealspire-debug.apk").isFile());

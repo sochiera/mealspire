@@ -71,6 +71,13 @@ public class BuildWorkflowTest {
     }
 
     @Test
+    public void apkPublicationIsRestrictedToMainPush() throws IOException {
+        String yaml = workflowContents();
+        assertTrue("PRs and implementation branches must not publish an APK",
+                yaml.contains("if: github.event_name == 'push' && github.ref == 'refs/heads/main'"));
+    }
+
+    @Test
     public void workflowUploadsApkArtifact() throws IOException {
         String yaml = workflowContents();
         assertTrue(

@@ -24,7 +24,7 @@ public final class VersionInfoParser {
                     || !apkUrl.trim().startsWith("https://")) {
                 return null;
             }
-            return new VersionInfo(versionCode, versionName, apkUrl);
+            return new VersionInfo(versionCode, versionName, apkUrl, object.optString("sha256", ""));
         } catch (JSONException e) {
             return null;
         }

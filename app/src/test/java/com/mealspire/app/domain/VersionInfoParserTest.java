@@ -22,6 +22,14 @@ public class VersionInfoParserTest {
             + "}";
 
     @Test
+    public void acceptsSha256ButKeepsLegacyMetadataReadable() {
+        VersionInfo info = new VersionInfoParser().parse("{\"versionCode\":999,\"versionName\":\"9.9\",\"apkUrl\":\"https://example.invalid/a.apk\",\"sha256\":\"" + "a".repeat(64) + "\"}");
+        org.junit.Assert.assertNotNull(info);
+        org.junit.Assert.assertTrue(info.hasSha256());
+        org.junit.Assert.assertEquals("a".repeat(64), info.getSha256());
+    }
+
+    @Test
     public void parsesValidJson() {
         VersionInfo info = parser.parse(VALID_JSON);
         assertEquals(7, info.getVersionCode());

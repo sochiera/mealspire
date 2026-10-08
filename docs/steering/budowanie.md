@@ -27,8 +27,11 @@ APK jest podpisywany wspólnym keystore `signing/mealspire.keystore`
 (hasło `mealspire`, celowo jawne — patrz steering projektu). **Nie generować
 nowego keystore** — zerwałoby to ciągłość aktualizacji u użytkowników.
 
-CI (`.github/workflows/build.yml`) dodatkowo buduje APK i wystawia artefakt
-`mealspire-debug-apk` przy każdym pushu/PR.
+CI (`.github/workflows/build.yml`) buduje APK przy pushu/PR. Artefakt
+`mealspire-debug-apk` wystawia tylko przy pushu do main; przygotowanie PR nie
+publikuje paczki. W pracach przed ship-it pozostaw numery wydania i APK w dist
+bez zmian. Po zgodzie na wydanie wykonaj checklistę oraz zapisz SHA-256 nowego
+APK w `dist/wersja.json` (`sha256sum dist/mealspire-debug.apk`).
 
 ## Budowanie w środowiskach z proxy/sandboksem (np. Claude Code web)
 

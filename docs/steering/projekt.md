@@ -103,8 +103,9 @@ Wszystkie teksty w UI i promptach są po polsku.
   Docs: https://developers.openai.com/siwc
 - **Aktualizacje**: raz na dobę `UpdateChecker` pobiera `dist/wersja.json`
   z raw.githubusercontent (bez tokenu) i porównuje z `BuildConfig.VERSION_CODE`;
-  wyższy → baner na ekranie startowym otwierający APK w przeglądarce
-  (`Intent.ACTION_VIEW`, bez nowych uprawnień). Decyzje w `domain/`
+  wyższy → baner na ekranie startowym otwierający pobieranie w aplikacji
+  (`update/UpdateActivity`). Instalacja wymaga zgody na nieznane źródła i
+  potwierdzenia w PackageInstaller; pobranie jest weryfikowane SHA-256. Decyzje w `domain/`
   (`UpdateChecker`, `VersionInfoParser`), stan w `SharedPreferencesUpdateStateStore`,
   transport w `net/HttpVersionJsonFetcher`. **Nigdy nie woła sieci w testach**:
   pierwszy odczyt znacznika czasu zasiewa „teraz" (świeża instalacja/test czeka
