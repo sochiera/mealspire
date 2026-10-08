@@ -334,3 +334,20 @@ Projekt jest udostępniony na licencji **PolyForm Noncommercial License 1.0.0** 
 możesz go używać, modyfikować i rozpowszechniać **za darmo do celów
 niekomercyjnych**. Użycie komercyjne wymaga osobnej zgody autora. Pełny tekst
 znajdziesz w pliku [`LICENSE.md`](LICENSE.md).
+
+## Backend VPS (przygotowanie przed wydaniem)
+
+Nowy klient wykonuje operacje AI przez konfigurowalny serwer HTTPS: „Więcej…”
+→ „Serwer Mealspire”. Po zgodzie serwer otrzymuje krótkotrwały token ChatGPT
+i dane gustu; logowanie i odświeżanie sesji zostają na telefonie. Pusty adres
+włącza offline. Katalog backendu zapisuje się na telefonie; awaria serwera
+nie usuwa cache, przepisów ani polubień. Powiadomienia działają bez sieci.
+
+Katalog, ocena gustu LLM, propozycje, przepisy, zmiany i import obsługuje
+moduł JVM `backend`. Link podczas importu jest traktowany jako opis, bez
+pobierania HTML na VPS. Zmiany promptów i katalogu wymagają redeployu
+backendu; zmiany UI/uprawnień Androida mogą nadal wymagać nowego APK.
+
+[Kontrakt API](docs/design/backend-api.md) i
+[bezpieczny test/wdrożenie OVH](deploy/BACKEND-RUNBOOK.md).
+Przygotowany PR nie uruchamia produkcyjnego API i nie publikuje APK.

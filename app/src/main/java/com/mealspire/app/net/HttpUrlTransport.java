@@ -43,6 +43,7 @@ public final class HttpUrlTransport implements HttpTransport {
                                  String contentType, String body) throws IOException {
         HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
         try {
+            connection.setInstanceFollowRedirects(false);
             connection.setRequestMethod(method);
             connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
             connection.setReadTimeout(READ_TIMEOUT_MS);
@@ -74,6 +75,7 @@ public final class HttpUrlTransport implements HttpTransport {
                 new InputStreamReader(stream, StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
+                if (sb.length() + line.length() > 4 * 1024 * 1024) throw new IOException("Odpowiedź serwera jest zbyt duża.");
                 sb.append(line).append('\n');
             }
         }

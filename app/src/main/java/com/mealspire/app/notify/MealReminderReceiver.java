@@ -59,7 +59,7 @@ public final class MealReminderReceiver extends BroadcastReceiver {
 
         // The same diet-filtered pipeline as the screen — do not let the two drift.
         List<Recipe> chosen = proposalGenerator.generate(
-                BuiltInRecipes.forMeal(mealIndex), cookbook, preferences,
+                new com.mealspire.app.storage.SharedPreferencesBackendStore(context).forMeal(mealIndex), cookbook, preferences,
                 profile, PROPOSAL_COUNT, new Random(), history,
                 System.currentTimeMillis(), diet);
 
