@@ -451,8 +451,6 @@ public class MainActivity extends Activity {
         String label;
         if (ai) {
             label = "AI · " + chatGptAccount.modelChoice().label;
-        } else if (chatGptAccount.isSignedIn()) {
-            label = "AI · brak serwera";
         } else {
             label = "Tryb offline";
         }
@@ -463,8 +461,6 @@ public class MainActivity extends Activity {
     private void onAiChipTapped() {
         if (!chatGptAccount.isSignedIn()) {
             offerChatGptSignIn();
-        } else if (backendStore.baseUrl().isEmpty()) {
-            showBackendDialog();
         } else {
             showModelChoiceDialog();
         }
@@ -670,7 +666,7 @@ public class MainActivity extends Activity {
     }
 
     private boolean isAiAvailable() {
-        return chatGptAccount.isSignedIn() && !backendStore.baseUrl().isEmpty();
+        return chatGptAccount.isSignedIn();
     }
 
     private void offerChatGptSignIn() {
@@ -678,6 +674,8 @@ public class MainActivity extends Activity {
                 .setTitle(SIGN_IN_DIALOG_TITLE)
                 .setMessage("AI korzysta z Twojego konta ChatGPT (plan Plus lub Pro) — "
                         + "logujesz się w przeglądarce, aplikacja nie ma własnego klucza. "
+                        + "Zapytania AI przechodzą przez serwer Mealspire, który otrzymuje dane "
+                        + "gustu i krótkotrwały token dostępu ChatGPT. "
                         + "Bez logowania aplikacja działa offline (losuje dania z bazy).")
                 .setPositiveButton("Zaloguj się", (dialog, which) -> startChatGptSignIn())
                 .setNegativeButton("Pomiń", null)
@@ -1701,8 +1699,6 @@ public class MainActivity extends Activity {
             labels.add("Lista zakupów");
             actions.add(this::showShoppingList);
         }
-        labels.add("Serwer Mealspire");
-        actions.add(this::showBackendDialog);
         labels.add("Zmień liczbę osób");
         actions.add(() -> showServingsDialog(true));
         labels.add("Profil domowników");
@@ -1729,26 +1725,9 @@ public class MainActivity extends Activity {
                 .show();
     }
 
-    private void showBackendDialog() {
-        EditText input = new EditText(this);
-        input.setSingleLine(true);
-        input.setHint("https://serwer/mealspire-api");
-        input.setText(backendStore.baseUrl());
-        new AlertDialog.Builder(this).setTitle("Serwer Mealspire")
-                .setMessage("Serwer otrzyma dane gustu i krótkotrwały token dostępu ChatGPT, aby tworzyć dania. Używaj tylko zaufanego serwera. Pusty adres włącza tryb offline.")
-                .setView(input).setNegativeButton("Anuluj", null)
-                .setPositiveButton("Zapisz i zezwól", (dialog, which) -> {
-                    try {
-                        backendStore.configure(input.getText().toString());
-                        updateAiChip();
-                        contentEpoch++;
-                        refreshCatalog(null);
-                    } catch (IllegalArgumentException e) { Toast.makeText(this, e.getMessage(), Toast.LENGTH_LONG).show(); }
-                }).show();
-    }
-
+    /** The server is contacted only after ChatGPT sign-in (consent covers the server). */
     private void refreshCatalog(Runnable after) {
-        if (!backendStore.needsCatalog()) { if (after != null) after.run(); return; }
+        if (!isAiAvailable() || !backendStore.needsCatalog()) { if (after != null) after.run(); return; }
         final String endpoint = backendStore.baseUrl();
         final int epoch = contentEpoch;
         new Thread(() -> {

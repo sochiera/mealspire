@@ -9,6 +9,8 @@ import java.util.*;
 /** Task-level HTTP client. OAuth, refresh tokens and APK updates stay on the device. */
 public final class BackendClient implements RecipeOperations, DishImporter, DishRater {
     public interface Configuration { String baseUrl(); }
+    /** Production backend (deploy/BACKEND-RUNBOOK.md); the user is never asked for an address. */
+    public static final String DEFAULT_BASE_URL = "https://sochiera.pl/mealspire-api";
     private final Configuration configuration;
     private final ChatGptAccount account;
     private final HttpTransport transport;
@@ -27,7 +29,7 @@ public final class BackendClient implements RecipeOperations, DishImporter, Dish
         String base;
         try { base = validateUrl(configuration.baseUrl()); }
         catch (IllegalArgumentException e) { throw new IOException("Nieprawidłowy adres serwera Mealspire.", e); }
-        if (base.isEmpty()) throw new IOException("Ustaw serwer Mealspire w „Więcej…” → „Serwer Mealspire”.");
+        if (base.isEmpty()) throw new IOException("Brak adresu serwera Mealspire.");
         return base + path;
     }
     private JSONObject call(String path, JSONObject body) throws IOException {

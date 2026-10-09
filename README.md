@@ -108,7 +108,7 @@ propozycje” nią nie są. „Nie lubię” nie jest zakazem: danie nie znika z
 AI po prostu oceni je (i podobne) niżej. Twarde zakazy to wyłącznie wykluczenia
 diety z profilu domowników.
 
-**Zalogowany kontem ChatGPT (i ze skonfigurowanym Serwerem Mealspire)** — przy
+**Zalogowany kontem ChatGPT** — przy
 każdym „Śniadanie / Obiad / Kolacja” i „Inne propozycje” aplikacja robi
 **jedno** wywołanie AI przez serwer (`/v1/rate`): wysyła ograniczoną
 listę ostatnich reakcji (nowsze ważą więcej) i kilkunastu kandydatów z
@@ -175,8 +175,8 @@ nigdy nie pyta — pokazuje zapamiętaną wartość jako etykietę „Gotuję dl
 i dołącza ją do zapytań do AI, więc przepis jest dobrany do wielkości rodziny.
 Liczbę osób można w każdej chwili zmienić, dotykając tej etykiety albo w menu
 **„Więcej…” → „Zmień liczbę osób”**. Obok jest etykieta trybu: **„Tryb
-offline”** albo **„AI · <model>”** — dotknięcie prowadzi do logowania, adresu
-serwera albo wyboru modelu. Ustawienie przeżywa obrót ekranu i restart aplikacji.
+offline”** albo **„AI · <model>”** — dotknięcie prowadzi do logowania albo wyboru
+modelu. Ustawienie przeżywa obrót ekranu i restart aplikacji.
 
 ## Menu „Więcej…”
 
@@ -328,10 +328,11 @@ znajdziesz w pliku [`LICENSE.md`](LICENSE.md).
 
 ## Backend VPS (przygotowanie przed wydaniem)
 
-Nowy klient wykonuje operacje AI przez konfigurowalny serwer HTTPS: „Więcej…”
-→ „Serwer Mealspire”. Po zgodzie serwer otrzymuje krótkotrwały token ChatGPT
-i dane gustu; logowanie i odświeżanie sesji zostają na telefonie. Pusty adres
-włącza offline. Katalog backendu zapisuje się na telefonie; awaria serwera
+Klient wykonuje operacje AI przez serwer Mealspire
+(`https://sochiera.pl/mealspire-api`, wbudowany — aplikacja nie pyta o adres).
+Po zalogowaniu kontem ChatGPT serwer otrzymuje krótkotrwały token ChatGPT
+i dane gustu; logowanie i odświeżanie sesji zostają na telefonie. Bez
+logowania aplikacja działa offline i nie łączy się z serwerem. Katalog backendu zapisuje się na telefonie; awaria serwera
 nie usuwa cache, przepisów ani polubień. Powiadomienia działają bez sieci.
 
 Katalog, ocena gustu LLM, propozycje, przepisy, zmiany i import obsługuje

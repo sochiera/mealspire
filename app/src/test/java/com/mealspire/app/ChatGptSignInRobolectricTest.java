@@ -17,6 +17,7 @@ import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.Shadows;
+import org.robolectric.shadows.ShadowAlertDialog;
 import org.robolectric.shadows.ShadowDialog;
 
 /**
@@ -47,6 +48,31 @@ public class ChatGptSignInRobolectricTest {
         Robolectric.buildActivity(MainActivity.class).setup().get();
 
         assertFalse(dialogShownWithTitle(MainActivity.SIGN_IN_DIALOG_TITLE));
+    }
+
+    @Test
+    public void signedInUserGetsAiWithoutBeingAskedForServerAddress() {
+        new SharedPreferencesAppSettings(ApplicationProvider.getApplicationContext())
+                .markOnboardingDone();
+        new SharedPreferencesChatGptSessionStore(ApplicationProvider.getApplicationContext())
+                .save(new ChatGptSession("oaiapp_x", "at", "rt", "it",
+                        System.currentTimeMillis() + 3_600_000, "sub", "ola@example.com", "gpt-6-luna", "gpt-6.1-sol"));
+        MainActivity activity = Robolectric.buildActivity(MainActivity.class).setup().get();
+
+        activity.<android.widget.Button>findViewById(R.id.more_button).performClick();
+        android.widget.ListAdapter items = ShadowAlertDialog.getLatestAlertDialog().getListView().getAdapter();
+        boolean modelItem = false;
+        for (int i = 0; i < items.getCount(); i++) {
+            String item = String.valueOf(items.getItem(i));
+            assertFalse(item, item.contains("Serwer"));
+            modelItem |= item.startsWith(MainActivity.MODEL_MENU_PREFIX);
+        }
+        assertTrue(modelItem);
+        for (Dialog dialog : ShadowDialog.getShownDialogs()) {
+            CharSequence title = dialog instanceof AlertDialog
+                    ? Shadows.shadowOf((AlertDialog) dialog).getTitle() : null;
+            assertFalse(title != null && title.toString().contains("Serwer"));
+        }
     }
 
     private static boolean dialogShownWithTitle(String title) {
