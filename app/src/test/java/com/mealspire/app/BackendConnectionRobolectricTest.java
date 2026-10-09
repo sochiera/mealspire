@@ -5,12 +5,14 @@ import android.content.Context;
 import android.content.Intent;
 import androidx.test.core.app.ApplicationProvider;
 import com.mealspire.app.backend.BackendClient;
+import com.mealspire.app.backend.BackendCodec;
 import com.mealspire.app.domain.*;
 import com.mealspire.app.storage.*;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import org.json.*;
 import org.junit.*;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
@@ -78,6 +80,59 @@ public class BackendConnectionRobolectricTest {
             assertTrue(result.isFailed());
             assertFalse(result.getRecipes().isEmpty());
             assertTrue(offline.containsAll(result.getRecipes()));
+        }
+    }
+
+    @Test public void freshAndUpgradedInstallsCanLoadCatalogAndUseSuccessfulRatings() throws Exception {
+        signIn();
+        for (String saved : new String[]{null, "", "https://old.example"}) {
+            context.getSharedPreferences("mealspire_backend", Context.MODE_PRIVATE).edit()
+                    .clear().putString("url", saved).commit();
+            SharedPreferencesBackendStore store = new SharedPreferencesBackendStore(context);
+            SuccessfulTransport successful = new SuccessfulTransport();
+            ChatGptAccount account = new ChatGptAccount(new SharedPreferencesChatGptSessionStore(context),
+                    successful, new ChatGptOAuth(new java.security.SecureRandom()), new IdTokenVerifier(),
+                    System::currentTimeMillis);
+            BackendClient client = new BackendClient(store, account, successful);
+            store.cache(store.baseUrl(), client.catalog());
+            List<Recipe> candidates = Arrays.asList(store.forMeal(1));
+            DishRecommender.Recommendation result = new DishRecommender(client).recommend(
+                    true, "Obiad", DishReactionLog.empty(), candidates, DietConstraints.empty(),
+                    Collections.emptyList(), 1, System.currentTimeMillis());
+
+            assertFalse(result.isFailed());
+            assertEquals(1, result.getRecipes().size());
+            assertEquals("Ryż", result.getRecipes().get(0).getTitle());
+            assertEquals(Arrays.asList(BackendClient.DEFAULT_BASE_URL + "/v1/catalog",
+                    BackendClient.DEFAULT_BASE_URL + "/v1/rate"), successful.urls);
+            assertFalse(new SharedPreferencesBackendStore(context).needsCatalog());
+        }
+    }
+
+    private static final class SuccessfulTransport implements HttpTransport {
+        final List<String> urls = new ArrayList<>();
+        public Response get(String url, String token) throws IOException {
+            urls.add(url);
+            assertNull(token);
+            try {
+                JSONArray meals = new JSONArray();
+                for (int i = 0; i < 3; i++) meals.put(new JSONArray()
+                        .put(BackendCodec.recipe(new Recipe("Ryż", "Ugotuj ryż."))));
+                return new Response(200, BackendCodec.envelope().put("meals", meals).toString());
+            } catch (JSONException e) { throw new IOException(e); }
+        }
+        public Response postJson(String url, String token, String body) throws IOException {
+            urls.add(url);
+            assertEquals("access", token);
+            try {
+                JSONObject request = new JSONObject(body);
+                assertEquals("Ryż", request.getJSONArray("candidates").getJSONObject(0).getString("name"));
+                return new Response(200, BackendCodec.envelope().put("ratings", new JSONArray()
+                        .put(BackendCodec.rating(new DishRating("Ryż", 9, "Pasuje do gustu.")))).toString());
+            } catch (JSONException e) { throw new IOException(e); }
+        }
+        public Response postForm(String url, Map<String,String> form) {
+            throw new AssertionError("Valid stored session must not require OAuth requests");
         }
     }
 
