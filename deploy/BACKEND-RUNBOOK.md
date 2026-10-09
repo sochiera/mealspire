@@ -41,11 +41,12 @@ Umieść runtime, backend z installDist i `backend-smoke.py` w jednym archiwum
 
 ## Konfiguracja klienta
 
-„Więcej…” → „Serwer Mealspire”: wpisz bazowy adres HTTPS, bez `/v1`, np.
-`https://mealspire-api.example.org`. Potwierdzenie informuje o przekazaniu
-krótkotrwałego tokenu ChatGPT oraz gustu do zaufanego serwera.
-Adres jest konfigurowalny bez nowego APK; pusty adres włącza offline.
-Żaden adres produkcyjny nie jest włączany automatycznie.
+Adres produkcyjny jest wbudowany (`BackendClient.DEFAULT_BASE_URL` =
+`https://sochiera.pl/mealspire-api`); aplikacja nie pyta o adres. Pusty lub
+inny adres zapisany przez starszą wersję jest przy starcie zastępowany
+domyślnym, a katalog ze starego adresu usuwany. Zmiana adresu wymaga nowego APK.
+Dialog logowania ChatGPT informuje o przekazaniu krótkotrwałego tokenu ChatGPT
+oraz gustu do serwera Mealspire; bez logowania klient nie łączy się z serwerem.
 OAuth/PKCE, weryfikacja ID tokenu, refresh/revoke zostają na urządzeniu.
 Backend nie otrzymuje refresh/ID tokenu ani e-maila. Nie podążamy za redirectami
 HTTP. Backend weryfikuje access token i dostępność wybranego modelu w OpenAI.

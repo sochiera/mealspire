@@ -161,4 +161,12 @@ i prompty wykonuje moduł JVM `backend`. Android nie ma nowych zależności.
 Samodzielny JVM korzysta z org.json jako odpowiednika platformowej biblioteki
 Android. Offline, quiz, magazyny i aktualizator pozostają lokalne.
 Kontrakt: `docs/design/backend-api.md`; staging: `deploy/BACKEND-RUNBOOK.md`.
-Przed ship-it brak automatycznie skonfigurowanego endpointu produkcyjnego.
+Adres serwera jest stały: `BackendClient.DEFAULT_BASE_URL`
+(`https://sochiera.pl/mealspire-api`), bez pola w UI. `SharedPreferencesBackendStore`
+przy starcie zastępuje pusty/inny adres zapisany przez starsze wersje i czyści
+jego katalog. Serwer jest wołany dopiero po zalogowaniu kontem ChatGPT.
+Informację o serwerze daje dialog logowania (także z menu „Więcej…”); sesja
+z wcześniejszej wersji dostaje raz dialog `SERVER_NOTICE_TITLE` (OK / wyloguj).
+AI rusza dopiero po OK; do tego czasu także start z powiadomienia działa offline.
+Zamknięcie dialogu nie zapamiętuje akceptacji. Po OK posiłek otwarty z powiadomienia
+jest ponownie dobierany przez AI, bez wpisywania adresu.

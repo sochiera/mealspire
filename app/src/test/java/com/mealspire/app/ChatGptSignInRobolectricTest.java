@@ -10,6 +10,7 @@ import androidx.test.core.app.ApplicationProvider;
 
 import com.mealspire.app.domain.ChatGptSession;
 import com.mealspire.app.storage.SharedPreferencesAppSettings;
+import com.mealspire.app.storage.SharedPreferencesBackendStore;
 import com.mealspire.app.storage.SharedPreferencesChatGptSessionStore;
 
 import org.junit.Test;
@@ -17,6 +18,7 @@ import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.Shadows;
+import org.robolectric.shadows.ShadowAlertDialog;
 import org.robolectric.shadows.ShadowDialog;
 
 /**
@@ -47,6 +49,73 @@ public class ChatGptSignInRobolectricTest {
         Robolectric.buildActivity(MainActivity.class).setup().get();
 
         assertFalse(dialogShownWithTitle(MainActivity.SIGN_IN_DIALOG_TITLE));
+    }
+
+    @Test
+    public void signedInUserGetsAiWithoutBeingAskedForServerAddress() {
+        new SharedPreferencesAppSettings(ApplicationProvider.getApplicationContext())
+                .markOnboardingDone();
+        new SharedPreferencesChatGptSessionStore(ApplicationProvider.getApplicationContext())
+                .save(new ChatGptSession("oaiapp_x", "at", "rt", "it",
+                        System.currentTimeMillis() + 3_600_000, "sub", "ola@example.com", "gpt-6-luna", "gpt-6.1-sol"));
+        MainActivity activity = Robolectric.buildActivity(MainActivity.class).setup().get();
+
+        activity.<android.widget.Button>findViewById(R.id.more_button).performClick();
+        android.widget.ListAdapter items = ShadowAlertDialog.getLatestAlertDialog().getListView().getAdapter();
+        boolean modelItem = false;
+        for (int i = 0; i < items.getCount(); i++) {
+            String item = String.valueOf(items.getItem(i));
+            assertFalse(item, item.contains("Serwer"));
+            modelItem |= item.startsWith(MainActivity.MODEL_MENU_PREFIX);
+        }
+        assertTrue(modelItem);
+        for (Dialog dialog : ShadowDialog.getShownDialogs()) {
+            CharSequence title = dialog instanceof AlertDialog
+                    ? Shadows.shadowOf((AlertDialog) dialog).getTitle() : null;
+            assertFalse(title != null && "Serwer Mealspire".contentEquals(title));
+        }
+    }
+
+    @Test
+    public void sessionFromOlderVersionIsToldOnceAboutServerInsteadOfAskedForAddress() {
+        new SharedPreferencesAppSettings(ApplicationProvider.getApplicationContext())
+                .markOnboardingDone();
+        new SharedPreferencesChatGptSessionStore(ApplicationProvider.getApplicationContext())
+                .save(new ChatGptSession("oaiapp_x", "at", "rt", "it",
+                        System.currentTimeMillis() + 3_600_000, "sub", "ola@example.com", "gpt-6-luna", "gpt-6.1-sol"));
+        ApplicationProvider.getApplicationContext()
+                .getSharedPreferences("mealspire_backend", android.content.Context.MODE_PRIVATE)
+                .edit().putString("url", "").commit();
+
+        Robolectric.buildActivity(MainActivity.class).setup().get();
+        assertTrue(dialogShownWithTitle(MainActivity.SERVER_NOTICE_TITLE));
+        assertFalse(new SharedPreferencesBackendStore(ApplicationProvider.getApplicationContext())
+                .serverNoticeShown());
+        ShadowAlertDialog.getLatestAlertDialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+        assertTrue(new SharedPreferencesBackendStore(ApplicationProvider.getApplicationContext())
+                .serverNoticeShown());
+        ShadowDialog.reset();
+        Robolectric.buildActivity(MainActivity.class).setup().get();
+        assertFalse(dialogShownWithTitle(MainActivity.SERVER_NOTICE_TITLE));
+    }
+
+    @Test
+    public void signInFromMoreMenuShowsServerInformationFirst() {
+        new SharedPreferencesAppSettings(ApplicationProvider.getApplicationContext())
+                .markOnboardingDone();
+        MainActivity activity = Robolectric.buildActivity(MainActivity.class).setup().get();
+        ShadowDialog.reset();
+
+        activity.<android.widget.Button>findViewById(R.id.more_button).performClick();
+        AlertDialog menu = ShadowAlertDialog.getLatestAlertDialog();
+        android.widget.ListAdapter items = menu.getListView().getAdapter();
+        for (int i = 0; i < items.getCount(); i++) {
+            if (MainActivity.SIGN_IN_MENU_LABEL.equals(String.valueOf(items.getItem(i)))) {
+                menu.getListView().performItemClick(null, i, i);
+            }
+        }
+        assertTrue(dialogShownWithTitle(MainActivity.SIGN_IN_DIALOG_TITLE));
     }
 
     private static boolean dialogShownWithTitle(String title) {

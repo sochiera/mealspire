@@ -8,7 +8,7 @@ pozostają do pracy offline i quizu; nie są źródłem promptów online.
 Dotychczasowe czyste klasy domeny kompilujemy również w module `backend`;
 zmiana ich zachowania online wymaga tylko nowego release backendu.
 
-Ścieżki są względne wobec konfigurowalnego adresu bazowego HTTPS:
+Ścieżki są względne wobec adresu bazowego HTTPS (w aplikacji stały: `https://sochiera.pl/mealspire-api`):
 
 | Metoda i ścieżka | Wejście | Wynik |
 | --- | --- | --- |
