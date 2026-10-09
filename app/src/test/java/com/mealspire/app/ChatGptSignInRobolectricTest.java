@@ -89,8 +89,15 @@ public class ChatGptSignInRobolectricTest {
 
         Robolectric.buildActivity(MainActivity.class).setup().get();
         assertTrue(dialogShownWithTitle(MainActivity.SERVER_NOTICE_TITLE));
+        assertFalse(new SharedPreferencesBackendStore(ApplicationProvider.getApplicationContext())
+                .serverNoticeShown());
+        ShadowAlertDialog.getLatestAlertDialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
         assertTrue(new SharedPreferencesBackendStore(ApplicationProvider.getApplicationContext())
                 .serverNoticeShown());
+        ShadowDialog.reset();
+        Robolectric.buildActivity(MainActivity.class).setup().get();
+        assertFalse(dialogShownWithTitle(MainActivity.SERVER_NOTICE_TITLE));
     }
 
     @Test

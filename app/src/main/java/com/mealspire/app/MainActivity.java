@@ -172,6 +172,7 @@ public class MainActivity extends Activity {
     // deterministic. Never assign these from production code.
     static VersionJsonSource versionJsonSourceOverride;
     static Executor updateCheckExecutorOverride;
+    static com.mealspire.app.domain.HttpTransport backendTransportOverride;
 
     private final Random random = new Random();
     private Button servingsLabel;
@@ -462,6 +463,8 @@ public class MainActivity extends Activity {
     private void onAiChipTapped() {
         if (!chatGptAccount.isSignedIn()) {
             offerChatGptSignIn();
+        } else if (!backendStore.serverNoticeShown()) {
+            showServerNotice();
         } else {
             showModelChoiceDialog();
         }
@@ -658,7 +661,8 @@ public class MainActivity extends Activity {
     }
 
     private void buildLlmClients() {
-        HttpUrlTransport transport = new HttpUrlTransport();
+        com.mealspire.app.domain.HttpTransport transport = backendTransportOverride != null
+                ? backendTransportOverride : new HttpUrlTransport();
         chatGptAccount = new ChatGptAccount(new SharedPreferencesChatGptSessionStore(this),
                 transport, new ChatGptOAuth(new SecureRandom()), new IdTokenVerifier(),
                 System::currentTimeMillis);
@@ -670,11 +674,10 @@ public class MainActivity extends Activity {
     }
 
     private boolean isAiAvailable() {
-        return chatGptAccount.isSignedIn();
+        return chatGptAccount.isSignedIn() && backendStore.serverNoticeShown();
     }
 
     private void offerChatGptSignIn() {
-        backendStore.markServerNoticeShown();
         new AlertDialog.Builder(this)
                 .setTitle(SIGN_IN_DIALOG_TITLE)
                 .setMessage("AI korzysta z Twojego konta ChatGPT (plan Plus lub Pro) — "
@@ -682,20 +685,26 @@ public class MainActivity extends Activity {
                         + "Zapytania AI przechodzą przez serwer Mealspire, który otrzymuje dane "
                         + "gustu i krótkotrwały token dostępu ChatGPT. "
                         + "Bez logowania aplikacja działa offline (losuje dania z bazy).")
-                .setPositiveButton("Zaloguj się", (dialog, which) -> startChatGptSignIn())
+                .setPositiveButton("Zaloguj się", (dialog, which) -> {
+                    backendStore.markServerNoticeShown();
+                    startChatGptSignIn();
+                })
                 .setNegativeButton("Pomiń", null)
                 .show();
     }
 
-    /** Informs (no address to type) that AI now goes through the built-in server. */
+    /** AI stays offline until the user accepts the built-in server notice. */
     private void showServerNotice() {
-        backendStore.markServerNoticeShown();
         new AlertDialog.Builder(this)
                 .setTitle(SERVER_NOTICE_TITLE)
                 .setMessage("Zapytania AI przechodzą przez serwer Mealspire, który otrzymuje "
                         + "dane gustu i krótkotrwały token dostępu ChatGPT. Jeśli wolisz tryb "
                         + "offline, wyloguj się z ChatGPT.")
-                .setPositiveButton("OK", null)
+                .setPositiveButton("OK", (dialog, which) -> {
+                    backendStore.markServerNoticeShown();
+                    updateAiChip();
+                    if (currentMealIndex >= 0) generateProposals();
+                })
                 .setNegativeButton("Wyloguj z ChatGPT", (dialog, which) -> signOutOfChatGpt())
                 .show();
     }

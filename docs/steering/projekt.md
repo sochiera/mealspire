@@ -167,3 +167,6 @@ przy starcie zastępuje pusty/inny adres zapisany przez starsze wersje i czyści
 jego katalog. Serwer jest wołany dopiero po zalogowaniu kontem ChatGPT.
 Informację o serwerze daje dialog logowania (także z menu „Więcej…”); sesja
 z wcześniejszej wersji dostaje raz dialog `SERVER_NOTICE_TITLE` (OK / wyloguj).
+AI rusza dopiero po OK; do tego czasu także start z powiadomienia działa offline.
+Zamknięcie dialogu nie zapamiętuje akceptacji. Po OK posiłek otwarty z powiadomienia
+jest ponownie dobierany przez AI, bez wpisywania adresu.
