@@ -1,6 +1,6 @@
 {
-  "versionCode": 6,
-  "versionName": "1.5",
+  "versionCode": 7,
+  "versionName": "1.6",
   "apkUrl": "https://raw.githubusercontent.com/sochiera/mealspire/main/dist/mealspire-debug.apk",
-  "sha256": "ff4af4f381c2a10bdedd60c2603d9ca8a243f3ab131b29c0f0e2c4dfb638bd54"
+  "sha256": "654283ac033b146ba3055e69e6c7c8466491b998b982dd695aa2924c58ac936d"
 }

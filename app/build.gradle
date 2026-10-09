@@ -12,8 +12,8 @@ android {
         targetSdk 35
         // Podbijaj przy każdym wydaniu (odświeżeniu dist/) razem z dist/wersja.json —
         // spójności pilnuje ReleaseConsistencyTest.
-        versionCode 6
-        versionName "1.5"
+        versionCode 7
+        versionName "1.6"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
