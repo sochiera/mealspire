@@ -19,6 +19,9 @@ public final class SharedPreferencesBackendStore implements BackendClient.Config
         if (!this.endpoint.equals(prefs.getString("url", null))) prefs.edit().clear().putString("url", this.endpoint).apply();
     }
     @Override public String baseUrl() { return endpoint; }
+    /** One-time notice that AI goes through the Mealspire server (reset with the endpoint). */
+    public boolean serverNoticeShown() { return prefs.getBoolean("server_notice", false); }
+    public void markServerNoticeShown() { prefs.edit().putBoolean("server_notice", true).apply(); }
     public boolean needsCatalog() { return System.currentTimeMillis()-prefs.getLong("catalog_time", 0) > 86400000; }
     public synchronized void cache(String expectedUrl, JSONObject data) throws IOException {
         try { BackendCodec.catalog(data); } catch (JSONException e) { throw new IOException("Nieprawidłowy katalog.", e); }

@@ -165,3 +165,5 @@ Adres serwera jest stały: `BackendClient.DEFAULT_BASE_URL`
 (`https://sochiera.pl/mealspire-api`), bez pola w UI. `SharedPreferencesBackendStore`
 przy starcie zastępuje pusty/inny adres zapisany przez starsze wersje i czyści
 jego katalog. Serwer jest wołany dopiero po zalogowaniu kontem ChatGPT.
+Informację o serwerze daje dialog logowania (także z menu „Więcej…”); sesja
+z wcześniejszej wersji dostaje raz dialog `SERVER_NOTICE_TITLE` (OK / wyloguj).

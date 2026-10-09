@@ -164,6 +164,7 @@ public class MainActivity extends Activity {
     static final String SIGN_IN_DIALOG_TITLE = "Zaloguj się kontem ChatGPT";
     static final String SIGN_IN_MENU_LABEL = "Zaloguj się kontem ChatGPT";
     static final String MODEL_MENU_PREFIX = "Model AI: ";
+    static final String SERVER_NOTICE_TITLE = "AI przez serwer Mealspire";
     private static final int SIGN_IN_TIMEOUT_MS = 5 * 60 * 1000;
 
     // Test seams (package-private, null in production): replace the network
@@ -469,12 +470,15 @@ public class MainActivity extends Activity {
     /**
      * One-time prompts asked outside the quiz, so nothing covers the first
      * question: the servings dialog, the ChatGPT sign-in offer (only while
-     * signed out) and the Android 13+ notification permission.
+     * signed out) or, once, the server notice for sessions from older versions,
+     * and the Android 13+ notification permission.
      */
     private void showStartupPrompts() {
         maybeAskServings();
         if (!chatGptAccount.isSignedIn()) {
             offerChatGptSignIn();
+        } else if (!backendStore.serverNoticeShown()) {
+            showServerNotice();
         }
         maybeRequestNotificationPermission();
     }
@@ -670,6 +674,7 @@ public class MainActivity extends Activity {
     }
 
     private void offerChatGptSignIn() {
+        backendStore.markServerNoticeShown();
         new AlertDialog.Builder(this)
                 .setTitle(SIGN_IN_DIALOG_TITLE)
                 .setMessage("AI korzysta z Twojego konta ChatGPT (plan Plus lub Pro) — "
@@ -679,6 +684,19 @@ public class MainActivity extends Activity {
                         + "Bez logowania aplikacja działa offline (losuje dania z bazy).")
                 .setPositiveButton("Zaloguj się", (dialog, which) -> startChatGptSignIn())
                 .setNegativeButton("Pomiń", null)
+                .show();
+    }
+
+    /** Informs (no address to type) that AI now goes through the built-in server. */
+    private void showServerNotice() {
+        backendStore.markServerNoticeShown();
+        new AlertDialog.Builder(this)
+                .setTitle(SERVER_NOTICE_TITLE)
+                .setMessage("Zapytania AI przechodzą przez serwer Mealspire, który otrzymuje "
+                        + "dane gustu i krótkotrwały token dostępu ChatGPT. Jeśli wolisz tryb "
+                        + "offline, wyloguj się z ChatGPT.")
+                .setPositiveButton("OK", null)
+                .setNegativeButton("Wyloguj z ChatGPT", (dialog, which) -> signOutOfChatGpt())
                 .show();
     }
 
@@ -1715,7 +1733,7 @@ public class MainActivity extends Activity {
             actions.add(this::signOutOfChatGpt);
         } else {
             labels.add(SIGN_IN_MENU_LABEL);
-            actions.add(this::startChatGptSignIn);
+            actions.add(this::offerChatGptSignIn);
         }
 
         new AlertDialog.Builder(this)

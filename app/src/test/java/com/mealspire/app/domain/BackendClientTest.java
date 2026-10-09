@@ -42,6 +42,12 @@ public class BackendClientTest {
             catch (java.io.IOException expected) { assertEquals(0, transport.calls.size()); }
         }
     }
+    @Test public void defaultServerIsProductionHttpsAddress() throws Exception {
+        FakeHttpTransport transport = new FakeHttpTransport().respond(200, "{\"apiVersion\":1,\"proposals\":[]}");
+        BackendClient client = new BackendClient(() -> BackendClient.DEFAULT_BASE_URL, account(transport), transport);
+        client.proposeDishes(new RecipeRequest("Obiad", UserPreferences.empty(), null, null), 3);
+        assertEquals("https://sochiera.pl/mealspire-api/v1/proposals", transport.calls.get(0).url);
+    }
     @Test public void catalogIsPublicAndMalformedOrNewMajorIsRejected() throws Exception {
         FakeHttpTransport transport = new FakeHttpTransport().respond(200, "{\"apiVersion\":2,\"meals\":[]}");
         BackendClient client = new BackendClient(() -> "https://trusted.example", account(transport), transport);
