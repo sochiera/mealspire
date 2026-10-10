@@ -62,8 +62,17 @@ Wszystkie teksty w UI i promptach są po polsku.
   `{"oceny":[{danie, ocena 0–10, powod}]}` (`DishRatingParser`) → odrzucenie
   nazw spoza kandydatów i naruszeń diety → 3 najwyższe z powodem na karcie,
   braki dopełnia pula offline. Pusta lista reakcji = ocena po popularności.
-  Bez logowania LLM nie jest wołany; zły JSON / sieć → offline + toast, bez
-  crasha. Brak progu „5 polubień" i reguły 2+1 — `TasteModel`/`TasteProfiler`
+  Bez logowania LLM nie jest wołany; zły JSON / sieć → offline, bez crasha.
+  **Ocena biegnie w tle, nie na kliknięcie** (`ReadyProposals`): wynik trafia do
+  gotowej puli posiłku (`ReadyDishPool` — tylko nazwa/ocena/powód, dania
+  zostają w katalogu + książce kucharskiej; trzymana obok katalogu w
+  `SharedPreferencesBackendStore`, ≥ `MIN_SCORE`, max `KEEP_PER_REFILL` z
+  oceny). Kliknięcie bierze 3 z puli od razu, braki dopełnia offline z jawną
+  notką (`proposalSourceNote`). Uzupełnianie: start, po każdym pobraniu gdy
+  < 2 zestawy, zmiana podpisu (reakcje/dieta/model) — jeden wątek, najwyżej
+  jedno naraz na posiłek, nieoceniane jeszcze dania. **Seria** (od dotknięcia
+  kafelka posiłku) nie powtarza dań (`seriesShown`), także offline; koniec
+  serii = stan „Zacznij od nowa". Brak progu „5 polubień" i reguły 2+1 — `TasteModel`/`TasteProfiler`
   nie wybierają kart zalogowanego użytkownika (zostają: `TasteProfiler` w
   offline'owym `VariedMealPicker`, dziennik `TasteEvent` w kontekście promptu
   pełnego przepisu/„Zmień przepis"). „Wyczyść reakcje" czyści listę

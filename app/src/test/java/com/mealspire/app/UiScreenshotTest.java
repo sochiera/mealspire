@@ -83,6 +83,44 @@ public class UiScreenshotTest {
         saveView(menu.getWindow().getDecorView(), "14-dialog-more");
     }
 
+    /** Pusta gotowa pula (uzupełnianie w tle wstrzymane) i koniec serii bez powtórek. */
+    @Test
+    public void readyPoolStates() throws Exception {
+        Context context = ApplicationProvider.getApplicationContext();
+        new SharedPreferencesAppSettings(context).markOnboardingDone();
+        new com.mealspire.app.storage.SharedPreferencesChatGptSessionStore(context).save(
+                new com.mealspire.app.domain.ChatGptSession("client", "access", "refresh", "id",
+                        System.currentTimeMillis() + 3_600_000, "subject", "email",
+                        "gpt-6-luna", "gpt-6.1-sol"));
+        com.mealspire.app.storage.SharedPreferencesBackendStore store =
+                new com.mealspire.app.storage.SharedPreferencesBackendStore(context);
+        store.markServerNoticeShown();
+        org.json.JSONArray meals = new org.json.JSONArray();
+        String[] lunch = {"Pierogi ruskie", "Zupa pomidorowa", "Kurczak curry", "Placki ziemniaczane"};
+        for (int meal = 0; meal < 3; meal++) {
+            org.json.JSONArray dishes = new org.json.JSONArray();
+            for (String title : lunch) {
+                dishes.put(com.mealspire.app.backend.BackendCodec.recipe(
+                        new com.mealspire.app.domain.Recipe(title,
+                                "Składniki: " + title.toLowerCase() + ".\nPrzygotowanie: ugotuj.")));
+            }
+            meals.put(dishes);
+        }
+        store.cache(store.baseUrl(), com.mealspire.app.backend.BackendCodec.envelope()
+                .put("revision", "s").put("meals", meals));
+        MainActivity.readyPoolExecutorOverride = task -> { }; // refill "still running"
+        try {
+            MainActivity activity = Robolectric.buildActivity(MainActivity.class).setup().get();
+            activity.<Button>findViewById(R.id.meal_lunch_button).performClick();
+            save(activity, "15-proposals-pool-warming");
+            activity.<Button>findViewById(R.id.refresh_button).performClick();
+            activity.<Button>findViewById(R.id.refresh_button).performClick();
+            save(activity, "16-series-exhausted");
+        } finally {
+            MainActivity.readyPoolExecutorOverride = null;
+        }
+    }
+
     @Test
     public void updateBannerAndScreen() throws IOException {
         Context context = ApplicationProvider.getApplicationContext();
