@@ -25,13 +25,19 @@ import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 
 /**
- * Świeża instalacja zaczyna od quizu gustu: pytania o domowników, poziom
- * gotowania i kuchnie, potem trzy rundy wyboru dań zapisywane jako zwykłe
- * polubienia. „Pomiń" i ukończenie ustawiają trwałą flagę — quiz pokazuje
+ * Świeża instalacja zaczyna od quizu gustu: pytania o domowników, dietę,
+ * czas i poziom gotowania, potem ankieta A/B (tu skrócona do 3 par) zapisywana
+ * jako zwykłe polubienia. „Pomiń" i ukończenie ustawiają trwałą flagę — quiz pokazuje
  * się tylko raz. Ścieżka wyłącznie offline.
  */
 @RunWith(RobolectricTestRunner.class)
 public class OnboardingRobolectricTest {
+
+    @org.junit.Before
+    public void shortSurvey() {
+        new SharedPreferencesAppSettings(ApplicationProvider.getApplicationContext())
+                .saveSurveyLength(3);
+    }
 
     private MainActivity launch() {
         return Robolectric.buildActivity(MainActivity.class).setup().get();
@@ -142,12 +148,12 @@ public class OnboardingRobolectricTest {
     }
 
     @Test
-    public void trzyRundyDanZapisujaTrzyPolubienia() {
+    public void trzyParyAnkietyZapisujaTrzyPolubienia() {
         MainActivity activity = launch();
         answerProfileQuestions(activity);
 
         for (int round = 0; round < 3; round++) {
-            assertEquals("Które danie najbardziej Ci pasuje?", questionText(activity));
+            assertEquals("Co wolisz?", questionText(activity));
             activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
         }
 
@@ -190,7 +196,7 @@ public class OnboardingRobolectricTest {
         answerProfileQuestions(activity);
 
         for (int round = 0; round < 3; round++) {
-            assertEquals("Które danie najbardziej Ci pasuje?", questionText(activity));
+            assertEquals("Co wolisz?", questionText(activity));
             activity.<Button>findViewById(R.id.onboarding_option_none).performClick();
         }
 
@@ -213,10 +219,9 @@ public class OnboardingRobolectricTest {
 
         DietConstraints veg = DietConstraints.of(java.util.Collections.singletonList(
                 DietConstraints.Exclusion.VEGETARIAN));
-        int[] optionIds = {R.id.onboarding_option_1, R.id.onboarding_option_2,
-                R.id.onboarding_option_3};
+        int[] optionIds = {R.id.onboarding_option_1, R.id.onboarding_option_2};
         for (int round = 0; round < 3; round++) {
-            assertEquals("Które danie najbardziej Ci pasuje?", questionText(activity));
+            assertEquals("Co wolisz?", questionText(activity));
             for (int optionId : optionIds) {
                 String dish = activity.<Button>findViewById(optionId)
                         .getText().toString();
