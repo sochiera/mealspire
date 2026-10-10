@@ -23,4 +23,6 @@
     <item name="onboarding_option_none" type="id" />
     <item name="onboarding_next_button" type="id" />
     <item name="onboarding_skip_button" type="id" />
+    <item name="survey_progress" type="id" />
+    <item name="survey_resume_button" type="id" />
 </resources>

@@ -59,7 +59,6 @@ import com.mealspire.app.domain.HouseholdProfileStore;
 import com.mealspire.app.domain.LearningStats;
 import com.mealspire.app.domain.LearningStatsStore;
 import com.mealspire.app.domain.BuiltInRecipes;
-import com.mealspire.app.domain.ContrastiveDishSampler;
 import com.mealspire.app.domain.IngredientExtractor;
 import com.mealspire.app.domain.OfflineProposalGenerator;
 import com.mealspire.app.domain.PortionSize;
@@ -85,6 +84,9 @@ import com.mealspire.app.domain.TasteEventStore;
 import com.mealspire.app.domain.TasteModel;
 import com.mealspire.app.domain.TasteProfile;
 import com.mealspire.app.domain.TasteProfiler;
+import com.mealspire.app.domain.TasteSurvey;
+import com.mealspire.app.domain.TasteSurveyPlanner;
+import com.mealspire.app.domain.TasteSurveyStore;
 import com.mealspire.app.domain.UpdateChecker;
 import com.mealspire.app.domain.UpdateStateStore;
 import com.mealspire.app.domain.UserPreferences;
@@ -107,6 +109,7 @@ import com.mealspire.app.storage.SharedPreferencesPreferenceStore;
 import com.mealspire.app.storage.SharedPreferencesLearningStatsStore;
 import com.mealspire.app.storage.SharedPreferencesChatGptSessionStore;
 import com.mealspire.app.storage.SharedPreferencesTasteEventStore;
+import com.mealspire.app.storage.SharedPreferencesTasteSurveyStore;
 import com.mealspire.app.storage.SharedPreferencesUpdateStateStore;
 import com.mealspire.app.ui.Ui;
 
@@ -161,8 +164,10 @@ public class MainActivity extends Activity {
             HouseholdProfile.CookingTime.MEDIUM,
             HouseholdProfile.CookingTime.LONG};
     private static final int ONBOARDING_QUESTIONS = 4;
-    private static final int ONBOARDING_DISH_ROUNDS = ContrastiveDishSampler.rounds();
-    private static final int ONBOARDING_STEPS = ONBOARDING_QUESTIONS + ONBOARDING_DISH_ROUNDS;
+    // The A/B taste survey is the one quiz step after the questions; its pairs
+    // advance inside that step (TasteSurvey.position).
+    private static final int SURVEY_STEP = ONBOARDING_QUESTIONS;
+    private static final int ONBOARDING_STEPS = ONBOARDING_QUESTIONS + 1;
 
     /** Intent extra: which meal to open (0=breakfast, 1=lunch, 2=dinner). */
     public static final String EXTRA_MEAL_INDEX = "meal_index";
@@ -259,20 +264,21 @@ public class MainActivity extends Activity {
     private int contentEpoch;
     // Which screen the content area currently shows; drives the system back button.
     private BackNavigation.Screen currentScreen = BackNavigation.Screen.START;
-    // First-launch taste quiz: current question (-1 = quiz not running), the
-    // sampled dish rounds, and a meal tapped in a notification to open once the
-    // quiz is finished or skipped. Held in fields (not saved state) because the
-    // manifest's configChanges keeps the Activity alive across rotation.
-    private final ContrastiveDishSampler onboardingDishSampler = new ContrastiveDishSampler();
+    // First-launch taste quiz: current question (-1 = quiz not running) and a
+    // meal tapped in a notification to open once the quiz is finished or
+    // skipped. Held in fields (not saved state) because the manifest's
+    // configChanges keeps the Activity alive across rotation.
     private int onboardingStep = -1;
-    private List<List<Recipe>> onboardingRounds;
-    // Diet the rounds were sampled with; a change (via back navigation) resamples.
-    private String onboardingRoundsDietKey;
-    // The dish picked in each quiz round. Persisted as likes only when the quiz
-    // ends, so going back and re-picking replaces the choice instead of
-    // accumulating extra likes.
-    private final String[] onboardingPicks = new String[ONBOARDING_DISH_ROUNDS];
     private int pendingMealIndex = -1;
+    // Ankieta A/B: zapisywana po każdej odpowiedzi (wznowienie po przerwie);
+    // wybrane dania trafiają do reakcji „lubię" przy zakończeniu albo przerwaniu,
+    // więc „Cofnij" podmienia wybór zamiast dokładać polubienia.
+    private final TasteSurveyPlanner surveyPlanner = new TasteSurveyPlanner();
+    private TasteSurveyStore surveyStore;
+    private TasteSurvey survey;
+    // Ankieta otwarta z ekranu startowego/menu, poza quizem: bez pytań profilu
+    // i jednorazowych dialogów startowych.
+    private boolean surveyOnly;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -298,6 +304,8 @@ public class MainActivity extends Activity {
         learningStatsStore = new SharedPreferencesLearningStatsStore(this);
         learningStats = learningStatsStore.load();
         updateStateStore = new SharedPreferencesUpdateStateStore(this);
+        surveyStore = new SharedPreferencesTasteSurveyStore(this);
+        survey = surveyStore.load();
         // Polubienia sprzed ery dziennika stają się zdarzeniami LIKED (raz).
         TasteEventLog migrated = TasteEventMigration.migrate(
                 tasteEvents, preferences, System.currentTimeMillis());
@@ -382,8 +390,8 @@ public class MainActivity extends Activity {
         } else {
             // Fresh install: a short taste quiz first; every one-time dialog
             // (servings, ChatGPT sign-in, notification permission) waits until
-            // it is finished or skipped.
-            startOnboarding();
+            // it is finished or skipped. An interrupted survey resumes where it stopped.
+            startOnboarding(isSurveyUnfinished() ? SURVEY_STEP : 0);
         }
 
         // Daily meal reminders (8/12/18). Scheduling is idempotent.
@@ -532,8 +540,7 @@ public class MainActivity extends Activity {
                 showStartScreen();
                 break;
             case ONBOARDING_PREVIOUS:
-                onboardingStep--;
-                renderOnboardingStep();
+                previousOnboardingStep();
                 break;
             case ONBOARDING_SKIP:
                 endOnboarding();
@@ -574,6 +581,23 @@ public class MainActivity extends Activity {
                 Ui.HERB_SOFT, Ui.HERB);
         card.addView(learning, marginTop(14));
         contentContainer.addView(card, matchWrap());
+        // Przerwana ankieta czeka tu na dokończenie; bez ankiety (pominięty quiz,
+        // aktualizacja ze starszej wersji) — zaproszenie, żeby ją zrobić.
+        if (survey == null || isSurveyUnfinished()) {
+            Button surveyButton = new Button(this);
+            surveyButton.setId(R.id.survey_resume_button);
+            surveyButton.setTextSize(16);
+            if (survey == null) {
+                surveyButton.setText("Ankieta gustu: A czy B?");
+                Ui.outlinedButton(surveyButton);
+            } else {
+                surveyButton.setText("Dokończ ankietę gustu (" + survey.position() + " z "
+                        + survey.size() + ")");
+                Ui.primary(surveyButton);
+            }
+            surveyButton.setOnClickListener(v -> openSurvey(0));
+            contentContainer.addView(surveyButton, marginTop(16));
+        }
     }
 
     /**
@@ -813,38 +837,78 @@ public class MainActivity extends Activity {
      * "which dish appeals most?" rounds saved as ordinary likes. Every step can
      * be skipped; answers given so far are kept either way.
      */
-    private void startOnboarding() {
-        onboardingRounds = null;
-        onboardingRoundsDietKey = null;
-        onboardingStep = 0;
+    private void startOnboarding(int step) {
+        onboardingStep = step;
         setMealButtonsEnabled(false);
         homeSection.setVisibility(View.GONE);
         Ui.setEnabledWithFade(moreButton, false);
         renderOnboardingStep();
     }
 
+    private boolean isSurveyUnfinished() {
+        return survey != null && !survey.isFinished();
+    }
+
     /**
-     * Samples the contrastive dish rounds lazily — after the diet question, so
-     * exclusions ticked moments earlier already filter the rounds. Changing the
-     * diet (back navigation) resamples and drops picks that may now be invalid.
+     * Plans the survey lazily — after the diet question, so exclusions ticked
+     * moments earlier already filter the pairs. A diet change before anything
+     * was saved replans (dropping answers that may now be invalid); after
+     * that, only the pairs still ahead that break the diet are dropped.
      */
-    private void ensureOnboardingRounds() {
-        String dietKey = householdProfile.getDiet().getExclusions().toString();
-        if (onboardingRounds != null && dietKey.equals(onboardingRoundsDietKey)) {
-            return;
+    private void ensureSurvey() {
+        String dietKey = surveyDietKey();
+        if (survey == null || survey.isFinished()
+                || (!dietKey.equals(survey.dietKey()) && survey.committed() == 0)) {
+            planSurvey();
+        } else if (!dietKey.equals(survey.dietKey())) {
+            saveSurvey(survey.withoutDisallowed(householdProfile.getDiet(),
+                    surveyDetailsByTitle(), dietKey));
         }
-        Recipe[][] pools = new Recipe[BuiltInRecipes.mealCount()][];
+    }
+
+    private void planSurvey() {
+        Recipe[][] pools = new Recipe[MEAL_TYPES.length][];
         for (int i = 0; i < pools.length; i++) {
-            pools[i] = BuiltInRecipes.forMeal(i);
+            pools[i] = backendStore.forMeal(i);
         }
-        onboardingRounds = onboardingDishSampler.sample(
-                pools, householdProfile.getDiet(), random);
-        onboardingRoundsDietKey = dietKey;
-        java.util.Arrays.fill(onboardingPicks, null);
+        saveSurvey(TasteSurvey.start(surveyPlanner.plan(pools, householdProfile.getDiet(),
+                appSettings.loadSurveyLength(), random), surveyDietKey()));
+    }
+
+    private String surveyDietKey() {
+        return householdProfile.getDiet().getExclusions().toString();
+    }
+
+    private void saveSurvey(TasteSurvey updated) {
+        survey = updated;
+        surveyStore.save(updated);
+    }
+
+    /** Dish details for the survey's pairs: the shared catalog plus the cookbook. */
+    private java.util.Map<String, String> surveyDetailsByTitle() {
+        java.util.Map<String, String> details = BuiltInRecipes.detailsByTitle(cookbook);
+        for (int i = 0; i < MEAL_TYPES.length; i++) {
+            for (Recipe recipe : backendStore.forMeal(i)) {
+                if (!details.containsKey(recipe.getTitle())) {
+                    details.put(recipe.getTitle(), recipe.getDetails());
+                }
+            }
+        }
+        return details;
     }
 
     private void renderOnboardingStep() {
         contentContainer.removeAllViews();
+        if (onboardingStep == SURVEY_STEP) {
+            ensureSurvey();
+            if (survey.isFinished()) {
+                // Empty survey (diet excludes the whole pool): nothing to ask.
+                advanceOnboarding();
+            } else {
+                renderSurveyPair();
+            }
+            return;
+        }
 
         if (onboardingStep == 0) {
             contentContainer.addView(Ui.overline(this, "Poznajmy się"), matchWrap());
@@ -855,7 +919,8 @@ public class MainActivity extends Activity {
                 marginTop(onboardingStep == 0 ? 18 : 4));
 
         TextView progress = Ui.text(this,
-                "Pytanie " + (onboardingStep + 1) + " z " + ONBOARDING_STEPS, 14, Ui.INK_SOFT);
+                "Pytanie " + (onboardingStep + 1) + " z " + ONBOARDING_QUESTIONS
+                        + ", potem ankieta gustu", 14, Ui.INK_SOFT);
         contentContainer.addView(progress, marginTop(10));
 
         TextView question = Ui.headline(this, "", 24);
@@ -925,43 +990,105 @@ public class MainActivity extends Activity {
                     });
                 }
                 break;
-            default:
-                question.setText("Które danie najbardziej Ci pasuje?");
-                ensureOnboardingRounds();
-                final int roundIndex = onboardingStep - ONBOARDING_QUESTIONS;
-                List<Recipe> round = onboardingRounds.get(roundIndex);
-                for (int i = 0; i < round.size(); i++) {
-                    final String dish = round.get(i).getTitle();
-                    addOnboardingOption(i + 1, dish, () -> {
-                        // Remembered per round and persisted at the end, so
-                        // going back and re-picking replaces the choice.
-                        onboardingPicks[roundIndex] = dish;
-                        toast("Zapamiętane — lubisz: " + dish);
-                        advanceOnboarding();
-                    });
-                }
-                // Wymuszony wybór to fałszywy sygnał — „Żadne z tych" po prostu
-                // nie zapisuje polubienia (uczenie pozostaje tylko pozytywne).
-                Button none = new Button(this);
-                none.setId(R.id.onboarding_option_none);
-                none.setText("Żadne z tych");
-                none.setTextSize(16);
-                Ui.outlinedButton(none);
-                none.setOnClickListener(v -> {
-                    onboardingPicks[roundIndex] = null;
-                    advanceOnboarding();
-                });
-                contentContainer.addView(none, marginTop(12));
-                break;
         }
 
+        addQuizSkipButton("Pomiń");
+    }
+
+    private void addQuizSkipButton(String label) {
         Button skip = new Button(this);
         skip.setId(R.id.onboarding_skip_button);
-        skip.setText("Pomiń");
+        skip.setText(label);
         skip.setTextSize(16);
         Ui.ghost(skip);
         skip.setOnClickListener(v -> endOnboarding());
         contentContainer.addView(skip, marginTop(20));
+    }
+
+    /**
+     * One A/B pair of the taste survey: two dishes, „Żadne z tych", and the
+     * progress through the whole survey. Every answer is saved at once, so an
+     * interrupted survey resumes at this pair.
+     */
+    private void renderSurveyPair() {
+        if (survey.position() == 0) {
+            contentContainer.addView(Ui.overline(this, "Ankieta gustu"), matchWrap());
+            contentContainer.addView(Ui.body(this, "Wybieraj szybko, bez zastanawiania — "
+                    + "z odpowiedzi zbiorę dania, które lubicie, i od nich zacznę "
+                    + "propozycje. Możesz przerwać i dokończyć później."), marginTop(6));
+        }
+        contentContainer.addView(buildProgressBar(survey.position(), survey.size()),
+                marginTop(survey.position() == 0 ? 18 : 4));
+        TextView progress = Ui.text(this, "Porównanie " + (survey.position() + 1) + " z "
+                + survey.size(), 14, Ui.INK_SOFT);
+        progress.setId(R.id.survey_progress);
+        contentContainer.addView(progress, marginTop(10));
+
+        TextView question = Ui.headline(this, "Co wolisz?", 24);
+        question.setId(R.id.onboarding_question);
+        contentContainer.addView(question, marginTop(4));
+
+        TasteSurvey.Pair pair = survey.current();
+        java.util.Map<String, String> details = surveyDetailsByTitle();
+        addSurveyOption(1, pair.getDishA(), details.get(pair.getDishA()), TasteSurvey.CHOICE_A);
+        TextView or = Ui.text(this, "albo", 14, Ui.INK_SOFT);
+        or.setGravity(android.view.Gravity.CENTER);
+        contentContainer.addView(or, marginTop(8));
+        addSurveyOption(2, pair.getDishB(), details.get(pair.getDishB()), TasteSurvey.CHOICE_B);
+
+        // Wymuszony wybór to fałszywy sygnał — „Żadne z tych" nic nie zapisuje.
+        Button none = new Button(this);
+        none.setId(R.id.onboarding_option_none);
+        none.setText("Żadne z tych");
+        none.setTextSize(16);
+        Ui.outlinedButton(none);
+        none.setOnClickListener(v -> answerSurvey(TasteSurvey.CHOICE_NEITHER));
+        contentContainer.addView(none, marginTop(12));
+
+        addQuizSkipButton("Przerwij — dokończę później");
+    }
+
+    private void addSurveyOption(int index, String dish, String details, int choice) {
+        addOnboardingOption(index, dish, () -> answerSurvey(choice));
+        String description = DishReaction.describe(details);
+        if (!description.isEmpty()) {
+            contentContainer.addView(Ui.text(this, description, 13, Ui.INK_SOFT), marginTop(4));
+        }
+    }
+
+    private void answerSurvey(int choice) {
+        saveSurvey(survey.answer(choice));
+        if (survey.isFinished()) {
+            advanceOnboarding();
+        } else {
+            renderOnboardingStep();
+        }
+    }
+
+    /** One step back in the quiz: the previous pair, question, or out of a standalone survey. */
+    private void previousOnboardingStep() {
+        if (onboardingStep == SURVEY_STEP && survey != null && survey.canGoBack()) {
+            saveSurvey(survey.back());
+        } else if (onboardingStep == SURVEY_STEP && surveyOnly) {
+            endOnboarding();
+            return;
+        } else {
+            onboardingStep--;
+        }
+        renderOnboardingStep();
+    }
+
+    /** Thin filled bar for the long survey (segments would be unreadably small). */
+    private View buildProgressBar(int done, int total) {
+        LinearLayout bar = Ui.row(this);
+        float fraction = total <= 0 ? 0f : (float) done / total;
+        View filled = new View(this);
+        filled.setBackground(Ui.rounded(this, Ui.ACCENT, 3));
+        bar.addView(filled, new LinearLayout.LayoutParams(0, dp(6), Math.max(fraction, 0.01f)));
+        View rest = new View(this);
+        rest.setBackground(Ui.rounded(this, Ui.OUTLINE, 3));
+        bar.addView(rest, new LinearLayout.LayoutParams(0, dp(6), Math.max(1f - fraction, 0.01f)));
+        return bar;
     }
 
     /** Segmented progress bar: one segment per quiz step, done ones filled. */
@@ -1027,15 +1154,27 @@ public class MainActivity extends Activity {
 
     /**
      * Finishes or skips the quiz for good: the flag is permanent, answers given
-     * so far stay saved, and a meal tapped in a notification opens now.
+     * so far stay saved, and a meal tapped in a notification opens now. Also
+     * ends (or interrupts) a survey started later from the start screen.
      */
     private void endOnboarding() {
+        boolean standalone = surveyOnly;
+        surveyOnly = false;
         appSettings.markOnboardingDone();
         onboardingStep = -1;
-        saveOnboardingPicks();
+        boolean learned = commitSurveyPicks();
         homeSection.setVisibility(View.VISIBLE);
         Ui.setEnabledWithFade(moreButton, true);
-        showStartupPrompts();
+        if (survey != null && survey.isFinished() && learned) {
+            toast("Ankieta gotowa — lubiane dania: " + survey.likedDishes().size()
+                    + ". Od nich zaczną się propozycje.");
+        }
+        if (!standalone) {
+            showStartupPrompts();
+        }
+        if (learned) {
+            warmReadyPools(); // nowe polubienia zmieniają podpis gustu gotowej puli
+        }
         if (pendingMealIndex >= 0) {
             int meal = pendingMealIndex;
             pendingMealIndex = -1;
@@ -1046,21 +1185,63 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** Persists the quiz dish picks as ordinary likes, one per answered round. */
-    private void saveOnboardingPicks() {
-        java.util.Map<String, String> detailsByTitle = BuiltInRecipes.detailsByTitle(cookbook);
-        for (String pick : onboardingPicks) {
-            if (pick != null) {
-                reactions = reactions.append(new DishReaction(pick,
-                        DishReaction.describe(detailsByTitle.get(pick)), true,
-                        System.currentTimeMillis()));
-                preferences = preferences.withLike(pick);
-                recordTasteEvent(TasteEvent.Type.ONBOARDING_PICK, pick,
-                        TasteEvent.NO_MEAL);
-            }
+    /**
+     * Saves the survey's not-yet-saved picks as ordinary likes — the shared
+     * reaction list, likes and ONBOARDING_PICK taste events — and marks them
+     * final. Returns whether anything new was learned.
+     */
+    private boolean commitSurveyPicks() {
+        if (survey == null || survey.committed() == survey.position()) {
+            return false;
         }
-        preferenceStore.save(preferences);
-        reactionStore.save(reactions);
+        List<String> picks = survey.pendingPicks();
+        java.util.Map<String, String> detailsByTitle = surveyDetailsByTitle();
+        long now = System.currentTimeMillis();
+        for (String pick : picks) {
+            reactions = reactions.append(new DishReaction(pick,
+                    DishReaction.describe(detailsByTitle.get(pick)), true, now));
+            preferences = preferences.withLike(pick);
+            recordTasteEvent(TasteEvent.Type.ONBOARDING_PICK, pick, TasteEvent.NO_MEAL);
+        }
+        if (!picks.isEmpty()) {
+            preferenceStore.save(preferences);
+            reactionStore.save(reactions);
+        }
+        saveSurvey(survey.commit());
+        return !picks.isEmpty();
+    }
+
+    /** Opens the survey on its own (start-screen card or "Więcej…"), resuming if unfinished. */
+    private void openSurvey(int newLength) {
+        if (newLength > 0) {
+            appSettings.saveSurveyLength(newLength);
+            survey = null; // ensureSurvey plans a fresh one
+        }
+        surveyOnly = true;
+        contentEpoch++;
+        currentRecipe = null;
+        currentMealIndex = -1;
+        highlightSelectedMeal();
+        startOnboarding(SURVEY_STEP);
+    }
+
+    /** "Więcej…" → "Ankieta gustu": resume, or pick how long the new one is. */
+    private void showSurveyMenu() {
+        if (isSurveyUnfinished()) {
+            openSurvey(0);
+            return;
+        }
+        final int[] lengths = TasteSurvey.LENGTH_CHOICES;
+        String[] labels = new String[lengths.length];
+        String[] names = {"Krótka", "Średnia", "Długa", "Bardzo długa"};
+        for (int i = 0; i < lengths.length; i++) {
+            labels[i] = (i < names.length ? names[i] + " — " : "") + lengths[i] + " porównań";
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Ankieta gustu: ile porównań?")
+                .setItems(labels, (dialog, which) -> openSurvey(lengths[which]))
+                .setNegativeButton("Anuluj", null)
+                .show();
     }
 
     // ----- Meal selection + proposals -------------------------------------
@@ -1831,6 +2012,8 @@ public class MainActivity extends Activity {
         actions.add(() -> showServingsDialog(true));
         labels.add("Profil domowników");
         actions.add(this::showHouseholdProfileDialog);
+        labels.add(isSurveyUnfinished() ? "Dokończ ankietę gustu" : "Ankieta gustu (A czy B?)");
+        actions.add(this::showSurveyMenu);
         labels.add("Dodaj danie, które znasz i lubisz");
         actions.add(this::showAddKnownDishDialog);
         labels.add("Zarządzaj moimi danymi");

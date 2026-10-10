@@ -19,13 +19,19 @@ przyciski, na każdym kroku widoczny przycisk **„Pomiń"**):
    około pół godziny / godzina i więcej.
 4. **Jak Ci idzie gotowanie?** — dopiero zaczynam / radzę sobie / gotuję dobrze
    i lubię wyzwania.
-5. Trzy **kontrastowe** rundy **„Które danie najbardziej Ci pasuje?"** — każda
-   runda rozstrzyga co innego (mięso/ryba/bezmięsne, zupa/zapiekane/świeże,
-   polskie/śródziemnomorskie/azjatyckie), więc każdy wybór uczy maksymalnie
-   dużo. Wybór zapisuje się jako reakcja „lubię” na liście, z której AI
-   ocenia kolejne dania (resztę douczy normalne używanie),
-   a **„Żadne z tych"** uczciwie nie zapisuje nic. Rundy respektują wykluczenia
-   z pytania 2.
+5. **Ankieta gustu „Co wolisz?” — A czy B.** Seria par dań (domyślnie 20,
+   długość do zmiany), każda para inna; kolejne pary kontrastują na zmianę
+   bazą (mięso/ryba/bezmięsne), charakterem (zupa/zapiekane/świeże) i kuchnią,
+   a dania przewijają się równomiernie przez cały katalog. Pasek i licznik
+   („Porównanie 7 z 20”) pokazują postęp. Wybrane danie zapisuje się jako
+   reakcja „lubię” na tej samej liście, z której AI ocenia kolejne dania —
+   tak powstaje początkowa grupa lubianych dań; **„Żadne z tych"** uczciwie
+   nie zapisuje nic. Pary respektują wykluczenia z pytania 2.
+   Każda odpowiedź jest od razu zapamiętana: po zamknięciu aplikacji ankieta
+   **wznawia się od tej samej pary**, a **„Przerwij — dokończę później”**
+   zapisuje dotychczasowe wybory i zostawia na ekranie startowym przycisk
+   **„Dokończ ankietę gustu”**. Nową ankietę (z wyborem długości: 10/20/30/40
+   porównań) uruchamia **„Więcej…” → „Ankieta gustu”**.
 
 Odpowiedzi z pytań 1–4 trafiają do **profilu domowników** i realnie wpływają na
 zapytania do AI („Gotuję też dla dzieci…", „Bezwzględny wymóg diety…",
@@ -34,8 +40,8 @@ zapytania do AI („Gotuję też dla dzieci…", „Bezwzględny wymóg diety…
 odpowiedzi zostają. Profil można później zmienić w menu **„Więcej…" → „Profil
 domowników"**. Systemowe „Cofnij" wraca w quizie do poprzedniego pytania
 (z pierwszego pytania działa jak „Pomiń") i pozwala **zmienić wybór dania** —
-liczy się ostatni wybór w rundzie, polubienia zapisują się dopiero na końcu
-quizu. Jednorazowe pytania startowe (liczba osób, logowanie kontem ChatGPT, zgoda na
+liczy się ostatni wybór w parze; polubienia zapisują się przy zakończeniu albo
+przerwaniu ankiety (zapisanych już wyborów „Cofnij” nie zmienia). Jednorazowe pytania startowe (liczba osób, logowanie kontem ChatGPT, zgoda na
 powiadomienia) pojawiają się dopiero po zakończeniu lub pominięciu quizu —
 nic nie zasłania pierwszego pytania.
 
@@ -192,6 +198,8 @@ Aby utrzymać główny ekran prostym, dodatkowe akcje są pod przyciskiem „Wi�
 (trzy kropki w prawym górnym rogu):
 
 - **Zmień liczbę osób** — zmienia zapamiętaną liczbę osób, dla których gotujesz.
+- **Ankieta gustu** — dokończenie przerwanej albo nowa ankieta A/B o wybranej
+  długości; wybory dokładają się do listy reakcji „lubię”.
 - **Profil domowników** — zmienia odpowiedzi z quizu startowego (dla kogo
   gotujesz, czego nie jadacie, ile masz czasu, jak Ci idzie gotowanie) oraz
   ulubione kuchnie (deklaracja opcjonalna — gustu kuchni aplikacja i tak uczy

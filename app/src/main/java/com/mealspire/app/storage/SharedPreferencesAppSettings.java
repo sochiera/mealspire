@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 
 import com.mealspire.app.domain.AppSettings;
+import com.mealspire.app.domain.TasteSurvey;
 
 /**
  * {@link AppSettings} backed by {@link SharedPreferences}, so the default
@@ -15,6 +16,7 @@ public final class SharedPreferencesAppSettings implements AppSettings {
     private static final String KEY_DEFAULT_SERVINGS = "default_servings";
     private static final String KEY_SERVINGS_CHOSEN = "servings_chosen";
     private static final String KEY_ONBOARDING_DONE = "onboarding_done";
+    private static final String KEY_SURVEY_LENGTH = "survey_length";
     private static final int MAX_SERVINGS = 12;
 
     private final SharedPreferences sharedPreferences;
@@ -55,6 +57,22 @@ public final class SharedPreferencesAppSettings implements AppSettings {
     public void markOnboardingDone() {
         sharedPreferences.edit()
                 .putBoolean(KEY_ONBOARDING_DONE, true)
+                .apply();
+    }
+
+    @Override
+    public int loadSurveyLength() {
+        int value = sharedPreferences.getInt(KEY_SURVEY_LENGTH, TasteSurvey.DEFAULT_PAIRS);
+        return value >= 1 ? value : TasteSurvey.DEFAULT_PAIRS;
+    }
+
+    @Override
+    public void saveSurveyLength(int pairs) {
+        if (pairs < 1) {
+            return;
+        }
+        sharedPreferences.edit()
+                .putInt(KEY_SURVEY_LENGTH, pairs)
                 .apply();
     }
 
