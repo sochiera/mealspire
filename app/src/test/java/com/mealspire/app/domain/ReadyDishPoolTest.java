@@ -31,6 +31,25 @@ public class ReadyDishPoolTest {
     }
 
     @Test
+    public void generatedDishesRoundTripAndLeaveWithTheirEntry() {
+        DishProposal leczo = new DishProposal("Leczo", "Papryka z cukinią.", "30 min",
+                Arrays.asList("papryka", "cukinia"));
+        ReadyDishPool pool = new ReadyDishPool("sig",
+                Arrays.asList(new DishRating("Leczo", 5, ""), new DishRating("Curry", 9, "x")),
+                Collections.<String>emptyList(), Collections.singletonList(leczo));
+        ReadyDishPoolSerializer serializer = new ReadyDishPoolSerializer();
+
+        ReadyDishPool restored = serializer.fromJson(serializer.toJson(pool));
+
+        DishProposal back = restored.generated("leczo");
+        assertEquals("Papryka z cukinią.", back.getDescription());
+        assertEquals("30 min", back.getTime());
+        assertEquals(Arrays.asList("papryka", "cukinia"), back.getKeyIngredients());
+        assertEquals(null, restored.generated("Curry"));
+        assertEquals(0, restored.without(Collections.singletonList("Leczo")).getGenerated().size());
+    }
+
+    @Test
     public void corruptJsonIsAnEmptyPool() {
         ReadyDishPoolSerializer serializer = new ReadyDishPoolSerializer();
         assertEquals(0, serializer.fromJson("{nie json").size());

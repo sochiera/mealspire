@@ -108,6 +108,18 @@ public class UiScreenshotTest {
         }
         store.cache(store.baseUrl(), com.mealspire.app.backend.BackendCodec.envelope()
                 .put("revision", "s").put("meals", meals));
+        store.saveReadyPool(2, new com.mealspire.app.domain.ReadyDishPool("s", java.util.Arrays.asList(
+                new com.mealspire.app.domain.DishRating("Shakshuka z fetą", 5, ""),
+                new com.mealspire.app.domain.DishRating("Pierogi ruskie", 9,
+                        "Lubicie pierogi i proste, sycące dania."),
+                new com.mealspire.app.domain.DishRating("Leczo z cukinią", 5, "")),
+                java.util.Collections.<String>emptyList(), java.util.Arrays.asList(
+                new com.mealspire.app.domain.DishProposal("Shakshuka z fetą",
+                        "Jajka duszone w pomidorach z papryką, posypane fetą.", "25 min",
+                        java.util.Arrays.asList("jajka", "pomidory", "feta")),
+                new com.mealspire.app.domain.DishProposal("Leczo z cukinią",
+                        "Papryka, cukinia i cebula duszone z kiełbasą.", "35 min",
+                        java.util.Arrays.asList("papryka", "cukinia")))));
         MainActivity.readyPoolExecutorOverride = task -> { }; // refill "still running"
         try {
             MainActivity activity = Robolectric.buildActivity(MainActivity.class).setup().get();
@@ -116,6 +128,8 @@ public class UiScreenshotTest {
             activity.<Button>findViewById(R.id.refresh_button).performClick();
             activity.<Button>findViewById(R.id.refresh_button).performClick();
             save(activity, "16-series-exhausted");
+            activity.<Button>findViewById(R.id.meal_dinner_button).performClick();
+            save(activity, "17-ready-pool-generated");
         } finally {
             MainActivity.readyPoolExecutorOverride = null;
         }

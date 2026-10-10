@@ -110,12 +110,16 @@ propozycje” nią nie są. „Nie lubię” nie jest zakazem: danie nie znika z
 AI po prostu oceni je (i podobne) niżej. Twarde zakazy to wyłącznie wykluczenia
 diety z profilu domowników.
 
-**Zalogowany kontem ChatGPT** — dania są **ocenione wcześniej, w tle**, więc
+**Zalogowany kontem ChatGPT** — dania są **przygotowane wcześniej, w tle**, więc
 „Śniadanie / Obiad / Kolacja” i „Inne propozycje” pokazują je od razu, bez
-czekania na AI. Aplikacja trzyma dla każdego posiłku małą gotową pulę
-ocenionych dań i uzupełnia ją w tle (po uruchomieniu i gdy się kończy, zmienia
-się gust albo dieta). Każde uzupełnienie to **jedno** wywołanie AI przez
-serwer (`/v1/rate`): wysyła ograniczoną
+czekania na AI. Aplikacja trzyma dla każdego posiłku gotową pulę dań i
+uzupełnia ją w tle **zanim się wyczerpie** — gdy zostają mniej niż dwa zestawy
+(6 dań), a także gdy jest pusta, po uruchomieniu i po zmianie gustu, diety czy
+modelu. Naraz trwa najwyżej jedno uzupełnienie na posiłek. W uzupełnieniu AI
+**generuje nowe dania** (`/v1/proposals`, 6 pomysłów, z listą dań do
+unikania: tych z puli, już pokazanych i ostatnich) — ich pełny przepis powstaje
+po „Pokaż przepis”. Dopóki w bazie są nieocenione dania, to samo uzupełnienie
+**ocenia je** (`/v1/rate`): wysyła ograniczoną
 listę ostatnich reakcji (nowsze ważą więcej) i kilkunastu kandydatów z
 wbudowanej bazy oraz Twojej bazy dań (nazwa + skład, już przefiltrowanych
 dietą). AI ocenia każdego kandydata od 0 do 10 według smaku, składników i

@@ -1141,17 +1141,20 @@ public class MainActivity extends Activity {
         final int meal = currentMealIndex;
         ReadyProposals.Selection selection = ReadyProposals.take(
                 backendStore.readyPool(meal), readyPoolSignature(), currentMealPool(meal),
-                reactions, seriesShown,
+                householdProfile.getDiet(), reactions, seriesShown,
                 generateOfflineRecipes(PROPOSAL_COUNT * 2), PROPOSAL_COUNT);
         backendStore.saveReadyPool(meal, selection.getRemaining());
-        if (selection.getRecipes().isEmpty() && seriesShown.isEmpty()) {
+        if (selection.size() == 0 && seriesShown.isEmpty()) {
             showHint(NO_DISHES_FOR_DIET);
             return;
         }
         proposalSource = selection.getSource();
         List<DishProposal> newProposals = new ArrayList<>();
-        for (Recipe recipe : selection.getRecipes()) {
-            newProposals.add(proposalFromRecipe(recipe));
+        for (int i = 0; i < selection.size(); i++) {
+            Recipe recipe = selection.getRecipes().get(i);
+            // New AI dishes have no recipe yet: "Pokaż przepis" fetches it on demand.
+            newProposals.add(recipe != null ? proposalFromRecipe(recipe)
+                    : selection.getGenerated().get(i));
         }
         showProposals(newProposals, new ArrayList<>(selection.getRecipes()),
                 new ArrayList<>(selection.getReasons()));
@@ -1176,9 +1179,11 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * Uzupełnia gotową pulę posiłku jednym wywołaniem LLM w tle — tylko gdy
-     * jest nieaktualna albo kończy się, najwyżej jedno naraz na posiłek. Błąd
-     * zostawia pulę bez zmian; kolejna propozycja spróbuje ponownie.
+     * Uzupełnia gotową pulę posiłku w tle: LLM generuje nowe dania (i ocenia
+     * nieocenione z katalogu). Rusza, gdy pula jest pusta, nieaktualna albo
+     * spada poniżej dwóch zestawów — zanim się wyczerpie. Najwyżej jedno
+     * uzupełnienie naraz na posiłek. Błąd zostawia pulę bez zmian; kolejna
+     * propozycja spróbuje ponownie.
      */
     private void refillReadyPool(final int meal) {
         if (!isAiAvailable() || refillingMeals.contains(meal)) {
@@ -1191,17 +1196,18 @@ public class MainActivity extends Activity {
         if (!ReadyProposals.needsRefill(pool, signature, shown, PROPOSAL_COUNT)) {
             return;
         }
-        final String mealType = MEAL_TYPES[meal];
         final DishReactionLog reactionSnapshot = reactions;
         final DietConstraints diet = householdProfile.getDiet();
         final List<Recipe> mealPool = currentMealPool(meal);
         final MealHistory historySnapshot = history;
         final long now = System.currentTimeMillis();
+        final RecipeRequest request = buildRequest(meal,
+                ReadyProposals.avoidList(pool, shown, history.recentTitles(8)));
         refillingMeals.add(meal);
         readyPoolExecutor().execute(() -> {
             ReadyProposals.Refill refill = null;
             try {
-                refill = ReadyProposals.refill(dishRater, mealType, signature,
+                refill = ReadyProposals.refill(dishRater, recipeService, request, signature,
                         pool, reactionSnapshot, mealPool, shown, diet, historySnapshot, now,
                         random);
             } catch (IOException | RuntimeException ignored) {
@@ -1236,7 +1242,12 @@ public class MainActivity extends Activity {
     }
 
     private RecipeRequest buildRequest() {
-        final String mealType = MEAL_TYPES[currentMealIndex];
+        return buildRequest(currentMealIndex, history.recentTitles(8));
+    }
+
+    /** Request for one meal; {@code recentToAvoid} lists names the AI should not repeat. */
+    private RecipeRequest buildRequest(int meal, List<String> recentToAvoid) {
+        final String mealType = MEAL_TYPES[meal];
         List<String> fragments = new ArrayList<>();
         String portionFragment = PortionSize.promptFragment(appSettings.loadDefaultServings());
         if (!portionFragment.isEmpty()) {
@@ -1248,12 +1259,12 @@ public class MainActivity extends Activity {
         }
         java.util.Map<String, String> detailsByTitle =
                 BuiltInRecipes.detailsByTitle(cookbook);
-        return new RecipeRequest(mealType, preferences, history.recentTitles(8),
+        return new RecipeRequest(mealType, preferences, recentToAvoid,
                 fragments, knownDishes, buildTasteProfile().getAffinities(),
                 householdProfile)
                 .withTasteContext(tasteContextBuilder.build(
                         currentTasteModel(detailsByTitle), tasteEvents,
-                        householdProfile.getDiet(), currentMealIndex)
+                        householdProfile.getDiet(), meal)
                         .withAntiMonotony(monotonyDetector.detect(
                                 history.recentTitles(MonotonyDetector.WINDOW),
                                 detailsByTitle)));
