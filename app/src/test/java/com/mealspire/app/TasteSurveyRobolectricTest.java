@@ -252,7 +252,7 @@ public class TasteSurveyRobolectricTest {
         org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
     }
 
-    /** /v1/rate: zapamiętuje treść żądania i ocenia każdego kandydata na 8/10. */
+    /** /v1/rate records taste; the background /v1/proposals call returns no extra dishes. */
     private static final class RecordingTransport implements HttpTransport {
         final List<String> bodies = new ArrayList<>();
 
@@ -261,9 +261,13 @@ public class TasteSurveyRobolectricTest {
         }
 
         public Response postJson(String url, String token, String body) throws IOException {
-            assertTrue(url.endsWith("/v1/rate"));
-            bodies.add(body);
             try {
+                if (url.endsWith("/v1/proposals")) {
+                    return new Response(200,
+                            BackendCodec.envelope().put("proposals", new JSONArray()).toString());
+                }
+                assertTrue(url.endsWith("/v1/rate"));
+                bodies.add(body);
                 JSONArray candidates = new JSONObject(body).getJSONArray("candidates");
                 JSONArray ratings = new JSONArray();
                 for (int i = 0; i < candidates.length(); i++) {
