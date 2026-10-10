@@ -35,6 +35,19 @@ public class OfflineProposalGeneratorTest {
     }
 
     @Test
+    public void excludedDishesNeverComeBackEvenWhenPoolRunsShort() {
+        Recipe[] builtIns = {new Recipe("Jajecznica", "jajka"), new Recipe("Owsianka", "płatki"),
+                new Recipe("Tosty", "chleb")};
+        Set<String> excluded = new HashSet<>(java.util.Arrays.asList("jajecznica", "tosty"));
+        List<Recipe> chosen = generator.generate(builtIns, Cookbook.empty(),
+                UserPreferences.empty(), new TasteProfile(Collections.emptyList()), 3,
+                new Random(3), MealHistory.empty(), 0L, DietConstraints.empty(), excluded);
+
+        assertEquals(1, chosen.size());
+        assertEquals("Owsianka", chosen.get(0).getTitle());
+    }
+
+    @Test
     public void neverExceedsAvailablePool() {
         Recipe[] builtIns = BuiltInRecipes.forMeal(0);
         int poolSize = builtIns.length;

@@ -8,6 +8,7 @@ import org.json.*;
 /**
  * Last validated catalog survives outages. The endpoint is fixed (no user-entered address);
  * an empty or different address saved by an older version is replaced and its catalog dropped.
+ * Also holds the ready (pre-rated) dish pool per meal, see {@link ReadyDishPool}.
  */
 public final class SharedPreferencesBackendStore implements BackendClient.Configuration {
     private final SharedPreferences prefs;
@@ -26,6 +27,16 @@ public final class SharedPreferencesBackendStore implements BackendClient.Config
     public synchronized void cache(String expectedUrl, JSONObject data) throws IOException {
         try { BackendCodec.catalog(data); } catch (JSONException e) { throw new IOException("Nieprawidłowy katalog.", e); }
         if (expectedUrl.equals(baseUrl())) prefs.edit().putString("catalog", data.toString()).putLong("catalog_time", System.currentTimeMillis()).apply();
+    }
+    /**
+     * Gotowa pula ocenionych dań posiłku — obok katalogu, bo trzyma tylko nazwy
+     * z jego dań (plus książki kucharskiej) i znika razem z nim przy zmianie adresu.
+     */
+    public synchronized ReadyDishPool readyPool(int meal) {
+        return new ReadyDishPoolSerializer().fromJson(prefs.getString("ready_pool_" + meal, null));
+    }
+    public synchronized void saveReadyPool(int meal, ReadyDishPool pool) {
+        prefs.edit().putString("ready_pool_" + meal, new ReadyDishPoolSerializer().toJson(pool)).apply();
     }
     public Recipe[] forMeal(int meal) {
         try { return BackendCodec.catalog(BackendCodec.response(prefs.getString("catalog", "")))[meal]; }

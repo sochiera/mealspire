@@ -1,8 +1,10 @@
 package com.mealspire.app.domain;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -53,7 +55,24 @@ public final class OfflineProposalGenerator {
                                  UserPreferences preferences, TasteProfile profile,
                                  int count, Random random, MealHistory history, long now,
                                  DietConstraints diet) {
-        List<Recipe> pool = mealPoolBuilder.build(builtIns, cookbook, preferences, diet);
+        return generate(builtIns, cookbook, preferences, profile, count, random, history, now,
+                diet, Collections.<String>emptySet());
+    }
+
+    /**
+     * Jak wyżej, ale bez dań z {@code excluded} (np. pokazanych już w tej
+     * serii) — te nie wracają nawet wtedy, gdy zabrakłoby innych.
+     */
+    public List<Recipe> generate(Recipe[] builtIns, Cookbook cookbook,
+                                 UserPreferences preferences, TasteProfile profile,
+                                 int count, Random random, MealHistory history, long now,
+                                 DietConstraints diet, Set<String> excluded) {
+        List<Recipe> pool = new ArrayList<>();
+        for (Recipe recipe : mealPoolBuilder.build(builtIns, cookbook, preferences, diet)) {
+            if (!excluded.contains(recipe.getTitle().trim().toLowerCase())) {
+                pool.add(recipe);
+            }
+        }
         Collections.shuffle(pool, random);
         List<Recipe> fresh = recentlyShownFilter.apply(pool, history, RECENCY_WINDOW_MILLIS,
                 now, count);

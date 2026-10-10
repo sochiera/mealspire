@@ -42,7 +42,9 @@ naruszający dietę zwraca 422. Nieznane wykluczenie diety zwraca 400,
 aby nigdy nie zignorować wymagania nowszego klienta.
 
 `/v1/rate` to jedyne wywołanie LLM przy propozycjach zalogowanej aplikacji
-(od wersji z ocenami dań): reactions {dish, description, liked, time},
+(od wersji z ocenami dań; od wersji z gotową pulą wołane w tle, a wynik
+trafia do lokalnej puli — kontrakt bez zmian). Ta sama pula jest uzupełniana
+w tle nowymi daniami z `/v1/proposals` (count 6, `recent` = dania do unikania): reactions {dish, description, liked, time},
 candidates {name, description ≤500 znaków — sam skład, bez pełnego przepisu}.
 Serwer zwraca tylko oceny podanych kandydatów, bez naruszeń diety; telefon
 filtruje dietę ponownie na pełnym przepisie i bierze 3 najwyżej ocenione.
