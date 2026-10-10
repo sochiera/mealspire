@@ -28,16 +28,27 @@ Wszystkie teksty w UI i promptach są po polsku.
 
 - **Onboarding tylko raz**: świeża instalacja zaczyna od quizu (dla kogo
   gotujesz / czego nie jadacie / ile czasu na gotowanie / jak idzie gotowanie
-  + 3 **kontrastowe** rundy wyboru dań z `ContrastiveDishSampler` — każda
-  rozstrzyga jeden wymiar gustu; opcja „Żadne z tych" nie zapisuje nic).
+  + **ankieta gustu A/B** — jeden krok quizu `SURVEY_STEP`, w nim seria par
+  z `TasteSurveyPlanner`: różne pary, kontrast w kolejnym wymiarze gustu,
+  równomierne pokrycie katalogu `backendStore.forMeal`, dieta bezwzględnie;
+  długość `AppSettings.loadSurveyLength()`, domyślnie
+  `TasteSurvey.DEFAULT_PAIRS`; „Żadne z tych" nie zapisuje nic).
   Odpowiedzi 1–4 → `HouseholdProfile` (wpływa na prompty przez
-  `RecipeRequest.getHouseholdProfile()`, także na „Zmień przepis"), wybory dań
-  → zwykłe polubienia i reakcje „lubię" na liście reakcji. Rundy losowane są **po** pytaniu o dietę i ją respektują;
-  zmiana diety przez „Cofnij" przelosowuje rundy (`ensureOnboardingRounds`).
-  Wybory rund trzymane są w `onboardingPicks` i zapisywane dopiero na końcu
-  quizu, żeby „Cofnij" + inny wybór **podmieniał** polubienie, a nie dokładał
-  kolejne. Flaga ukończenia w `AppSettings.isOnboardingDone()` jest niezależna
-  od profilu; „Pomiń" też ją ustawia, a udzielone odpowiedzi zostają.
+  `RecipeRequest.getHouseholdProfile()`, także na „Zmień przepis"). Ankieta
+  **nie ma własnego modelu gustu**: `TasteSurvey` to tylko stan kwestionariusza
+  (pary nazw dań, odpowiedzi, `position`, `committed`), zapisywany po każdej
+  odpowiedzi (`SharedPreferencesTasteSurveyStore`, wznowienie po zabiciu
+  procesu). Wybory trafiają do wspólnych zdarzeń — reakcja „lubię" w
+  `DishReactionLog`, like w `UserPreferences`, `TasteEvent.ONBOARDING_PICK` —
+  dopiero przy końcu lub przerwaniu (`commitSurveyPicks`), żeby „Cofnij" +
+  inny wybór **podmieniał** polubienie; zapisanych odpowiedzi nie da się cofnąć.
+  Potem `warmReadyPools()` (zmieniony podpis gustu). Zmiana diety przez „Cofnij"
+  przed zapisem przelosowuje pary; po zapisie odpadają tylko dalsze pary
+  łamiące dietę. Przerwana ankieta: przycisk „Dokończ ankietę gustu" na
+  ekranie startowym i „Więcej…" → „Ankieta gustu" (tam też nowa o wybranej
+  długości; tryb `surveyOnly` bez dialogów startowych). Flaga ukończenia w
+  `AppSettings.isOnboardingDone()` jest niezależna od profilu; „Pomiń"/„Przerwij"
+  też ją ustawia, a udzielone odpowiedzi zostają.
   Jednorazowe dialogi startowe (liczba osób, logowanie kontem ChatGPT, uprawnienie
   do powiadomień) przechodzą przez `showStartupPrompts()` i czekają do końca
   quizu. Zmiana odpowiedzi później: „Więcej…" → „Profil domowników" (etykiety

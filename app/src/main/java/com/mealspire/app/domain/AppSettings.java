@@ -33,4 +33,13 @@ public interface AppSettings {
 
     /** Marks the onboarding quiz as finished or skipped, permanently. */
     void markOnboardingDone();
+
+    /**
+     * How many A/B pairs the taste survey asks; {@link TasteSurvey#DEFAULT_PAIRS}
+     * until the user picks a length in "Więcej…".
+     */
+    int loadSurveyLength();
+
+    /** Remembers the survey length; values below 1 are ignored. */
+    void saveSurveyLength(int pairs);
 }

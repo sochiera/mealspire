@@ -305,6 +305,10 @@ szybszy i przewidywalny.
 
 ### 6.2 Docelowy zestaw: 4 pytania + 3 rundy kontrastowe
 
+> **Aktualizacja (2026-10):** trzy rundy zastąpiła długa ankieta A/B
+> (`TasteSurvey`/`TasteSurveyPlanner`, konfigurowalna liczba par) — opis w
+> `docs/steering/projekt.md`. Poniższe zostaje jako zapis decyzji.
+
 | # | Ekran | Ujście |
 |---|---|---|
 | 1 | **Dla kogo gotujesz?** (dorośli / z dziećmi) — bez zmian | zdanie o dzieciach w prompcie |
