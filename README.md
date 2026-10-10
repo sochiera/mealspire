@@ -57,7 +57,9 @@ i akapity osobno. Pod przepisem są skróty **„Lista zakupów”** i **„Zapi
 danie”** (te same akcje co w menu „Więcej”).
 
 Pod propozycjami jest **„Inne propozycje”** — jeden dotyk podsuwa kolejny zestaw,
-więc nie musisz nic odrzucać po kolei.
+więc nie musisz nic odrzucać po kolei. W jednej serii (od dotknięcia posiłku)
+żadne danie się nie powtarza; gdy pokażesz już wszystkie pasujące, aplikacja
+mówi to wprost, a przycisk zmienia się w **„Zacznij od nowa”**.
 
 Systemowy przycisk **„Cofnij"** cofa o jeden widok: z pełnego przepisu do listy
 propozycji (bez ponownego pytania AI — przepis jest zapamiętany), z propozycji
@@ -108,16 +110,26 @@ propozycje” nią nie są. „Nie lubię” nie jest zakazem: danie nie znika z
 AI po prostu oceni je (i podobne) niżej. Twarde zakazy to wyłącznie wykluczenia
 diety z profilu domowników.
 
-**Zalogowany kontem ChatGPT** — przy
-każdym „Śniadanie / Obiad / Kolacja” i „Inne propozycje” aplikacja robi
-**jedno** wywołanie AI przez serwer (`/v1/rate`): wysyła ograniczoną
+**Zalogowany kontem ChatGPT** — dania są **przygotowane wcześniej, w tle**, więc
+„Śniadanie / Obiad / Kolacja” i „Inne propozycje” pokazują je od razu, bez
+czekania na AI. Aplikacja trzyma dla każdego posiłku gotową pulę dań i
+uzupełnia ją w tle **zanim się wyczerpie** — gdy zostają mniej niż dwa zestawy
+(6 dań), a także gdy jest pusta, po uruchomieniu i po zmianie gustu, diety czy
+modelu. Naraz trwa najwyżej jedno uzupełnienie na posiłek. W uzupełnieniu AI
+**generuje nowe dania** (`/v1/proposals`, 6 pomysłów, z listą dań do
+unikania: tych z puli, już pokazanych i ostatnich) — ich pełny przepis powstaje
+po „Pokaż przepis”. Dopóki w bazie są nieocenione dania, to samo uzupełnienie
+**ocenia je** (`/v1/rate`): wysyła ograniczoną
 listę ostatnich reakcji (nowsze ważą więcej) i kilkunastu kandydatów z
 wbudowanej bazy oraz Twojej bazy dań (nazwa + skład, już przefiltrowanych
 dietą). AI ocenia każdego kandydata od 0 do 10 według smaku, składników i
 sposobu przygotowania i podaje jednozdaniowy powód. Aplikacja jeszcze raz
-odrzuca naruszenia diety i pokazuje **3 najwyżej ocenione dania razem z
-powodem** („Dlaczego: …”). Pełny przepis jest od razu, po wybraniu karty. Przy
-pustej liście reakcji AI ocenia kandydatów po popularności.
+odrzuca naruszenia diety, do puli trafiają najlepiej ocenione (od 5/10), a
+karty pokazują je po kolei **razem z powodem** („Dlaczego: …”). Pełny przepis
+jest od razu, po wybraniu karty. Przy pustej liście reakcji AI ocenia
+kandydatów po popularności. Gdy pula jest jeszcze pusta (pierwsze użycie, brak
+sieci), od razu widać propozycje offline z informacją, że gotowe dania AI
+dopiero się przygotowują — nic się nie zawiesza.
 
 **Bez logowania, bez sieci albo gdy AI zwróci nieczytelną odpowiedź** —
 propozycje pochodzą z lokalnej puli offline (z uwzględnieniem polubień), bez

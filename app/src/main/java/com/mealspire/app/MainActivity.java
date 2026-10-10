@@ -52,7 +52,7 @@ import com.mealspire.app.domain.DishProposal;
 import com.mealspire.app.domain.DishReaction;
 import com.mealspire.app.domain.DishReactionLog;
 import com.mealspire.app.domain.DishReactionStore;
-import com.mealspire.app.domain.DishRecommender;
+import com.mealspire.app.domain.DishRater;
 import com.mealspire.app.domain.MealPoolBuilder;
 import com.mealspire.app.domain.HouseholdProfile;
 import com.mealspire.app.domain.HouseholdProfileStore;
@@ -67,6 +67,8 @@ import com.mealspire.app.domain.ProposalValidator;
 import com.mealspire.app.domain.MealHistory;
 import com.mealspire.app.domain.MealHistoryStore;
 import com.mealspire.app.domain.PreferenceStore;
+import com.mealspire.app.domain.ReadyDishPool;
+import com.mealspire.app.domain.ReadyProposals;
 import com.mealspire.app.domain.Recipe;
 import com.mealspire.app.domain.RecipeLayout;
 import com.mealspire.app.domain.RecipeRequest;
@@ -111,8 +113,10 @@ import com.mealspire.app.ui.Ui;
 import java.io.IOException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.Executor;
 
 /**
@@ -133,6 +137,8 @@ public class MainActivity extends Activity {
     private static final int[] MEAL_ICONS = {R.drawable.ic_meal_breakfast,
             R.drawable.ic_meal_lunch, R.drawable.ic_meal_dinner};
     private static final int PROPOSAL_COUNT = 3;
+    private static final String NO_DISHES_FOR_DIET =
+            "Brak dań pasujących do diety. Dodaj własne danie.";
     private static final int MAX_SERVINGS = 12;
     // Odpowiedzi profilu domowników — wspólne dla quizu startowego i dialogów
     // „Profil domowników", żeby oba miejsca zawsze pokazywały to samo.
@@ -173,6 +179,7 @@ public class MainActivity extends Activity {
     static VersionJsonSource versionJsonSourceOverride;
     static Executor updateCheckExecutorOverride;
     static com.mealspire.app.domain.HttpTransport backendTransportOverride;
+    static Executor readyPoolExecutorOverride;
 
     private final Random random = new Random();
     private Button servingsLabel;
@@ -190,7 +197,13 @@ public class MainActivity extends Activity {
     private RecipeOperations recipeService;
     private SharedPreferencesBackendStore backendStore;
     private BackendClient backendClient;
-    private DishRecommender dishRecommender;
+    private DishRater dishRater;
+    // Ready pool refills run one at a time, in the background (one LLM call each).
+    private Executor readyPoolExecutor;
+    private final Set<Integer> refillingMeals = new HashSet<>();
+    // Dishes (lower-case) already shown in this series: since the meal tile was tapped.
+    private final Set<String> seriesShown = new HashSet<>();
+    private ReadyProposals.Source proposalSource = ReadyProposals.Source.READY;
     private PreferenceStore preferenceStore;
     private UserPreferences preferences;
     private MealHistoryStore historyStore;
@@ -365,6 +378,7 @@ public class MainActivity extends Activity {
             showStartScreen();
             showStartupPrompts();
             maybeCheckForUpdate();
+            warmReadyPools();
         } else {
             // Fresh install: a short taste quiz first; every one-time dialog
             // (servings, ChatGPT sign-in, notification permission) waits until
@@ -669,7 +683,7 @@ public class MainActivity extends Activity {
         backendStore = new SharedPreferencesBackendStore(this);
         backendClient = new BackendClient(backendStore, chatGptAccount, transport);
         recipeService = backendClient;
-        dishRecommender = new DishRecommender(backendClient);
+        dishRater = backendClient;
         dishImporter = backendClient;
     }
 
@@ -703,7 +717,8 @@ public class MainActivity extends Activity {
                 .setPositiveButton("OK", (dialog, which) -> {
                     backendStore.markServerNoticeShown();
                     updateAiChip();
-                    if (currentMealIndex >= 0) generateProposals();
+                    // An open meal refreshes the catalog first, then refills its own pool.
+                    if (currentMealIndex >= 0) generateProposals(); else warmReadyPools();
                 })
                 .setNegativeButton("Wyloguj z ChatGPT", (dialog, which) -> signOutOfChatGpt())
                 .show();
@@ -735,6 +750,7 @@ public class MainActivity extends Activity {
                 final String email = chatGptAccount.completeSignIn(pending, query).email;
                 runOnUiThread(() -> {
                     updateAiChip();
+                    warmReadyPools();
                     // Refresh the open recipe so the AI-only "Zmień przepis" button appears.
                     if (currentRecipe != null) {
                         showFullRecipe(currentRecipe);
@@ -1051,6 +1067,7 @@ public class MainActivity extends Activity {
 
     private void selectMeal(int index) {
         currentMealIndex = index;
+        seriesShown.clear(); // a tapped meal starts a new series
         highlightSelectedMeal();
         generateProposals();
     }
@@ -1062,28 +1079,32 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * Offer a fresh set of proposals for the current meal. Signed in, one LLM call
-     * rates catalogue candidates against the explicit like/dislike list (empty
-     * list = popularity); otherwise the offline pool, never pretending to be AI.
+     * Offer a fresh set of proposals for the current meal, at once: signed in,
+     * from the ready pool rated by the LLM earlier in the background (shortfall
+     * filled offline, refill kicked off); otherwise the offline pool, never
+     * pretending to be AI. No dish repeats within a series.
      */
     private void generateProposals() {
         if (currentMealIndex < 0) {
             return;
         }
         contentEpoch++;
-        // From now on the content area belongs to the proposal flow, so back
-        // (even while the AI is still thinking) returns to the start screen.
         currentScreen = BackNavigation.Screen.PROPOSALS;
         refreshCatalog(isAiAvailable()
-                ? this::generateRatedProposals : this::generateOfflineProposals);
+                ? this::generateReadyProposals : this::generateOfflineProposals);
     }
 
     private void generateOfflineProposals() {
         // Shared offline pipeline: pool -> shuffle -> at most one taste-led pick,
         // the rest kept varied (so liking three chicken dishes does not turn every
         // suggestion into chicken).
-        List<Recipe> chosen = generateOfflineRecipes();
-
+        List<Recipe> chosen = generateOfflineRecipes(PROPOSAL_COUNT);
+        if (chosen.isEmpty() && seriesShown.isEmpty()) {
+            showHint(NO_DISHES_FOR_DIET);
+            return;
+        }
+        proposalSource = chosen.isEmpty()
+                ? ReadyProposals.Source.EXHAUSTED : ReadyProposals.Source.READY;
         List<DishProposal> newProposals = new ArrayList<>();
         List<Recipe> newRecipes = new ArrayList<>();
         for (Recipe recipe : chosen) {
@@ -1093,12 +1114,12 @@ public class MainActivity extends Activity {
         showProposals(newProposals, newRecipes, null);
     }
 
-    /** The shared offline pipeline for the current meal, diet-filtered. */
-    private List<Recipe> generateOfflineRecipes() {
+    /** The shared offline pipeline for the current meal, diet-filtered, minus this series. */
+    private List<Recipe> generateOfflineRecipes(int count) {
         return offlineProposalGenerator.generate(
                 backendStore.forMeal(currentMealIndex), cookbook, preferences,
-                buildTasteProfile(), PROPOSAL_COUNT, random, history,
-                System.currentTimeMillis(), householdProfile.getDiet());
+                buildTasteProfile(), count, random, history,
+                System.currentTimeMillis(), householdProfile.getDiet(), seriesShown);
     }
 
     /** Distils the user's likes into recurring "taste" terms (with known recipe details). */
@@ -1112,47 +1133,106 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * Jedno wywołanie LLM: kandydaci z katalogu (już po diecie) oceniani
-     * względem listy reakcji; pokazujemy 3 najwyżej ocenione z powodem.
-     * Sieć, zły JSON czy wylogowanie po drodze kończą się pulą offline.
+     * Bez czekania: dania z gotowej puli (ocenione wcześniej w tle przez LLM),
+     * braki z puli offline. Pusta pula to jawny stan na ekranie, nie spinner;
+     * uzupełnianie rusza w tle.
      */
-    private void generateRatedProposals() {
-        final String mealType = MEAL_TYPES[currentMealIndex];
+    private void generateReadyProposals() {
+        final int meal = currentMealIndex;
+        ReadyProposals.Selection selection = ReadyProposals.take(
+                backendStore.readyPool(meal), readyPoolSignature(), currentMealPool(meal),
+                householdProfile.getDiet(), reactions, seriesShown,
+                generateOfflineRecipes(PROPOSAL_COUNT * 2), PROPOSAL_COUNT);
+        backendStore.saveReadyPool(meal, selection.getRemaining());
+        if (selection.size() == 0 && seriesShown.isEmpty()) {
+            showHint(NO_DISHES_FOR_DIET);
+            return;
+        }
+        proposalSource = selection.getSource();
+        List<DishProposal> newProposals = new ArrayList<>();
+        for (int i = 0; i < selection.size(); i++) {
+            Recipe recipe = selection.getRecipes().get(i);
+            // New AI dishes have no recipe yet: "Pokaż przepis" fetches it on demand.
+            newProposals.add(recipe != null ? proposalFromRecipe(recipe)
+                    : selection.getGenerated().get(i));
+        }
+        showProposals(newProposals, new ArrayList<>(selection.getRecipes()),
+                new ArrayList<>(selection.getReasons()));
+        refillReadyPool(meal);
+    }
+
+    private List<Recipe> currentMealPool(int meal) {
+        return mealPoolBuilder.build(backendStore.forMeal(meal), cookbook, preferences,
+                householdProfile.getDiet());
+    }
+
+    private String readyPoolSignature() {
+        return ReadyDishPool.signature(reactions, householdProfile.getDiet(),
+                chatGptAccount.modelChoice().name());
+    }
+
+    /** Fills every meal's ready pool in the background, so the first tap is instant too. */
+    private void warmReadyPools() {
+        for (int meal = 0; meal < MEAL_TYPES.length; meal++) {
+            refillReadyPool(meal);
+        }
+    }
+
+    /**
+     * Uzupełnia gotową pulę posiłku w tle: LLM generuje nowe dania (i ocenia
+     * nieocenione z katalogu). Rusza, gdy pula jest pusta, nieaktualna albo
+     * spada poniżej dwóch zestawów — zanim się wyczerpie. Najwyżej jedno
+     * uzupełnienie naraz na posiłek. Błąd zostawia pulę bez zmian; kolejna
+     * propozycja spróbuje ponownie.
+     */
+    private void refillReadyPool(final int meal) {
+        if (!isAiAvailable() || refillingMeals.contains(meal)) {
+            return;
+        }
+        final Set<String> shown = meal == currentMealIndex
+                ? new HashSet<>(seriesShown) : new HashSet<String>();
+        final String signature = readyPoolSignature();
+        final ReadyDishPool pool = backendStore.readyPool(meal);
+        if (!ReadyProposals.needsRefill(pool, signature, shown, PROPOSAL_COUNT)) {
+            return;
+        }
         final DishReactionLog reactionSnapshot = reactions;
         final DietConstraints diet = householdProfile.getDiet();
+        final List<Recipe> mealPool = currentMealPool(meal);
+        final MealHistory historySnapshot = history;
         final long now = System.currentTimeMillis();
-        final List<Recipe> candidates = DishRecommender.candidates(
-                mealPoolBuilder.build(backendStore.forMeal(currentMealIndex), cookbook,
-                        preferences, diet),
-                history, now, random);
-        final List<Recipe> offline = generateOfflineRecipes();
-        final int epoch = contentEpoch;
-        setMealButtonsEnabled(false);
-        showLoading("Dobieram dania do Waszego gustu…");
-        new Thread(() -> {
-            final DishRecommender.Recommendation recommendation = dishRecommender.recommend(
-                    isAiAvailable(), mealType, reactionSnapshot, candidates, diet, offline,
-                    PROPOSAL_COUNT, now);
+        final RecipeRequest request = buildRequest(meal,
+                ReadyProposals.avoidList(pool, shown, history.recentTitles(8)));
+        refillingMeals.add(meal);
+        readyPoolExecutor().execute(() -> {
+            ReadyProposals.Refill refill = null;
+            try {
+                refill = ReadyProposals.refill(dishRater, recipeService, request, signature,
+                        pool, reactionSnapshot, mealPool, shown, diet, historySnapshot, now,
+                        random);
+            } catch (IOException | RuntimeException ignored) {
+                // Offline proposals keep working; the next proposal retries.
+            }
+            final ReadyProposals.Refill result = refill;
             runOnUiThread(() -> {
-                setMealButtonsEnabled(true);
-                if (epoch != contentEpoch) {
-                    return; // the user moved on; don't stomp the new content
-                }
-                if (recommendation.getRecipes().isEmpty()) {
-                    showHint("Brak dań pasujących do diety. Dodaj własne danie.");
-                    return;
-                }
-                List<DishProposal> newProposals = new ArrayList<>();
-                for (Recipe recipe : recommendation.getRecipes()) {
-                    newProposals.add(proposalFromRecipe(recipe));
-                }
-                showProposals(newProposals, new ArrayList<>(recommendation.getRecipes()),
-                        recommendation.getReasons());
-                if (recommendation.isFailed()) {
-                    toast("AI nie oceniło dań — pokazuję propozycje offline.");
+                refillingMeals.remove(meal);
+                if (result != null && !result.isEmpty()) {
+                    backendStore.saveReadyPool(meal, result.applyTo(backendStore.readyPool(meal),
+                            meal == currentMealIndex ? seriesShown
+                                    : java.util.Collections.<String>emptySet()));
                 }
             });
-        }).start();
+        });
+    }
+
+    private Executor readyPoolExecutor() {
+        if (readyPoolExecutorOverride != null) {
+            return readyPoolExecutorOverride;
+        }
+        if (readyPoolExecutor == null) {
+            readyPoolExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
+        }
+        return readyPoolExecutor;
     }
 
     /** Aktualny model gustu (pochodna dziennika + agregatu, tanio liczona). */
@@ -1162,7 +1242,12 @@ public class MainActivity extends Activity {
     }
 
     private RecipeRequest buildRequest() {
-        final String mealType = MEAL_TYPES[currentMealIndex];
+        return buildRequest(currentMealIndex, history.recentTitles(8));
+    }
+
+    /** Request for one meal; {@code recentToAvoid} lists names the AI should not repeat. */
+    private RecipeRequest buildRequest(int meal, List<String> recentToAvoid) {
+        final String mealType = MEAL_TYPES[meal];
         List<String> fragments = new ArrayList<>();
         String portionFragment = PortionSize.promptFragment(appSettings.loadDefaultServings());
         if (!portionFragment.isEmpty()) {
@@ -1174,12 +1259,12 @@ public class MainActivity extends Activity {
         }
         java.util.Map<String, String> detailsByTitle =
                 BuiltInRecipes.detailsByTitle(cookbook);
-        return new RecipeRequest(mealType, preferences, history.recentTitles(8),
+        return new RecipeRequest(mealType, preferences, recentToAvoid,
                 fragments, knownDishes, buildTasteProfile().getAffinities(),
                 householdProfile)
                 .withTasteContext(tasteContextBuilder.build(
                         currentTasteModel(detailsByTitle), tasteEvents,
-                        householdProfile.getDiet(), currentMealIndex)
+                        householdProfile.getDiet(), meal)
                         .withAntiMonotony(monotonyDetector.detect(
                                 history.recentTitles(MonotonyDetector.WINDOW),
                                 detailsByTitle)));
@@ -1196,6 +1281,7 @@ public class MainActivity extends Activity {
         viewedInTrio.clear();
         for (DishProposal proposal : newProposals) {
             recordChosen(proposal.getName());
+            seriesShown.add(proposal.getName().trim().toLowerCase());
         }
         countShownTrio(newProposals, newRecipes);
         renderProposals();
@@ -1229,6 +1315,20 @@ public class MainActivity extends Activity {
         learningStatsStore.save(learningStats);
     }
 
+    /** Jawny stan gotowej puli nad kartami; "" gdy wszystko z puli (albo zwykły offline). */
+    static String proposalSourceNote(ReadyProposals.Source source) {
+        switch (source) {
+            case PARTIAL:
+                return "Część propozycji z puli offline — gotowe dania AI dobierają się w tle.";
+            case OFFLINE:
+                return "Pula gotowych dań AI jeszcze się przygotowuje — na razie propozycje offline.";
+            case EXHAUSTED:
+                return "To już wszystkie pasujące dania w tej serii — bez powtórek.";
+            default:
+                return "";
+        }
+    }
+
     private void renderProposals() {
         currentScreen = BackNavigation.Screen.PROPOSALS;
         contentContainer.removeAllViews();
@@ -1236,19 +1336,31 @@ public class MainActivity extends Activity {
             contentContainer.addView(Ui.overline(this,
                     "Pomysły na " + MEAL_ACCUSATIVE[currentMealIndex]), matchWrap());
         }
+        String note = proposalSourceNote(proposalSource);
+        if (!note.isEmpty()) {
+            TextView status = Ui.callout(this, note, Ui.SURFACE_MUTED, Ui.INK_BODY);
+            status.setId(R.id.ready_pool_status);
+            contentContainer.addView(status, marginTop(10));
+        }
         for (int i = 0; i < proposals.size(); i++) {
             contentContainer.addView(buildProposalCard(i), marginTop(i == 0 ? 10 : 14));
         }
 
         Button refresh = new Button(this);
         refresh.setId(R.id.refresh_button);
-        refresh.setText("Inne propozycje");
+        boolean exhausted = proposalSource == ReadyProposals.Source.EXHAUSTED;
+        // Koniec serii: „od nowa" otwiera nową serię zamiast pustego odświeżenia.
+        refresh.setText(exhausted ? "Zacznij od nowa" : "Inne propozycje");
         refresh.setTextSize(16);
         Ui.tonal(refresh);
         refresh.setCompoundDrawablesWithIntrinsicBounds(
                 tinted(R.drawable.ic_refresh, Ui.ACCENT_DEEP), null, null, null);
         refresh.setCompoundDrawablePadding(dp(8));
         refresh.setOnClickListener(v -> {
+            if (exhausted) {
+                selectMeal(currentMealIndex);
+                return;
+            }
             recordTrioRerolled();
             generateProposals();
         });
