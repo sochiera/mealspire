@@ -33,19 +33,19 @@ public class ChatGptLlmClientTest {
         FakeHttpTransport.Call call = http.calls.get(0);
         assertEquals(ResponsesApi.RESPONSES_URL, call.url);
         assertEquals("at", call.bearer);
-        assertEquals("GPT Luna by default", "gpt-6-luna", new JSONObject(call.json).getString("model"));
+        assertEquals("GPT 6.1 Sol by default", "gpt-6.1-sol", new JSONObject(call.json).getString("model"));
     }
 
     @Test
-    public void switchingToSolSendsSolSlug() throws Exception {
+    public void switchingToLunaSendsLunaSlug() throws Exception {
         store.save(new ChatGptSession("oaiapp_x", "at", "rt", "it", NOW_MS + 3_600_000,
                 "sub", "e", "gpt-6-luna", "gpt-6.1-sol"));
-        account.setModelChoice(GptModel.SOL);
+        account.setModelChoice(GptModel.LUNA);
         http.respond(200, OK_STREAM);
 
         client.complete("s", "u");
 
-        assertEquals("gpt-6.1-sol", new JSONObject(http.calls.get(0).json).getString("model"));
+        assertEquals("gpt-6-luna", new JSONObject(http.calls.get(0).json).getString("model"));
     }
 
     @Test

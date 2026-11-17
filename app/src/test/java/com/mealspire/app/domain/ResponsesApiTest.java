@@ -77,11 +77,11 @@ public class ResponsesApiTest {
     }
 
     @Test
-    public void lunaIsTheDefault() {
-        assertEquals(GptModel.LUNA, GptModel.DEFAULT);
-        assertEquals(GptModel.LUNA, GptModel.fromName(""));
-        assertEquals(GptModel.LUNA, GptModel.fromName("NIEZNANY"));
-        assertEquals(GptModel.SOL, GptModel.fromName("SOL"));
+    public void solIsTheDefault() {
+        assertEquals(GptModel.SOL, GptModel.DEFAULT);
+        assertEquals(GptModel.SOL, GptModel.fromName(""));
+        assertEquals(GptModel.SOL, GptModel.fromName("NIEZNANY"));
+        assertEquals(GptModel.LUNA, GptModel.fromName("LUNA"));
     }
 
     @Test
