@@ -24,9 +24,18 @@ public class HouseholdProfileSerializerTest {
                 .withCuisines(Arrays.asList("polska", "azjatycka"))
                 .withDiet(DietConstraints.of(Arrays.asList(
                         DietConstraints.Exclusion.NO_PORK,
-                        DietConstraints.Exclusion.NO_NUTS)));
+                        DietConstraints.Exclusion.NO_NUTS)))
+                .withSpice(HouseholdProfile.SpiceLevel.HOT)
+                .withStyle(HouseholdProfile.MealStyle.LIGHT)
+                .withBudget(HouseholdProfile.Budget.THRIFTY)
+                .withNovelty(HouseholdProfile.Novelty.CLASSICS);
 
         HouseholdProfile restored = serializer.fromJson(serializer.toJson(original));
+
+        assertEquals(HouseholdProfile.SpiceLevel.HOT, restored.getSpice());
+        assertEquals(HouseholdProfile.MealStyle.LIGHT, restored.getStyle());
+        assertEquals(HouseholdProfile.Budget.THRIFTY, restored.getBudget());
+        assertEquals(HouseholdProfile.Novelty.CLASSICS, restored.getNovelty());
 
         assertEquals(HouseholdProfile.Audience.WITH_CHILDREN, restored.getAudience());
         assertEquals(HouseholdProfile.CookingSkill.BEGINNER, restored.getSkill());
@@ -71,5 +80,16 @@ public class HouseholdProfileSerializerTest {
                 "{\"audience\":\"ADULTS_ONLY\",\"skill\":\"COMFORTABLE\","
                         + "\"cuisines\":[]}");
         assertTrue(restored.getDiet().isEmpty());
+    }
+
+    @Test
+    public void starszyZapisBezNowychPolDajeNieznaneOdpowiedzi() {
+        HouseholdProfile restored = serializer.fromJson(
+                "{\"audience\":\"ADULTS_ONLY\",\"spice\":\"Z_PRZYSZLOSCI\"}");
+        assertEquals(HouseholdProfile.Audience.ADULTS_ONLY, restored.getAudience());
+        assertEquals(HouseholdProfile.SpiceLevel.UNKNOWN, restored.getSpice());
+        assertEquals(HouseholdProfile.MealStyle.UNKNOWN, restored.getStyle());
+        assertEquals(HouseholdProfile.Budget.UNKNOWN, restored.getBudget());
+        assertEquals(HouseholdProfile.Novelty.UNKNOWN, restored.getNovelty());
     }
 }

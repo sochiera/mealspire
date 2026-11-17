@@ -34,7 +34,8 @@ public class NotificationLaunchRobolectricTest {
         Context context = ApplicationProvider.getApplicationContext();
         ShadowAlarmManager shadow = Shadows.shadowOf(
                 (AlarmManager) context.getSystemService(Context.ALARM_SERVICE));
-        assertEquals(3, shadow.getScheduledAlarms().size());
+        assertEquals("8/12/18 + evening food-log question", 4,
+                shadow.getScheduledAlarms().size());
     }
 
     @Test
@@ -53,5 +54,29 @@ public class NotificationLaunchRobolectricTest {
         assertNotNull(activity.findViewById(R.id.accept_button));
         TextView title = activity.findViewById(R.id.recipe_title);
         assertFalse(title.getText().toString().trim().isEmpty());
+    }
+
+    @Test
+    public void foodLogNotificationOpensTheAnswerDialogAndSavesTheAnswer() {
+        Context context = ApplicationProvider.getApplicationContext();
+        new SharedPreferencesAppSettings(context).markOnboardingDone();
+        Intent intent = new Intent(context, MainActivity.class)
+                .putExtra(MainActivity.EXTRA_FOOD_LOG, true);
+
+        Robolectric.buildActivity(MainActivity.class, intent).setup().get();
+
+        android.app.AlertDialog dialog =
+                org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
+        assertNotNull(dialog);
+        android.widget.EditText input = dialog.findViewById(R.id.food_log_input);
+        assertNotNull(input);
+        input.setText("jajecznica, rosół");
+        dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).performClick();
+        Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+
+        com.mealspire.app.domain.FoodLog log =
+                new com.mealspire.app.storage.SharedPreferencesFoodLogStore(context).load();
+        assertEquals(1, log.entries().size());
+        assertEquals("jajecznica, rosół", log.entries().get(0).getText());
     }
 }

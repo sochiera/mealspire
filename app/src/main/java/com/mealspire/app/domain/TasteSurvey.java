@@ -18,9 +18,11 @@ import java.util.Map;
 public final class TasteSurvey {
 
     /** Domyślna długość ankiety; użytkownik zmienia ją w „Więcej…". */
-    public static final int DEFAULT_PAIRS = 20;
+    public static final int DEFAULT_PAIRS = 40;
     /** Długości do wyboru w „Więcej…" → „Ankieta gustu". */
-    public static final int[] LENGTH_CHOICES = {10, 20, 30, 40};
+    public static final int[] LENGTH_CHOICES = {20, 40, 60, 80};
+    /** Para bez przypisanej pory posiłku (np. zapis ze starszej wersji). */
+    public static final int ANY_MEAL = -1;
 
     public static final int NOT_ANSWERED = -1;
     public static final int CHOICE_A = 0;
@@ -28,14 +30,29 @@ public final class TasteSurvey {
     /** „Żadne z tych" — wymuszony wybór to fałszywy sygnał, nic nie zapisujemy. */
     public static final int CHOICE_NEITHER = 2;
 
-    /** Jedna para dań do porównania. */
+    /**
+     * Jedna para dań do porównania. Oba dania są z tej samej pory posiłku
+     * ({@code meal}: 0 śniadanie, 1 obiad, 2 kolacja), żeby pytanie miało sens
+     * („Co wolisz na obiad?"), a nie porównywało owsianki z gulaszem.
+     */
     public static final class Pair {
         private final String dishA;
         private final String dishB;
+        private final int meal;
 
         public Pair(String dishA, String dishB) {
+            this(dishA, dishB, ANY_MEAL);
+        }
+
+        public Pair(String dishA, String dishB, int meal) {
             this.dishA = dishA == null ? "" : dishA;
             this.dishB = dishB == null ? "" : dishB;
+            this.meal = meal < 0 ? ANY_MEAL : meal;
+        }
+
+        /** Pora posiłku obu dań albo {@link #ANY_MEAL}. */
+        public int getMeal() {
+            return meal;
         }
 
         public String getDishA() {

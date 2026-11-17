@@ -17,7 +17,8 @@ public final class TasteSurveySerializer {
         try {
             JSONArray pairs = new JSONArray();
             for (TasteSurvey.Pair pair : survey.pairs()) {
-                pairs.put(new JSONArray().put(pair.getDishA()).put(pair.getDishB()));
+                pairs.put(new JSONArray().put(pair.getDishA()).put(pair.getDishB())
+                        .put(pair.getMeal()));
             }
             JSONArray answers = new JSONArray();
             for (int answer : survey.answers()) {
@@ -47,7 +48,8 @@ public final class TasteSurveySerializer {
             List<Integer> answers = new ArrayList<>();
             for (int i = 0; i < pairsJson.length(); i++) {
                 JSONArray pair = pairsJson.getJSONArray(i);
-                pairs.add(new TasteSurvey.Pair(pair.getString(0), pair.getString(1)));
+                pairs.add(new TasteSurvey.Pair(pair.getString(0), pair.getString(1),
+                        pair.optInt(2, TasteSurvey.ANY_MEAL)));
                 answers.add(answersJson == null
                         ? TasteSurvey.NOT_ANSWERED : answersJson.optInt(i, TasteSurvey.NOT_ANSWERED));
             }

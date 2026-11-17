@@ -10,10 +10,11 @@ import java.util.Set;
 
 /**
  * Układa pary dań do ankiety gustu tak, żeby każdy wybór niósł jak najwięcej
- * informacji: dania w parze kontrastują w kolejnym wymiarze gustu (baza →
- * charakter → kuchnia, na zmianę), żadna para się nie powtarza, a dania
- * pojawiają się równomiernie (najpierw te jeszcze niepokazane), więc długa
- * ankieta przegląda całą pulę. Losowa kolejność puli daje różne ankiety
+ * informacji: oba dania w parze są z tej samej pory posiłku (pary krążą po
+ * śniadaniu, obiedzie i kolacji), kontrastują w kolejnym wymiarze gustu
+ * (baza → charakter → kuchnia, na zmianę w obrębie każdej pory), żadna para się nie powtarza, a
+ * dania pojawiają się równomiernie (najpierw te jeszcze niepokazane), więc
+ * długa ankieta przegląda całą pulę. Losowa kolejność puli daje różne ankiety
  * między instalacjami. Wykluczenia diety obowiązują bezwzględnie.
  */
 public final class TasteSurveyPlanner {
@@ -24,32 +25,45 @@ public final class TasteSurveyPlanner {
     private final DishTagger tagger = new DishTagger();
 
     /**
-     * @param pools pule dań (wszystkie pory posiłku naraz)
+     * @param pools pule dań, po jednej na porę posiłku (indeks = pora posiłku)
      * @param count żądana liczba par; mniej, gdy pula nie wystarcza na różne pary
      */
     public List<TasteSurvey.Pair> plan(Recipe[][] pools, DietConstraints diet, int count,
                                        java.util.Random random) {
-        List<Recipe> candidates = allowedCandidates(pools, diet);
-        Collections.shuffle(candidates, random);
+        int meals = pools == null ? 0 : pools.length;
+        List<List<Recipe>> candidates = new ArrayList<>();
         Map<String, DishTags> tags = new HashMap<>();
         Map<String, Integer> uses = new HashMap<>();
-        for (Recipe recipe : candidates) {
-            tags.put(recipe.getTitle(), tagger.tag(recipe.getTitle(), recipe.getDetails()));
-            uses.put(recipe.getTitle(), 0);
+        for (int meal = 0; meal < meals; meal++) {
+            List<Recipe> mealCandidates = allowedCandidates(pools[meal], diet);
+            Collections.shuffle(mealCandidates, random);
+            candidates.add(mealCandidates);
+            for (Recipe recipe : mealCandidates) {
+                tags.put(recipe.getTitle(), tagger.tag(recipe.getTitle(), recipe.getDetails()));
+                uses.put(recipe.getTitle(), 0);
+            }
         }
 
         Set<String> usedPairs = new HashSet<>();
         List<TasteSurvey.Pair> result = new ArrayList<>();
         String previousA = null;
         String previousB = null;
+        int[] pairsPerMeal = new int[meals];
+        int nextMeal = 0;
         for (int i = 0; i < count; i++) {
-            TasteDimension dimension = DIMENSIONS[i % DIMENSIONS.length];
-            TasteSurvey.Pair pair = nextPair(candidates, tags, uses, usedPairs, dimension,
-                    previousA, previousB);
+            TasteSurvey.Pair pair = null;
+            // Kolejna pora posiłku; wyczerpana pora oddaje miejsce następnej.
+            for (int attempt = 0; attempt < meals && pair == null; attempt++) {
+                int meal = (nextMeal + attempt) % meals;
+                pair = nextPair(candidates.get(meal), meal, tags, uses, usedPairs,
+                        dimensionFor(pairsPerMeal[meal]), previousA, previousB);
+            }
             if (pair == null) {
                 break;
             }
             result.add(pair);
+            pairsPerMeal[pair.getMeal()]++;
+            nextMeal = (pair.getMeal() + 1) % meals;
             usedPairs.add(pairKey(pair.getDishA(), pair.getDishB()));
             uses.put(pair.getDishA(), uses.get(pair.getDishA()) + 1);
             uses.put(pair.getDishB(), uses.get(pair.getDishB()) + 1);
@@ -59,7 +73,13 @@ public final class TasteSurveyPlanner {
         return result;
     }
 
-    private static TasteSurvey.Pair nextPair(List<Recipe> candidates, Map<String, DishTags> tags,
+    /** Wymiar kontrastu dla n-tej pary danej pory posiłku (rotacja per pora). */
+    static TasteDimension dimensionFor(int pairIndexWithinMeal) {
+        return DIMENSIONS[pairIndexWithinMeal % DIMENSIONS.length];
+    }
+
+    private static TasteSurvey.Pair nextPair(List<Recipe> candidates, int meal,
+                                             Map<String, DishTags> tags,
                                              Map<String, Integer> uses, Set<String> usedPairs,
                                              TasteDimension dimension,
                                              String previousA, String previousB) {
@@ -97,7 +117,7 @@ public final class TasteSurveyPlanner {
                 }
             }
         }
-        return bestA == null ? null : new TasteSurvey.Pair(bestA, bestB);
+        return bestA == null ? null : new TasteSurvey.Pair(bestA, bestB, meal);
     }
 
     private static boolean contrasts(DishTags a, DishTags b, TasteDimension dimension) {
@@ -112,22 +132,20 @@ public final class TasteSurveyPlanner {
         return x.compareTo(y) < 0 ? x + "\n" + y : y + "\n" + x;
     }
 
-    private static List<Recipe> allowedCandidates(Recipe[][] pools, DietConstraints diet) {
+    private static List<Recipe> allowedCandidates(Recipe[] pool, DietConstraints diet) {
         List<Recipe> candidates = new ArrayList<>();
         Set<String> seenTitles = new HashSet<>();
-        if (pools != null) {
-            for (Recipe[] pool : pools) {
-                for (Recipe recipe : pool) {
-                    if (recipe.getTitle().trim().isEmpty()
-                            || !seenTitles.add(recipe.getTitle().toLowerCase())) {
-                        continue;
-                    }
-                    if (diet != null && !diet.allows(
-                            recipe.getTitle() + "\n" + recipe.getDetails())) {
-                        continue;
-                    }
-                    candidates.add(recipe);
+        if (pool != null) {
+            for (Recipe recipe : pool) {
+                if (recipe.getTitle().trim().isEmpty()
+                        || !seenTitles.add(recipe.getTitle().toLowerCase())) {
+                    continue;
                 }
+                if (diet != null && !diet.allows(
+                        recipe.getTitle() + "\n" + recipe.getDetails())) {
+                    continue;
+                }
+                candidates.add(recipe);
             }
         }
         return candidates;

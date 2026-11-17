@@ -42,7 +42,7 @@ public final class ChatGptAccount {
         return session == null ? "" : session.email;
     }
 
-    /** Model family used for AI requests (GPT Luna unless the user switched). */
+    /** Model family used for AI requests (GPT Sol unless the user switched). */
     public GptModel modelChoice() {
         return store.modelChoice();
     }

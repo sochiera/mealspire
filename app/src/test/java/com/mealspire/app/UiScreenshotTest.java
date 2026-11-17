@@ -60,6 +60,13 @@ public class UiScreenshotTest {
         activity.<Button>findViewById(R.id.onboarding_next_button).performClick();
         activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
         activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
+        save(activity, "02a-quiz-cuisines");
+        activity.<Button>findViewById(R.id.onboarding_next_button).performClick();
+        save(activity, "02b-quiz-spice");
+        activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
+        activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
+        activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
+        activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
         save(activity, "03-quiz-dishes");
     }
 

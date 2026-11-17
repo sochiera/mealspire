@@ -39,12 +39,12 @@ public class ChatGptSessionStoreRobolectricTest {
     }
 
     @Test
-    public void modelChoiceDefaultsToLunaAndSurvivesSignOut() {
+    public void modelChoiceDefaultsToSolAndSurvivesSignOut() {
         SharedPreferencesChatGptSessionStore store = newStore();
-        assertEquals(com.mealspire.app.domain.GptModel.LUNA, store.modelChoice());
-        store.saveModelChoice(com.mealspire.app.domain.GptModel.SOL);
+        assertEquals(com.mealspire.app.domain.GptModel.SOL, store.modelChoice());
+        store.saveModelChoice(com.mealspire.app.domain.GptModel.LUNA);
         store.clear();
-        assertEquals(com.mealspire.app.domain.GptModel.SOL, newStore().modelChoice());
+        assertEquals(com.mealspire.app.domain.GptModel.LUNA, newStore().modelChoice());
     }
 
     @Test

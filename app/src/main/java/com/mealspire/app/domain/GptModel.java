@@ -4,8 +4,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Model families the user can pick for AI on their ChatGPT plan. Luna (fast,
- * cheap on the plan's limits) is the default; Sol is the stronger option.
+ * Model families the user can pick for AI on their ChatGPT plan. Sol (GPT 6.1
+ * Sol, the stronger model) is the default; Luna is the faster option that is
+ * cheaper on the plan's limits.
  *
  * <p>The real slug always comes from the signed-in account's model catalog
  * ({@code GET /v1/models}) — the IDs below are only the documented OpenAI
@@ -18,7 +19,7 @@ public enum GptModel {
     // https://developers.openai.com/api/docs/models/gpt-6.1-sol (+ starsze gpt-6-sol)
     SOL("GPT Sol", "sol", "gpt-6.1-sol", "gpt-6-sol");
 
-    public static final GptModel DEFAULT = LUNA;
+    public static final GptModel DEFAULT = SOL;
 
     public final String label;
     private final Pattern familyPattern;
@@ -52,7 +53,7 @@ public enum GptModel {
         return best;
     }
 
-    /** Parses a stored name; unknown or empty means the default (Luna). */
+    /** Parses a stored name; unknown or empty means the default (Sol). */
     public static GptModel fromName(String name) {
         for (GptModel model : values()) {
             if (model.name().equals(name)) {

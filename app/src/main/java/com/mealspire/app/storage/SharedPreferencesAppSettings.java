@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 
 import com.mealspire.app.domain.AppSettings;
+import com.mealspire.app.domain.FoodLogReminder;
 import com.mealspire.app.domain.TasteSurvey;
 
 /**
@@ -17,6 +18,7 @@ public final class SharedPreferencesAppSettings implements AppSettings {
     private static final String KEY_SERVINGS_CHOSEN = "servings_chosen";
     private static final String KEY_ONBOARDING_DONE = "onboarding_done";
     private static final String KEY_SURVEY_LENGTH = "survey_length";
+    private static final String KEY_FOOD_LOG_HOUR = "food_log_hour";
     private static final int MAX_SERVINGS = 12;
 
     private final SharedPreferences sharedPreferences;
@@ -73,6 +75,22 @@ public final class SharedPreferencesAppSettings implements AppSettings {
         }
         sharedPreferences.edit()
                 .putInt(KEY_SURVEY_LENGTH, pairs)
+                .apply();
+    }
+
+    @Override
+    public int loadFoodLogHour() {
+        int value = sharedPreferences.getInt(KEY_FOOD_LOG_HOUR, FoodLogReminder.DEFAULT_HOUR);
+        return FoodLogReminder.isValidHour(value) ? value : FoodLogReminder.DEFAULT_HOUR;
+    }
+
+    @Override
+    public void saveFoodLogHour(int hour) {
+        if (!FoodLogReminder.isValidHour(hour)) {
+            return;
+        }
+        sharedPreferences.edit()
+                .putInt(KEY_FOOD_LOG_HOUR, hour)
                 .apply();
     }
 

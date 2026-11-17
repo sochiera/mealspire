@@ -26,14 +26,19 @@ Wszystkie teksty w UI i promptach są po polsku.
 
 ## Kluczowe decyzje produktowe
 
-- **Onboarding tylko raz**: świeża instalacja zaczyna od quizu (dla kogo
-  gotujesz / czego nie jadacie / ile czasu na gotowanie / jak idzie gotowanie
+- **Onboarding tylko raz**: świeża instalacja zaczyna od quizu (9 pytań
+  profilu: dla kogo gotujesz / czego nie jadacie / ile czasu na gotowanie /
+  jak idzie gotowanie / kuchnie / ostrość / lekko–sycąco / budżet /
+  klasyki–nowości; teksty w stałych `Q_*`
   + **ankieta gustu A/B** — jeden krok quizu `SURVEY_STEP`, w nim seria par
-  z `TasteSurveyPlanner`: różne pary, kontrast w kolejnym wymiarze gustu,
-  równomierne pokrycie katalogu `backendStore.forMeal`, dieta bezwzględnie;
+  z `TasteSurveyPlanner`: oba dania z tej samej pory posiłku (`Pair.getMeal()`,
+  nagłówek „Co wolisz na …?”, pory na zmianę), różne pary, kontrast w kolejnym
+  wymiarze gustu (rotacja per pora), równomierne pokrycie katalogu
+  `backendStore.forMeal`, dieta bezwzględnie;
   długość `AppSettings.loadSurveyLength()`, domyślnie
   `TasteSurvey.DEFAULT_PAIRS`; „Żadne z tych" nie zapisuje nic).
-  Odpowiedzi 1–4 → `HouseholdProfile` (wpływa na prompty przez
+  Odpowiedzi 1–9 → `HouseholdProfile` (środkowe odpowiedzi nowych pytań nie
+  dokładają zdań do promptu) (wpływa na prompty przez
   `RecipeRequest.getHouseholdProfile()`, także na „Zmień przepis"). Ankieta
   **nie ma własnego modelu gustu**: `TasteSurvey` to tylko stan kwestionariusza
   (pary nazw dań, odpowiedzi, `position`, `committed`), zapisywany po każdej
@@ -97,6 +102,14 @@ Wszystkie teksty w UI i promptach są po polsku.
 - **Wspólny pipeline offline** (`OfflineProposalGenerator`): pula → shuffle →
   filtr „ostatnio pokazane" (3 dni) → `VariedMealPicker` (max 1 wybór wg gustu,
   reszta różnorodna). Używany przez ekran i przez powiadomienia — nie rozjeżdżać.
+- **Wieczorne „Co dzisiaj jedliście?”** — osobny kanał `food_log`, osobny
+  alarm (`MealReminderScheduler.scheduleFoodLog`, godzina z
+  `AppSettings.loadFoodLogHour()`, domyślnie `FoodLogReminder.DEFAULT_HOUR` = 20,
+  `DISABLED` = wyłączone). Android 7+: direct reply (`RemoteInput`) →
+  `FoodLogReceiver`; tap / Android 6 → dialog w `MainActivity` (`EXTRA_FOOD_LOG`,
+  po quizie). Wpisy w `FoodLog` (lokalnie, max 60); ostatnie 2 dni idą do
+  `recentToAvoid` jako „niedawno zjedzone: …” — bez zmian w API backendu.
+  Przypomnień 8/12/18 to nie dotyka.
 - **Powiadomienia 8/12/18** liczone offline (bez sieci i logowania), AlarmManager
   `setInexactRepeating` (bez uprawnienia exact-alarm), przeżywają reboot przez
   `BootReceiver`. W Doze mogą być opóźnione — świadomy kompromis.
@@ -117,7 +130,7 @@ Wszystkie teksty w UI i promptach są po polsku.
 - **Inferencja**: `ChatGptLlmClient` → `POST /v1/responses` z dozwolonymi
   wyłącznie `model`, `input`, `store:false`, `stream:true` (plan usage nie
   pozwala na `temperature`/`max_output_tokens`); prompt systemowy idzie jako
-  wiadomość `developer`. Model: `GptModel` LUNA (domyślny) / SOL, wybór
+  wiadomość `developer`. Model: `GptModel` SOL (domyślny, GPT 6.1 Sol) / LUNA, wybór
   użytkownika w `ChatGptSessionStore.modelChoice()` („Więcej…” → „Model AI”).
   Slugi rozwiązywane przy logowaniu z `GET /v1/models` (`visibility:"list"`):
   najpierw udokumentowane ID (`gpt-6-luna`; `gpt-6.1-sol`, `gpt-6-sol`), potem

@@ -70,4 +70,17 @@ public class AppSettingsRobolectricTest {
         newStore().markOnboardingDone();
         assertTrue(newStore().isOnboardingDone());
     }
+
+    @Test
+    public void foodLogQuestionDefaultsToEveningAndCanBeMovedOrSwitchedOff() {
+        assertEquals(com.mealspire.app.domain.FoodLogReminder.DEFAULT_HOUR,
+                newStore().loadFoodLogHour());
+        newStore().saveFoodLogHour(22);
+        assertEquals(22, newStore().loadFoodLogHour());
+        newStore().saveFoodLogHour(99);
+        assertEquals("invalid hour is ignored", 22, newStore().loadFoodLogHour());
+        newStore().saveFoodLogHour(com.mealspire.app.domain.FoodLogReminder.DISABLED);
+        assertEquals(com.mealspire.app.domain.FoodLogReminder.DISABLED,
+                newStore().loadFoodLogHour());
+    }
 }

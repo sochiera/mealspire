@@ -42,4 +42,13 @@ public interface AppSettings {
 
     /** Remembers the survey length; values below 1 are ignored. */
     void saveSurveyLength(int pairs);
+
+    /**
+     * Hour (0–23) of the evening "Co dzisiaj jedliście?" question, or
+     * {@link FoodLogReminder#DISABLED}; {@link FoodLogReminder#DEFAULT_HOUR} until changed.
+     */
+    int loadFoodLogHour();
+
+    /** Remembers the question hour; invalid values are ignored. */
+    void saveFoodLogHour(int hour);
 }

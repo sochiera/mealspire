@@ -40,6 +40,11 @@
             android:name=".notify.MealReminderReceiver"
             android:exported="false" />
 
+        <!-- Wieczorne pytanie „Co dzisiaj jedliście?" i odpowiedź wpisana w powiadomieniu. -->
+        <receiver
+            android:name=".notify.FoodLogReceiver"
+            android:exported="false" />
+
         <!-- Przeplanowuje alarmy po starcie systemu. -->
         <receiver
             android:name=".notify.BootReceiver"

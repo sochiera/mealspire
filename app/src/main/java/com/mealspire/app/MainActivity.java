@@ -72,6 +72,9 @@ import com.mealspire.app.domain.Recipe;
 import com.mealspire.app.domain.RecipeLayout;
 import com.mealspire.app.domain.RecipeRequest;
 import com.mealspire.app.domain.DishTagger;
+import com.mealspire.app.domain.FoodLog;
+import com.mealspire.app.domain.FoodLogReminder;
+import com.mealspire.app.domain.FoodLogStore;
 import com.mealspire.app.domain.FrozenTasteAggregate;
 import com.mealspire.app.domain.MonotonyDetector;
 import com.mealspire.app.domain.TasteContextBuilder;
@@ -98,10 +101,12 @@ import com.mealspire.app.domain.IdTokenVerifier;
 import com.mealspire.app.net.HttpUrlTransport;
 import com.mealspire.app.net.LoopbackCallbackServer;
 import com.mealspire.app.net.HttpVersionJsonFetcher;
+import com.mealspire.app.notify.FoodLogNotifications;
 import com.mealspire.app.notify.MealNotifications;
 import com.mealspire.app.notify.MealReminderScheduler;
 import com.mealspire.app.storage.SharedPreferencesAppSettings;
 import com.mealspire.app.storage.SharedPreferencesCookbookStore;
+import com.mealspire.app.storage.SharedPreferencesFoodLogStore;
 import com.mealspire.app.storage.SharedPreferencesDishReactionStore;
 import com.mealspire.app.storage.SharedPreferencesHouseholdProfileStore;
 import com.mealspire.app.storage.SharedPreferencesMealHistoryStore;
@@ -163,7 +168,41 @@ public class MainActivity extends Activity {
             HouseholdProfile.CookingTime.QUICK,
             HouseholdProfile.CookingTime.MEDIUM,
             HouseholdProfile.CookingTime.LONG};
-    private static final int ONBOARDING_QUESTIONS = 4;
+    private static final String[] SPICE_LABELS =
+            {"Łagodnie, bez ostrego", "Średnio", "Im ostrzej, tym lepiej"};
+    private static final HouseholdProfile.SpiceLevel[] SPICE_VALUES = {
+            HouseholdProfile.SpiceLevel.MILD,
+            HouseholdProfile.SpiceLevel.MEDIUM,
+            HouseholdProfile.SpiceLevel.HOT};
+    private static final String[] STYLE_LABELS =
+            {"Lekko i zdrowo", "Różnie, zależnie od dnia", "Sycąco, po domowemu"};
+    private static final HouseholdProfile.MealStyle[] STYLE_VALUES = {
+            HouseholdProfile.MealStyle.LIGHT,
+            HouseholdProfile.MealStyle.BALANCED,
+            HouseholdProfile.MealStyle.HEARTY};
+    private static final String[] BUDGET_LABELS =
+            {"Oszczędnie", "Bez szaleństw", "Nie liczę — liczy się smak"};
+    private static final HouseholdProfile.Budget[] BUDGET_VALUES = {
+            HouseholdProfile.Budget.THRIFTY,
+            HouseholdProfile.Budget.MODERATE,
+            HouseholdProfile.Budget.GENEROUS};
+    private static final String[] NOVELTY_LABELS =
+            {"Sprawdzone klasyki", "Pół na pół", "Ciągle coś nowego"};
+    private static final HouseholdProfile.Novelty[] NOVELTY_VALUES = {
+            HouseholdProfile.Novelty.CLASSICS,
+            HouseholdProfile.Novelty.MIXED,
+            HouseholdProfile.Novelty.ADVENTUROUS};
+    // Pytania profilu w quizie, w tej kolejności (indeks = krok quizu).
+    private static final String Q_AUDIENCE = "Dla kogo gotujesz?";
+    private static final String Q_DIET = "Czego nie jadacie?";
+    private static final String Q_TIME = "Ile masz zwykle czasu na gotowanie w dzień powszedni?";
+    private static final String Q_SKILL = "Jak Ci idzie gotowanie?";
+    private static final String Q_CUISINES = "Jakie kuchnie lubicie?";
+    private static final String Q_SPICE = "Jak ostro jadacie?";
+    private static final String Q_STYLE = "Na co macie zwykle ochotę?";
+    private static final String Q_BUDGET = "Ile chcecie wydawać na zakupy?";
+    private static final String Q_NOVELTY = "Klasyki czy nowości?";
+    private static final int ONBOARDING_QUESTIONS = 9;
     // The A/B taste survey is the one quiz step after the questions; its pairs
     // advance inside that step (TasteSurvey.position).
     private static final int SURVEY_STEP = ONBOARDING_QUESTIONS;
@@ -171,7 +210,10 @@ public class MainActivity extends Activity {
 
     /** Intent extra: which meal to open (0=breakfast, 1=lunch, 2=dinner). */
     public static final String EXTRA_MEAL_INDEX = "meal_index";
+    /** Intent extra: open the "Co dzisiaj jedliście?" answer dialog. */
+    public static final String EXTRA_FOOD_LOG = "food_log";
     private static final int REQ_POST_NOTIFICATIONS = 1001;
+    static final String FOOD_LOG_HOUR_MENU_PREFIX = "Pytanie wieczorne: ";
     static final String SIGN_IN_DIALOG_TITLE = "Zaloguj się kontem ChatGPT";
     static final String SIGN_IN_MENU_LABEL = "Zaloguj się kontem ChatGPT";
     static final String MODEL_MENU_PREFIX = "Model AI: ";
@@ -270,6 +312,9 @@ public class MainActivity extends Activity {
     // configChanges keeps the Activity alive across rotation.
     private int onboardingStep = -1;
     private int pendingMealIndex = -1;
+    // „Co dzisiaj jedliście?" z powiadomienia w trakcie quizu — pytamy po nim.
+    private boolean pendingFoodLogPrompt;
+    private FoodLogStore foodLogStore;
     // Ankieta A/B: zapisywana po każdej odpowiedzi (wznowienie po przerwie);
     // wybrane dania trafiają do reakcji „lubię" przy zakończeniu albo przerwaniu,
     // więc „Cofnij" podmienia wybór zamiast dokładać polubienia.
@@ -306,6 +351,7 @@ public class MainActivity extends Activity {
         updateStateStore = new SharedPreferencesUpdateStateStore(this);
         surveyStore = new SharedPreferencesTasteSurveyStore(this);
         survey = surveyStore.load();
+        foodLogStore = new SharedPreferencesFoodLogStore(this);
         // Polubienia sprzed ery dziennika stają się zdarzeniami LIKED (raz).
         TasteEventLog migrated = TasteEventMigration.migrate(
                 tasteEvents, preferences, System.currentTimeMillis());
@@ -394,8 +440,10 @@ public class MainActivity extends Activity {
             startOnboarding(isSurveyUnfinished() ? SURVEY_STEP : 0);
         }
 
-        // Daily meal reminders (8/12/18). Scheduling is idempotent.
+        // Daily meal reminders (8/12/18) and the evening "Co dzisiaj jedliście?"
+        // question. Scheduling is idempotent.
         MealNotifications.ensureChannel(this);
+        FoodLogNotifications.ensureChannel(this);
         new MealReminderScheduler().scheduleAll(this);
         handleMealIntent(getIntent());
     }
@@ -673,6 +721,14 @@ public class MainActivity extends Activity {
         if (intent == null) {
             return;
         }
+        if (intent.getBooleanExtra(EXTRA_FOOD_LOG, false)) {
+            intent.removeExtra(EXTRA_FOOD_LOG);
+            if (isOnboardingActive()) {
+                pendingFoodLogPrompt = true;
+            } else {
+                showFoodLogDialog();
+            }
+        }
         int mealIndex = intent.getIntExtra(EXTRA_MEAL_INDEX, -1);
         if (mealIndex >= 0 && mealIndex < MEAL_TYPES.length) {
             // Consume the extra so a later re-delivery of the same intent (e.g.
@@ -792,7 +848,7 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    /** GPT Luna (default) or GPT Sol; a model missing on the account is marked, not swapped. */
+    /** GPT Sol (default) or GPT Luna; a model missing on the account is marked, not swapped. */
     private void showModelChoiceDialog() {
         final GptModel[] models = GptModel.values();
         String[] labels = new String[models.length];
@@ -912,8 +968,9 @@ public class MainActivity extends Activity {
 
         if (onboardingStep == 0) {
             contentContainer.addView(Ui.overline(this, "Poznajmy się"), matchWrap());
-            contentContainer.addView(Ui.body(this, "Kilka krótkich pytań, żeby pierwsze "
-                    + "propozycje od razu pasowały. Każde możesz pominąć."), marginTop(6));
+            contentContainer.addView(Ui.body(this, "Parę szybkich pytań o Was i Wasze "
+                    + "jedzenie, potem ankieta gustu — żeby pierwsze propozycje od razu "
+                    + "pasowały. Każde pytanie możesz pominąć."), marginTop(6));
         }
         contentContainer.addView(buildQuizProgress(),
                 marginTop(onboardingStep == 0 ? 18 : 4));
@@ -929,7 +986,7 @@ public class MainActivity extends Activity {
 
         switch (onboardingStep) {
             case 0:
-                question.setText("Dla kogo gotujesz?");
+                question.setText(Q_AUDIENCE);
                 for (int i = 0; i < AUDIENCE_LABELS.length; i++) {
                     final HouseholdProfile.Audience value = AUDIENCE_VALUES[i];
                     addOnboardingOption(i + 1, AUDIENCE_LABELS[i], () -> {
@@ -939,7 +996,7 @@ public class MainActivity extends Activity {
                 }
                 break;
             case 1:
-                question.setText("Czego nie jadacie?");
+                question.setText(Q_DIET);
                 TextView dietNote = Ui.text(this, "Tego nigdy nie zaproponuję. Możesz "
                         + "zaznaczyć kilka odpowiedzi albo nic.", 15, Ui.INK_SOFT);
                 contentContainer.addView(dietNote, marginTop(6));
@@ -948,30 +1005,17 @@ public class MainActivity extends Activity {
                 dietCard.setPadding(dp(8), dp(6), dp(16), dp(6));
                 for (final DietConstraints.Exclusion exclusion
                         : DietConstraints.Exclusion.values()) {
-                    CheckBox dietBox = new CheckBox(this);
-                    dietBox.setText(exclusion.label());
-                    dietBox.setTextSize(17);
-                    dietBox.setTextColor(Ui.INK);
-                    dietBox.setButtonTintList(ColorStateList.valueOf(Ui.ACCENT));
-                    dietBox.setMinHeight(dp(52));
-                    dietBox.setPadding(dp(8), 0, 0, 0);
-                    dietBox.setChecked(householdProfile.getDiet().getExclusions()
-                            .contains(exclusion));
+                    CheckBox dietBox = quizCheckBox(exclusion.label(),
+                            householdProfile.getDiet().getExclusions().contains(exclusion));
                     dietBox.setOnCheckedChangeListener((view, checked) ->
                             toggleExclusion(exclusion, checked));
                     dietCard.addView(dietBox, matchWrap());
                 }
                 contentContainer.addView(dietCard, marginTop(16));
-                Button dietNext = new Button(this);
-                dietNext.setId(R.id.onboarding_next_button);
-                dietNext.setText("Dalej");
-                dietNext.setTextSize(17);
-                Ui.primary(dietNext);
-                dietNext.setOnClickListener(v -> advanceOnboarding());
-                contentContainer.addView(dietNext, marginTop(16));
+                addQuizNextButton();
                 break;
             case 2:
-                question.setText("Ile masz zwykle czasu na gotowanie w dzień powszedni?");
+                question.setText(Q_TIME);
                 for (int i = 0; i < TIME_LABELS.length; i++) {
                     final HouseholdProfile.CookingTime value = TIME_VALUES[i];
                     addOnboardingOption(i + 1, TIME_LABELS[i], () -> {
@@ -981,7 +1025,7 @@ public class MainActivity extends Activity {
                 }
                 break;
             case 3:
-                question.setText("Jak Ci idzie gotowanie?");
+                question.setText(Q_SKILL);
                 for (int i = 0; i < SKILL_LABELS.length; i++) {
                     final HouseholdProfile.CookingSkill value = SKILL_VALUES[i];
                     addOnboardingOption(i + 1, SKILL_LABELS[i], () -> {
@@ -990,9 +1034,89 @@ public class MainActivity extends Activity {
                     });
                 }
                 break;
+            case 4:
+                question.setText(Q_CUISINES);
+                contentContainer.addView(Ui.text(this, "Zaznacz dowolnie wiele albo nic — "
+                        + "inne kuchnie też będą się pojawiać.", 15, Ui.INK_SOFT), marginTop(6));
+                LinearLayout cuisineCard = Ui.card(this);
+                cuisineCard.setElevation(0f);
+                cuisineCard.setPadding(dp(8), dp(6), dp(16), dp(6));
+                for (final String cuisine : CUISINE_OPTIONS) {
+                    CheckBox cuisineBox = quizCheckBox(cuisine,
+                            householdProfile.getCuisines().contains(cuisine));
+                    cuisineBox.setOnCheckedChangeListener((view, checked) ->
+                            toggleCuisine(cuisine, checked));
+                    cuisineCard.addView(cuisineBox, matchWrap());
+                }
+                contentContainer.addView(cuisineCard, marginTop(16));
+                addQuizNextButton();
+                break;
+            case 5:
+                question.setText(Q_SPICE);
+                addProfileOptions(SPICE_LABELS, SPICE_VALUES, HouseholdProfile::withSpice);
+                break;
+            case 6:
+                question.setText(Q_STYLE);
+                addProfileOptions(STYLE_LABELS, STYLE_VALUES, HouseholdProfile::withStyle);
+                break;
+            case 7:
+                question.setText(Q_BUDGET);
+                addProfileOptions(BUDGET_LABELS, BUDGET_VALUES, HouseholdProfile::withBudget);
+                break;
+            case 8:
+                question.setText(Q_NOVELTY);
+                addProfileOptions(NOVELTY_LABELS, NOVELTY_VALUES, HouseholdProfile::withNovelty);
+                break;
         }
 
         addQuizSkipButton("Pomiń");
+    }
+
+    /** Single-choice quiz answers: each saves into the profile and moves on. */
+    private <T> void addProfileOptions(String[] labels, T[] values,
+                                       final ProfileUpdate<T> update) {
+        for (int i = 0; i < labels.length; i++) {
+            final T value = values[i];
+            addOnboardingOption(i + 1, labels[i], () -> {
+                saveProfile(update.apply(householdProfile, value));
+                advanceOnboarding();
+            });
+        }
+    }
+
+    private CheckBox quizCheckBox(String label, boolean checked) {
+        CheckBox box = new CheckBox(this);
+        box.setText(label);
+        box.setTextSize(17);
+        box.setTextColor(Ui.INK);
+        box.setButtonTintList(ColorStateList.valueOf(Ui.ACCENT));
+        box.setMinHeight(dp(52));
+        box.setPadding(dp(8), 0, 0, 0);
+        box.setChecked(checked);
+        return box;
+    }
+
+    private void addQuizNextButton() {
+        Button next = new Button(this);
+        next.setId(R.id.onboarding_next_button);
+        next.setText("Dalej");
+        next.setTextSize(17);
+        Ui.primary(next);
+        next.setOnClickListener(v -> advanceOnboarding());
+        contentContainer.addView(next, marginTop(16));
+    }
+
+    /** Saves each (un)ticked cuisine immediately, so skipping keeps the answers. */
+    private void toggleCuisine(String cuisine, boolean liked) {
+        List<String> cuisines = new ArrayList<>(householdProfile.getCuisines());
+        if (liked) {
+            if (!cuisines.contains(cuisine)) {
+                cuisines.add(cuisine);
+            }
+        } else {
+            cuisines.remove(cuisine);
+        }
+        saveProfile(householdProfile.withCuisines(cuisines));
     }
 
     private void addQuizSkipButton(String label) {
@@ -1024,11 +1148,13 @@ public class MainActivity extends Activity {
         progress.setId(R.id.survey_progress);
         contentContainer.addView(progress, marginTop(10));
 
-        TextView question = Ui.headline(this, "Co wolisz?", 24);
+        TasteSurvey.Pair pair = survey.current();
+        int meal = pair.getMeal();
+        TextView question = Ui.headline(this, meal >= 0 && meal < MEAL_ACCUSATIVE.length
+                ? "Co wolisz na " + MEAL_ACCUSATIVE[meal] + "?" : "Co wolisz?", 24);
         question.setId(R.id.onboarding_question);
         contentContainer.addView(question, marginTop(4));
 
-        TasteSurvey.Pair pair = survey.current();
         java.util.Map<String, String> details = surveyDetailsByTitle();
         addSurveyOption(1, pair.getDishA(), details.get(pair.getDishA()), TasteSurvey.CHOICE_A);
         TextView or = Ui.text(this, "albo", 14, Ui.INK_SOFT);
@@ -1174,6 +1300,10 @@ public class MainActivity extends Activity {
         }
         if (learned) {
             warmReadyPools(); // nowe polubienia zmieniają podpis gustu gotowej puli
+        }
+        if (pendingFoodLogPrompt) {
+            pendingFoodLogPrompt = false;
+            showFoodLogDialog();
         }
         if (pendingMealIndex >= 0) {
             int meal = pendingMealIndex;
@@ -1440,7 +1570,10 @@ public class MainActivity extends Activity {
         }
         java.util.Map<String, String> detailsByTitle =
                 BuiltInRecipes.detailsByTitle(cookbook);
-        return new RecipeRequest(mealType, preferences, recentToAvoid,
+        // Co użytkownik napisał, że już zjadł — AI ma tego nie powtarzać.
+        List<String> avoid = new ArrayList<>(recentToAvoid);
+        avoid.addAll(foodLogStore.load().promptAvoidItems(System.currentTimeMillis()));
+        return new RecipeRequest(mealType, preferences, avoid,
                 fragments, knownDishes, buildTasteProfile().getAffinities(),
                 householdProfile)
                 .withTasteContext(tasteContextBuilder.build(
@@ -2025,6 +2158,11 @@ public class MainActivity extends Activity {
         actions.add(this::showHouseholdProfileDialog);
         labels.add(isSurveyUnfinished() ? "Dokończ ankietę gustu" : "Ankieta gustu (A czy B?)");
         actions.add(this::showSurveyMenu);
+        labels.add(FoodLogReminder.TITLE);
+        actions.add(this::showFoodLogDialog);
+        labels.add(FOOD_LOG_HOUR_MENU_PREFIX
+                + FoodLogReminder.hourLabel(appSettings.loadFoodLogHour()));
+        actions.add(this::showFoodLogHourDialog);
         labels.add("Dodaj danie, które znasz i lubisz");
         actions.add(this::showAddKnownDishDialog);
         labels.add("Zarządzaj moimi danymi");
@@ -2047,6 +2185,82 @@ public class MainActivity extends Activity {
                 .show();
     }
 
+    // ----- "Co dzisiaj jedliście?" (evening question + food log) ----------
+
+    /**
+     * The answer dialog — from the evening notification (Android 6, or a tap
+     * instead of a direct reply) or from "Więcej…". Shows the last few answers
+     * so the user sees what the app already knows.
+     */
+    void showFoodLogDialog() {
+        final EditText input = new EditText(this);
+        input.setId(R.id.food_log_input);
+        input.setHint(FoodLogReminder.REPLY_HINT);
+        input.setMinLines(2);
+        input.setFilters(new android.text.InputFilter[]{
+                new android.text.InputFilter.LengthFilter(FoodLog.MAX_TEXT_LENGTH)});
+        List<String> recent = foodLogStore.load().recentTexts(System.currentTimeMillis(), 3);
+        StringBuilder message = new StringBuilder(FoodLogReminder.TEXT);
+        if (!recent.isEmpty()) {
+            message.append("\n\nOstatnio zapisane:");
+            for (String text : recent.subList(0, Math.min(3, recent.size()))) {
+                message.append("\n• ").append(text);
+            }
+        }
+        LinearLayout box = new LinearLayout(this);
+        box.setPadding(dp(20), dp(4), dp(20), 0);
+        box.addView(input, matchWrap());
+        new AlertDialog.Builder(this)
+                .setTitle(FoodLogReminder.TITLE)
+                .setMessage(message.toString())
+                .setView(box)
+                .setPositiveButton("Zapisz", (dialog, which) -> {
+                    String text = input.getText().toString();
+                    if (text.trim().isEmpty()) {
+                        return;
+                    }
+                    foodLogStore.save(foodLogStore.load().append(text,
+                            System.currentTimeMillis()));
+                    FoodLogNotifications.cancel(this);
+                    toast(FoodLogReminder.SAVED_TEXT);
+                })
+                .setNegativeButton("Anuluj", null)
+                .show();
+    }
+
+    /** "Więcej…" → when the evening question comes, or switch it off. */
+    private void showFoodLogHourDialog() {
+        final int[] hours = new int[FoodLogReminder.HOUR_CHOICES.length + 1];
+        final String[] labels = new String[hours.length];
+        for (int i = 0; i < FoodLogReminder.HOUR_CHOICES.length; i++) {
+            hours[i] = FoodLogReminder.HOUR_CHOICES[i];
+            labels[i] = FoodLogReminder.hourLabel(hours[i])
+                    + (hours[i] == FoodLogReminder.DEFAULT_HOUR ? " (domyślnie)" : "");
+        }
+        hours[hours.length - 1] = FoodLogReminder.DISABLED;
+        labels[hours.length - 1] = FoodLogReminder.hourLabel(FoodLogReminder.DISABLED);
+        int current = appSettings.loadFoodLogHour();
+        int checked = -1;
+        for (int i = 0; i < hours.length; i++) {
+            if (hours[i] == current) {
+                checked = i;
+            }
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Kiedy pytać, co dziś jedliście?")
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    appSettings.saveFoodLogHour(hours[which]);
+                    new MealReminderScheduler().scheduleAll(this);
+                    dialog.dismiss();
+                    toast(hours[which] == FoodLogReminder.DISABLED
+                            ? "Wieczorne pytanie wyłączone."
+                            : "Zapytam codziennie o " + FoodLogReminder.hourLabel(hours[which])
+                                    + ".");
+                })
+                .setNegativeButton("Anuluj", null)
+                .show();
+    }
+
     /** The server is contacted only after ChatGPT sign-in (consent covers the server). */
     private void refreshCatalog(Runnable after) {
         if (!isAiAvailable() || !backendStore.needsCatalog()) { if (after != null) after.run(); return; }
@@ -2063,24 +2277,22 @@ public class MainActivity extends Activity {
 
     /** Lets the user change the quiz answers later, one simple dialog each. */
     private void showHouseholdProfileDialog() {
-        final String[] items = {"Dla kogo gotujesz?", "Czego nie jadacie?",
-                "Ile masz czasu na gotowanie?", "Jak Ci idzie gotowanie?",
-                "Ulubione kuchnie"};
+        final String[] items = {Q_AUDIENCE, Q_DIET,
+                "Ile masz czasu na gotowanie?", Q_SKILL,
+                "Ulubione kuchnie", Q_SPICE, Q_STYLE, Q_BUDGET, Q_NOVELTY};
+        final Runnable[] actions = {this::showAudienceDialog, this::showDietDialog,
+                this::showTimeDialog, this::showSkillDialog, this::showCuisinesDialog,
+                () -> showProfileChoiceDialog(Q_SPICE, SPICE_LABELS, SPICE_VALUES,
+                        householdProfile.getSpice(), HouseholdProfile::withSpice),
+                () -> showProfileChoiceDialog(Q_STYLE, STYLE_LABELS, STYLE_VALUES,
+                        householdProfile.getStyle(), HouseholdProfile::withStyle),
+                () -> showProfileChoiceDialog(Q_BUDGET, BUDGET_LABELS, BUDGET_VALUES,
+                        householdProfile.getBudget(), HouseholdProfile::withBudget),
+                () -> showProfileChoiceDialog(Q_NOVELTY, NOVELTY_LABELS, NOVELTY_VALUES,
+                        householdProfile.getNovelty(), HouseholdProfile::withNovelty)};
         new AlertDialog.Builder(this)
                 .setTitle("Profil domowników")
-                .setItems(items, (dialog, which) -> {
-                    if (which == 0) {
-                        showAudienceDialog();
-                    } else if (which == 1) {
-                        showDietDialog();
-                    } else if (which == 2) {
-                        showTimeDialog();
-                    } else if (which == 3) {
-                        showSkillDialog();
-                    } else {
-                        showCuisinesDialog();
-                    }
-                })
+                .setItems(items, (dialog, which) -> actions[which].run())
                 .show();
     }
 

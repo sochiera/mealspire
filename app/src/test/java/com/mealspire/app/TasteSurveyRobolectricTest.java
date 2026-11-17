@@ -74,12 +74,16 @@ public class TasteSurveyRobolectricTest {
         return view == null ? null : view.getText().toString();
     }
 
-    /** Cztery pytania profilu (dieta bez zaznaczeń), do pierwszej pary ankiety. */
+    /** Dziewięć pytań profilu (dieta i kuchnie bez zaznaczeń), do pierwszej pary ankiety. */
     private static void answerProfileQuestions(MainActivity activity) {
         click(activity, R.id.onboarding_option_1);
         click(activity, R.id.onboarding_next_button);
         click(activity, R.id.onboarding_option_2);
         click(activity, R.id.onboarding_option_2);
+        click(activity, R.id.onboarding_next_button);
+        for (int i = 0; i < 4; i++) {
+            click(activity, R.id.onboarding_option_2);
+        }
     }
 
     private Set<String> likes() {
@@ -103,7 +107,7 @@ public class TasteSurveyRobolectricTest {
 
         Set<String> pairs = new HashSet<>();
         for (int i = 1; i <= 12; i++) {
-            assertEquals("Co wolisz?", text(activity, R.id.onboarding_question));
+            assertTrue(text(activity, R.id.onboarding_question).startsWith("Co wolisz na "));
             assertEquals("Porównanie " + i + " z 12", text(activity, R.id.survey_progress));
             String a = text(activity, R.id.onboarding_option_1);
             String b = text(activity, R.id.onboarding_option_2);

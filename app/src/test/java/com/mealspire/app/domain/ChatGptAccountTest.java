@@ -56,7 +56,7 @@ public class ChatGptAccountTest {
         assertEquals("gpt-6.1-sol", session.solModel);
         assertTrue(account.isAvailable(GptModel.LUNA));
         assertTrue(account.isAvailable(GptModel.SOL));
-        assertEquals("Luna is the default", GptModel.LUNA, account.modelChoice());
+        assertEquals("GPT 6.1 Sol is the default", GptModel.SOL, account.modelChoice());
         assertEquals("rt", session.refreshToken);
         assertEquals(NOW_MS + 3_600_000, session.accessTokenExpiresAtMs);
         assertEquals(ChatGptOAuth.TOKEN_URL, http.calls.get(0).url);
