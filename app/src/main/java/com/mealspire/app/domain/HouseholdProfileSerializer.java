@@ -16,6 +16,10 @@ public final class HouseholdProfileSerializer {
     private static final String KEY_TIME = "time";
     private static final String KEY_CUISINES = "cuisines";
     private static final String KEY_EXCLUSIONS = "exclusions";
+    private static final String KEY_SPICE = "spice";
+    private static final String KEY_STYLE = "style";
+    private static final String KEY_BUDGET = "budget";
+    private static final String KEY_NOVELTY = "novelty";
 
     public String toJson(HouseholdProfile profile) {
         try {
@@ -29,6 +33,10 @@ public final class HouseholdProfileSerializer {
                 exclusions.put(exclusion.name());
             }
             root.put(KEY_EXCLUSIONS, exclusions);
+            root.put(KEY_SPICE, profile.getSpice().name());
+            root.put(KEY_STYLE, profile.getStyle().name());
+            root.put(KEY_BUDGET, profile.getBudget().name());
+            root.put(KEY_NOVELTY, profile.getNovelty().name());
             return root.toString();
         } catch (JSONException e) {
             return "{}";
@@ -48,7 +56,15 @@ public final class HouseholdProfileSerializer {
                     .withCuisines(PreferencesSerializer.readArray(
                             root.optJSONArray(KEY_CUISINES)))
                     .withDiet(dietOf(PreferencesSerializer.readArray(
-                            root.optJSONArray(KEY_EXCLUSIONS))));
+                            root.optJSONArray(KEY_EXCLUSIONS))))
+                    .withSpice(enumOf(HouseholdProfile.SpiceLevel.class,
+                            root.optString(KEY_SPICE, ""), HouseholdProfile.SpiceLevel.UNKNOWN))
+                    .withStyle(enumOf(HouseholdProfile.MealStyle.class,
+                            root.optString(KEY_STYLE, ""), HouseholdProfile.MealStyle.UNKNOWN))
+                    .withBudget(enumOf(HouseholdProfile.Budget.class,
+                            root.optString(KEY_BUDGET, ""), HouseholdProfile.Budget.UNKNOWN))
+                    .withNovelty(enumOf(HouseholdProfile.Novelty.class,
+                            root.optString(KEY_NOVELTY, ""), HouseholdProfile.Novelty.UNKNOWN));
         } catch (JSONException e) {
             return HouseholdProfile.empty();
         }
@@ -64,6 +80,15 @@ public final class HouseholdProfileSerializer {
             }
         }
         return DietConstraints.of(exclusions);
+    }
+
+    /** Brak/nieznana wartość (np. starszy zapis lub nowsza appka) = {@code fallback}. */
+    private static <E extends Enum<E>> E enumOf(Class<E> type, String name, E fallback) {
+        try {
+            return Enum.valueOf(type, name);
+        } catch (IllegalArgumentException e) {
+            return fallback;
+        }
     }
 
     private static HouseholdProfile.Audience audienceOf(String name) {

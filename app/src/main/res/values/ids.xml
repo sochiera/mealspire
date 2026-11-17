@@ -24,5 +24,6 @@
     <item name="onboarding_next_button" type="id" />
     <item name="onboarding_skip_button" type="id" />
     <item name="survey_progress" type="id" />
+    <item name="food_log_input" type="id" />
     <item name="survey_resume_button" type="id" />
 </resources>

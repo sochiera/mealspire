@@ -6,9 +6,9 @@ razu podsuwa kilka prostych propozycji** naraz. Pełny przepis powstaje dopiero,
 gdy któryś pomysł Ci się spodoba. Idea: jak najmniej klikania, a aplikacja uczy
 się Twojej kuchni.
 
-## Pierwsze uruchomienie: krótki test gustu
+## Pierwsze uruchomienie: test gustu
 
-Świeża instalacja zaczyna od **krótkiego quizu** (jedno pytanie na ekran, duże
+Świeża instalacja zaczyna od **quizu** (jedno pytanie na ekran, duże
 przyciski, na każdym kroku widoczny przycisk **„Pomiń"**):
 
 1. **Dla kogo gotujesz?** — tylko dorośli / dorośli i dzieci.
@@ -19,23 +19,32 @@ przyciski, na każdym kroku widoczny przycisk **„Pomiń"**):
    około pół godziny / godzina i więcej.
 4. **Jak Ci idzie gotowanie?** — dopiero zaczynam / radzę sobie / gotuję dobrze
    i lubię wyzwania.
-5. **Ankieta gustu „Co wolisz?” — A czy B.** Seria par dań (domyślnie 20,
-   długość do zmiany), każda para inna; kolejne pary kontrastują na zmianę
-   bazą (mięso/ryba/bezmięsne), charakterem (zupa/zapiekane/świeże) i kuchnią,
+5. **Jakie kuchnie lubicie?** — wielokrotny wybór (polska, włoska, azjatycka,
+   meksykańska, bliskowschodnia) albo nic.
+6. **Jak ostro jadacie?** — łagodnie / średnio / im ostrzej, tym lepiej.
+7. **Na co macie zwykle ochotę?** — lekko i zdrowo / różnie / sycąco, po domowemu.
+8. **Ile chcecie wydawać na zakupy?** — oszczędnie / bez szaleństw / nie liczę.
+9. **Klasyki czy nowości?** — sprawdzone klasyki / pół na pół / ciągle coś nowego.
+10. **Ankieta gustu „Co wolisz na śniadanie / obiad / kolację?” — A czy B.**
+   Seria par dań (domyślnie 40, długość do zmiany), każda para inna; oba dania
+   w parze są z tej samej pory posiłku, a pary krążą po śniadaniu, obiedzie
+   i kolacji. W każdej porze kolejne pary kontrastują na zmianę bazą
+   (mięso/ryba/bezmięsne), charakterem (zupa/zapiekane/świeże) i kuchnią,
    a dania przewijają się równomiernie przez cały katalog. Pasek i licznik
-   („Porównanie 7 z 20”) pokazują postęp. Wybrane danie zapisuje się jako
+   („Porównanie 7 z 40”) pokazują postęp. Wybrane danie zapisuje się jako
    reakcja „lubię” na tej samej liście, z której AI ocenia kolejne dania —
    tak powstaje początkowa grupa lubianych dań; **„Żadne z tych"** uczciwie
    nie zapisuje nic. Pary respektują wykluczenia z pytania 2.
    Każda odpowiedź jest od razu zapamiętana: po zamknięciu aplikacji ankieta
    **wznawia się od tej samej pary**, a **„Przerwij — dokończę później”**
    zapisuje dotychczasowe wybory i zostawia na ekranie startowym przycisk
-   **„Dokończ ankietę gustu”**. Nową ankietę (z wyborem długości: 10/20/30/40
+   **„Dokończ ankietę gustu”**. Nową ankietę (z wyborem długości: 20/40/60/80
    porównań) uruchamia **„Więcej…” → „Ankieta gustu”**.
 
-Odpowiedzi z pytań 1–4 trafiają do **profilu domowników** i realnie wpływają na
+Odpowiedzi z pytań 1–9 trafiają do **profilu domowników** i realnie wpływają na
 zapytania do AI („Gotuję też dla dzieci…", „Bezwzględny wymóg diety…",
-„Dopiero uczę się gotować…") — także przy **„Zmień przepis"**. Quiz pokazuje się
+„Dopiero uczę się gotować…", „Lubimy ostre jedzenie…"; środkowe odpowiedzi nic
+nie dokładają) — także przy **„Zmień przepis"**. Quiz pokazuje się
 **tylko raz** — „Pomiń" na dowolnym kroku kończy go na zawsze, a już udzielone
 odpowiedzi zostają. Profil można później zmienić w menu **„Więcej…" → „Profil
 domowników"**. Systemowe „Cofnij" wraca w quizie do poprzedniego pytania
@@ -80,8 +89,8 @@ pasują dodatki (owsianka, płatki, tosty…), są one opcją do dopisania, a ni
 osobnym, bardziej skomplikowanym daniem.
 
 Gdy jesteś zalogowany kontem ChatGPT, te same dania (wbudowana pula + Twoja baza)
-**ocenia** model GPT z Twojego planu ChatGPT (domyślnie GPT Luna, do
-przełączenia na GPT Sol; OpenAI Responses API, `store:false`) — pokazane są trzy
+**ocenia** model GPT z Twojego planu ChatGPT (domyślnie GPT 6.1 Sol, do
+przełączenia na GPT Luna; OpenAI Responses API, `store:false`) — pokazane są trzy
 najlepiej dopasowane do Twoich reakcji, z krótkim powodem.
 
 ## Codzienne powiadomienia z propozycjami (8 / 12 / 18)
@@ -96,6 +105,17 @@ bazy, z uwzględnieniem polubień), więc działają zawsze — także bez inter
 logowania. Przypomnienia korzystają z `AlarmManager` (lekko, bez dodatkowych
 bibliotek) i przeżywają restart telefonu. Na Androidzie 13+ aplikacja poprosi raz
 o zgodę na powiadomienia; bez zgody reszta działa normalnie, tylko bez przypomnień.
+
+## Wieczorne pytanie „Co dzisiaj jedliście?”
+
+Niezależnie od przypomnień 8/12/18 aplikacja raz dziennie, **domyślnie o 20:00**
+(po kolacji), pyta w osobnym powiadomieniu, co było dziś jedzone. Na Androidzie 7+
+odpowiedź wpisuje się **wprost w powiadomieniu** („Odpowiedz”); dotknięcie
+powiadomienia (i każde na Androidzie 6) otwiera okienko z polem tekstowym.
+Odpowiedzi zostają w telefonie (dziennik do 60 wpisów); zjedzone w ostatnich dwóch
+dniach idą do zapytań AI jako to, czego nie powtarzać. Godzinę (19–22) albo
+wyłączenie pytania ustawisz w **„Więcej…” → „Pytanie wieczorne: …”**, a odpowiedź
+dopiszesz też ręcznie przez **„Więcej…” → „Co dzisiaj jedliście?”**.
 
 ## Powiadomienie o nowej wersji
 
@@ -172,9 +192,9 @@ Nie istnieje żaden sekret klienta. Tokeny (dostępowy ważny godzinę, odświe�
 i są **wyłączone z kopii zapasowej Androida**. Zapytania idą do OpenAI Responses
 API i są liczone z limitu Twojego planu, nie z czyjegokolwiek klucza.
 
-**Model AI**: domyślnie **GPT Luna** (szybki i oszczędny dla limitów planu).
-W **„Więcej…” → „Model AI: …”** możesz przełączyć na **GPT Sol** (mocniejszy,
-z mniejszym limitem w planie) i z powrotem; wybór jest zapamiętywany. Dokładny
+**Model AI**: domyślnie **GPT Sol** (GPT 6.1 Sol — mocniejszy, z mniejszym
+limitem w planie). W **„Więcej…” → „Model AI: …”** możesz przełączyć na
+**GPT Luna** (szybki i oszczędny dla limitów planu) i z powrotem; wybór jest zapamiętywany. Dokładny
 identyfikator modelu aplikacja bierze z katalogu Twojego konta (`GET /v1/models`,
 np. `gpt-6-luna`, `gpt-6.1-sol`). Jeśli wybranego modelu nie ma na Twoim koncie,
 aplikacja to pokaże i **nie podstawi innego modelu**.
@@ -205,9 +225,11 @@ Aby utrzymać główny ekran prostym, dodatkowe akcje są pod przyciskiem „Wi�
 - **Ankieta gustu** — dokończenie przerwanej albo nowa ankieta A/B o wybranej
   długości; wybory dokładają się do listy reakcji „lubię”.
 - **Profil domowników** — zmienia odpowiedzi z quizu startowego (dla kogo
-  gotujesz, czego nie jadacie, ile masz czasu, jak Ci idzie gotowanie) oraz
-  ulubione kuchnie (deklaracja opcjonalna — gustu kuchni aplikacja i tak uczy
+  gotujesz, czego nie jadacie, ile masz czasu, jak Ci idzie gotowanie, ostrość,
+  lekko/sycąco, budżet, klasyki/nowości) oraz ulubione kuchnie (deklaracja opcjonalna — gustu kuchni aplikacja i tak uczy
   się z wyborów).
+- **Co dzisiaj jedliście?** / **Pytanie wieczorne: …** — dopisanie odpowiedzi
+  ręcznie i godzina (albo wyłączenie) wieczornego pytania.
 - **Zapisz danie do mojej bazy** — zapisuje aktualnie pokazane danie.
 - **Lista zakupów** — wyciąga składniki z aktualnego przepisu i pokazuje je jako
   odhaczaną listę.

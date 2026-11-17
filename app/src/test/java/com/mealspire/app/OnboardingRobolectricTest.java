@@ -101,6 +101,36 @@ public class OnboardingRobolectricTest {
     }
 
     @Test
+    public void nowePytaniaProfiluTrafiajaDoProfiluAPotemJestAnkieta() {
+        MainActivity activity = launch();
+        activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
+        activity.<Button>findViewById(R.id.onboarding_next_button).performClick();
+        activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
+        activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
+        // 5. Kuchnie: pierwszy checkbox („polska"), „Dalej"
+        assertEquals("Jakie kuchnie lubicie?", questionText(activity));
+        firstCheckBox(activity).performClick();
+        activity.<Button>findViewById(R.id.onboarding_next_button).performClick();
+        assertEquals("Jak ostro jadacie?", questionText(activity));
+        activity.<Button>findViewById(R.id.onboarding_option_3).performClick();
+        assertEquals("Na co macie zwykle ochotę?", questionText(activity));
+        activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
+        assertEquals("Ile chcecie wydawać na zakupy?", questionText(activity));
+        activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
+        assertEquals("Klasyki czy nowości?", questionText(activity));
+        activity.<Button>findViewById(R.id.onboarding_option_3).performClick();
+        assertTrue(questionText(activity).startsWith("Co wolisz na "));
+
+        HouseholdProfile profile = new SharedPreferencesHouseholdProfileStore(
+                ApplicationProvider.getApplicationContext()).load();
+        assertEquals(java.util.Collections.singletonList("polska"), profile.getCuisines());
+        assertEquals(HouseholdProfile.SpiceLevel.HOT, profile.getSpice());
+        assertEquals(HouseholdProfile.MealStyle.LIGHT, profile.getStyle());
+        assertEquals(HouseholdProfile.Budget.THRIFTY, profile.getBudget());
+        assertEquals(HouseholdProfile.Novelty.ADVENTUROUS, profile.getNovelty());
+    }
+
+    @Test
     public void zaznaczoneWykluczeniaTrafiajaDoProfilu() {
         MainActivity activity = launch();
         activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
@@ -139,10 +169,18 @@ public class OnboardingRobolectricTest {
         return null;
     }
 
-    /** Przechodzi cztery pytania profilu (dieta bez zaznaczeń), do rund dań. */
+    /**
+     * Przechodzi dziewięć pytań profilu (dieta i kuchnie bez zaznaczeń, reszta
+     * środkowe odpowiedzi), do rund dań.
+     */
     private static void answerProfileQuestions(MainActivity activity) {
         activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
         activity.<Button>findViewById(R.id.onboarding_next_button).performClick();
+        activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
+        activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
+        activity.<Button>findViewById(R.id.onboarding_next_button).performClick();
+        activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
+        activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
         activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
         activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
     }
@@ -153,7 +191,7 @@ public class OnboardingRobolectricTest {
         answerProfileQuestions(activity);
 
         for (int round = 0; round < 3; round++) {
-            assertEquals("Co wolisz?", questionText(activity));
+            assertTrue(questionText(activity).startsWith("Co wolisz na "));
             activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
         }
 
@@ -196,7 +234,7 @@ public class OnboardingRobolectricTest {
         answerProfileQuestions(activity);
 
         for (int round = 0; round < 3; round++) {
-            assertEquals("Co wolisz?", questionText(activity));
+            assertTrue(questionText(activity).startsWith("Co wolisz na "));
             activity.<Button>findViewById(R.id.onboarding_option_none).performClick();
         }
 
@@ -216,12 +254,17 @@ public class OnboardingRobolectricTest {
         activity.<Button>findViewById(R.id.onboarding_next_button).performClick();
         activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
         activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
+        activity.<Button>findViewById(R.id.onboarding_next_button).performClick();
+        activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
+        activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
+        activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
+        activity.<Button>findViewById(R.id.onboarding_option_2).performClick();
 
         DietConstraints veg = DietConstraints.of(java.util.Collections.singletonList(
                 DietConstraints.Exclusion.VEGETARIAN));
         int[] optionIds = {R.id.onboarding_option_1, R.id.onboarding_option_2};
         for (int round = 0; round < 3; round++) {
-            assertEquals("Co wolisz?", questionText(activity));
+            assertTrue(questionText(activity).startsWith("Co wolisz na "));
             for (int optionId : optionIds) {
                 String dish = activity.<Button>findViewById(optionId)
                         .getText().toString();

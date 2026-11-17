@@ -73,15 +73,16 @@ public class TasteSurveyPlannerTest {
     public void wiekszoscParKontrastujeWWymiarzeGustu() {
         DishTagger tagger = new DishTagger();
         Map<String, String> details = BuiltInRecipes.detailsByTitle(null);
-        TasteDimension[] dims = {TasteDimension.BASE, TasteDimension.CHARACTER,
-                TasteDimension.CUISINE};
         List<TasteSurvey.Pair> pairs = planner.plan(builtInPools(), null, 20, new Random(5));
+        Map<Integer, Integer> perMeal = new HashMap<>();
         int contrasting = 0;
         for (int i = 0; i < pairs.size(); i++) {
+            int indexInMeal = perMeal.merge(pairs.get(i).getMeal(), 1, Integer::sum) - 1;
+            TasteDimension dim = TasteSurveyPlanner.dimensionFor(indexInMeal);
             String a = tagger.tag(pairs.get(i).getDishA(), details.get(pairs.get(i).getDishA()))
-                    .get(dims[i % 3]);
+                    .get(dim);
             String b = tagger.tag(pairs.get(i).getDishB(), details.get(pairs.get(i).getDishB()))
-                    .get(dims[i % 3]);
+                    .get(dim);
             if (a != null && b != null && !a.equals(b)) {
                 contrasting++;
             }
@@ -112,5 +113,64 @@ public class TasteSurveyPlannerTest {
         assertTrue(pairs.size() <= 6); // C(4,2)
         assertFalse(pairs.isEmpty());
         assertTrue(planner.plan(new Recipe[0][], null, 10, new Random(2)).isEmpty());
+    }
+
+    @Test
+    public void obaDaniaWParzeSaZTejSamejPoryPosilkuAPoryKraza() {
+        Recipe[][] pools = builtInPools();
+        List<TasteSurvey.Pair> pairs = planner.plan(pools, null, 30, new Random(9));
+        Map<Integer, Integer> perMeal = new HashMap<>();
+        for (TasteSurvey.Pair pair : pairs) {
+            int meal = pair.getMeal();
+            assertTrue("para bez pory posiłku", meal >= 0 && meal < pools.length);
+            assertTrue(pair.getDishA(), inPool(pools[meal], pair.getDishA()));
+            assertTrue(pair.getDishB(), inPool(pools[meal], pair.getDishB()));
+            perMeal.merge(meal, 1, Integer::sum);
+        }
+        assertEquals(10, (int) perMeal.get(0));
+        assertEquals(10, (int) perMeal.get(1));
+        assertEquals(10, (int) perMeal.get(2));
+    }
+
+    @Test
+    public void wyczerpanaPoraOddajeMiejsceInnym() {
+        Recipe[][] pools = {{new Recipe("A", ""), new Recipe("B", "")},
+                {new Recipe("C", ""), new Recipe("D", ""), new Recipe("E", ""),
+                        new Recipe("F", "")}};
+        List<TasteSurvey.Pair> pairs = planner.plan(pools, null, 6, new Random(4));
+        assertTrue(pairs.size() > 2);
+        int fromFirst = 0;
+        for (TasteSurvey.Pair pair : pairs) {
+            fromFirst += pair.getMeal() == 0 ? 1 : 0;
+        }
+        assertEquals(1, fromFirst); // jedyna możliwa para A/B
+    }
+
+    @Test
+    public void domyslnaAnkietaJestWyraznieDluzszaNiz20Par() {
+        assertTrue(TasteSurvey.DEFAULT_PAIRS > 20);
+        List<TasteSurvey.Pair> pairs = planner.plan(builtInPools(), null,
+                TasteSurvey.DEFAULT_PAIRS, new Random(6));
+        assertEquals(TasteSurvey.DEFAULT_PAIRS, pairs.size());
+    }
+
+    @Test
+    public void poraPosilkuParyPrzezywaZapisIStaryZapisJestCzytelny() {
+        TasteSurveySerializer serializer = new TasteSurveySerializer();
+        TasteSurvey survey = TasteSurvey.start(Collections.singletonList(
+                new TasteSurvey.Pair("Owsianka", "Jajecznica", 0)), "[]");
+        assertEquals(0, serializer.fromJson(serializer.toJson(survey)).current().getMeal());
+        TasteSurvey legacy = serializer.fromJson(
+                "{\"pairs\":[[\"Owsianka\",\"Gulasz\"]],\"answers\":[-1]}");
+        assertEquals(TasteSurvey.ANY_MEAL, legacy.current().getMeal());
+    }
+
+    private static boolean inPool(Recipe[] pool, String title) {
+        for (Recipe recipe : pool) {
+            if (recipe.getTitle().equals(title)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

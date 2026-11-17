@@ -82,6 +82,42 @@ public class HouseholdProfileTest {
     }
 
     @Test
+    public void nowePytaniaQuizuTrafiajaDoPromptu() {
+        String joined = joined(HouseholdProfile.empty()
+                .withSpice(HouseholdProfile.SpiceLevel.HOT)
+                .withStyle(HouseholdProfile.MealStyle.LIGHT)
+                .withBudget(HouseholdProfile.Budget.THRIFTY)
+                .withNovelty(HouseholdProfile.Novelty.ADVENTUROUS).promptSentences());
+        assertTrue(joined, joined.contains("ostre"));
+        assertTrue(joined, joined.contains("lekkie"));
+        assertTrue(joined, joined.contains("oszczędnie"));
+        assertTrue(joined, joined.contains("nowych smaków"));
+
+        String other = joined(HouseholdProfile.empty()
+                .withSpice(HouseholdProfile.SpiceLevel.MILD)
+                .withStyle(HouseholdProfile.MealStyle.HEARTY)
+                .withBudget(HouseholdProfile.Budget.GENEROUS)
+                .withNovelty(HouseholdProfile.Novelty.CLASSICS).promptSentences());
+        assertTrue(other, other.contains("łagodnie"));
+        assertTrue(other, other.contains("sycące"));
+        assertTrue(other, other.contains("droższe"));
+        assertTrue(other, other.contains("klasyki"));
+    }
+
+    @Test
+    public void srodkoweOdpowiedziNowychPytanNieDodajaZdanIProfilNieJestPusty() {
+        HouseholdProfile profile = HouseholdProfile.empty()
+                .withSpice(HouseholdProfile.SpiceLevel.MEDIUM)
+                .withStyle(HouseholdProfile.MealStyle.BALANCED)
+                .withBudget(HouseholdProfile.Budget.MODERATE)
+                .withNovelty(HouseholdProfile.Novelty.MIXED);
+        assertTrue(profile.promptSentences().isEmpty());
+        assertFalse(profile.isEmpty());
+        assertEquals(HouseholdProfile.SpiceLevel.MEDIUM,
+                profile.withAudience(HouseholdProfile.Audience.WITH_CHILDREN).getSpice());
+    }
+
+    @Test
     public void maloCzasuDodajeZdanieOSzybkichDaniach() {
         String joined = joined(HouseholdProfile.empty()
                 .withTime(HouseholdProfile.CookingTime.QUICK)
