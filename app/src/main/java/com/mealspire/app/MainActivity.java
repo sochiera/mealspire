@@ -922,11 +922,12 @@ public class MainActivity extends Activity {
             planSurvey();
             return;
         }
-        java.util.Map<String, String> details = surveyDetailsByTitle();
+        Recipe[][] catalog = surveyCatalog(); // decoded once per screen
+        java.util.Map<String, String> details = surveyDetailsByTitle(catalog);
         // Pairs are planned from the active catalog only (not the cookbook, which may keep old names).
         java.util.Set<String> catalogTitles = new java.util.HashSet<>();
-        for (int i = 0; i < MEAL_TYPES.length; i++) {
-            for (Recipe recipe : backendStore.forMeal(i)) {
+        for (Recipe[] meal : catalog) {
+            for (Recipe recipe : meal) {
                 catalogTitles.add(recipe.getTitle());
             }
         }
@@ -963,9 +964,21 @@ public class MainActivity extends Activity {
 
     /** Dish details for the survey's pairs: the shared catalog plus the cookbook. */
     private java.util.Map<String, String> surveyDetailsByTitle() {
+        return surveyDetailsByTitle(surveyCatalog());
+    }
+
+    private Recipe[][] surveyCatalog() {
+        Recipe[][] catalog = new Recipe[MEAL_TYPES.length][];
+        for (int i = 0; i < catalog.length; i++) {
+            catalog[i] = backendStore.forMeal(i);
+        }
+        return catalog;
+    }
+
+    private java.util.Map<String, String> surveyDetailsByTitle(Recipe[][] catalog) {
         java.util.Map<String, String> details = BuiltInRecipes.detailsByTitle(cookbook);
-        for (int i = 0; i < MEAL_TYPES.length; i++) {
-            for (Recipe recipe : backendStore.forMeal(i)) {
+        for (Recipe[] meal : catalog) {
+            for (Recipe recipe : meal) {
                 if (!details.containsKey(recipe.getTitle())) {
                     details.put(recipe.getTitle(), recipe.getDetails());
                 }
