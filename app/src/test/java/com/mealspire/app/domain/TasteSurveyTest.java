@@ -145,6 +145,14 @@ public class TasteSurveyTest {
     }
 
     @Test
+    public void odpowiedzPrzedPozycjaPoCofnijLiczySieJakoOdpowiedz() {
+        TasteSurvey back = survey().answer(TasteSurvey.CHOICE_B).back();
+        assertEquals(0, back.position());
+        assertTrue(back.hasAnswers());
+        assertFalse(survey().hasAnswers());
+    }
+
+    @Test
     public void danieBezSkladnikowNiePrzechodziPrzezWykluczenieDiety() {
         DietConstraints noLactose = DietConstraints.of(Collections.singletonList(
                 DietConstraints.Exclusion.NO_LACTOSE));

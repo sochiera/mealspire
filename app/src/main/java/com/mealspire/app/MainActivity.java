@@ -912,7 +912,7 @@ public class MainActivity extends Activity {
      * that, only the pairs still ahead that break the diet are dropped.
      * Pairs ahead with a dish missing from the current catalog (a name saved
      * before an update renamed it) are dropped the same way — or the survey
-     * is replanned when nothing was answered yet — so a stale name is never shown
+     * is replanned when it has no answer at all — so a stale name is never shown
      * and never slips past the diet unchecked.
      */
     private void ensureSurvey() {
@@ -932,7 +932,7 @@ public class MainActivity extends Activity {
             }
         }
         TasteSurvey current = survey.withoutUnknownDishes(catalogTitles);
-        if (current != survey && current.position() == 0) {
+        if (current != survey && current.committed() == 0 && !current.hasAnswers()) {
             planSurvey();
             return;
         }
@@ -945,10 +945,7 @@ public class MainActivity extends Activity {
     }
 
     private void planSurvey() {
-        Recipe[][] pools = new Recipe[MEAL_TYPES.length][];
-        for (int i = 0; i < pools.length; i++) {
-            pools[i] = backendStore.forMeal(i);
-        }
+        Recipe[][] pools = surveyCatalog();
         saveSurvey(TasteSurvey.start(surveyPlanner.plan(pools, householdProfile.getDiet(),
                 appSettings.loadSurveyLength(), random), surveyDietKey()));
     }
@@ -968,11 +965,7 @@ public class MainActivity extends Activity {
     }
 
     private Recipe[][] surveyCatalog() {
-        Recipe[][] catalog = new Recipe[MEAL_TYPES.length][];
-        for (int i = 0; i < catalog.length; i++) {
-            catalog[i] = backendStore.forMeal(i);
-        }
-        return catalog;
+        return backendStore.catalog(MEAL_TYPES.length);
     }
 
     private java.util.Map<String, String> surveyDetailsByTitle(Recipe[][] catalog) {

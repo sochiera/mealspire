@@ -53,4 +53,15 @@ public final class SharedPreferencesBackendStore implements BackendClient.Config
         try { return BackendCodec.catalog(BackendCodec.response(prefs.getString("catalog", "")))[meal]; }
         catch (IOException | JSONException | IndexOutOfBoundsException e) { return BuiltInRecipes.forMeal(meal); }
     }
+    /** All meals from one decode of the cached catalog (built-in pool when there is none). */
+    public Recipe[][] catalog(int meals) {
+        Recipe[][] result = new Recipe[meals][];
+        try {
+            Recipe[][] cached = BackendCodec.catalog(BackendCodec.response(prefs.getString("catalog", "")));
+            for (int i = 0; i < meals; i++) result[i] = cached[i];
+        } catch (IOException | JSONException | IndexOutOfBoundsException e) {
+            for (int i = 0; i < meals; i++) result[i] = BuiltInRecipes.forMeal(i);
+        }
+        return result;
+    }
 }

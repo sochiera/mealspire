@@ -145,6 +145,16 @@ public final class TasteSurvey {
                 ? new TasteSurvey(pairs, answers, position - 1, committed, dietKey) : this;
     }
 
+    /** Czy jest choć jedna odpowiedź (także przed bieżącą pozycją po „Cofnij"). */
+    public boolean hasAnswers() {
+        for (int answer : answers) {
+            if (answer != NOT_ANSWERED) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Wybrane dania z odpowiedzi czekających na zapis (kolejność odpowiedzi). */
     public List<String> pendingPicks() {
         return picks(committed, position);

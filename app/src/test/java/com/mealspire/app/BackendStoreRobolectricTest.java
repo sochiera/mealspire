@@ -72,6 +72,12 @@ public class BackendStoreRobolectricTest {
         try { store.cache(store.baseUrl(), rolledBack); fail(); } catch (java.io.IOException expected) { }
         assertEquals("Nowe danie 0", new SharedPreferencesBackendStore(context).forMeal(0)[0].getTitle());
     }
+    @Test public void wholeCatalogMatchesPerMealReads() throws Exception {
+        SharedPreferencesBackendStore store = new SharedPreferencesBackendStore(context);
+        assertEquals(BuiltInRecipes.forMeal(2)[0].getTitle(), store.catalog(3)[2][0].getTitle());
+        store.cache(store.baseUrl(), catalog());
+        assertEquals("Nowe danie 2", store.catalog(3)[2][0].getTitle());
+    }
     @Test public void catalogCachedBeforeDishRenameIsDroppedAtStartup() throws Exception {
         context.getSharedPreferences("mealspire_backend", Context.MODE_PRIVATE).edit().clear()
                 .putString("url", BackendClient.DEFAULT_BASE_URL).putString("catalog", catalog().toString())
