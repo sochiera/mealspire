@@ -971,6 +971,17 @@ public class MainActivity extends Activity {
         return surveyDetailsByTitle(surveySnapshot != null ? surveySnapshot : surveyCatalog());
     }
 
+    /** Details of the active catalog only (no cookbook): what a survey pair may show. */
+    private java.util.Map<String, String> surveyCatalogDetails() {
+        java.util.Map<String, String> details = new java.util.HashMap<>();
+        for (Recipe[] meal : surveySnapshot != null ? surveySnapshot : surveyCatalog()) {
+            for (Recipe recipe : meal) {
+                details.put(recipe.getTitle(), recipe.getDetails());
+            }
+        }
+        return details;
+    }
+
     private Recipe[][] surveyCatalog() {
         return backendStore.catalog(MEAL_TYPES.length);
     }
@@ -1225,7 +1236,8 @@ public class MainActivity extends Activity {
 
     /** One step back in the quiz: the previous pair, question, or out of a standalone survey. */
     private void previousOnboardingStep() {
-        if (onboardingStep == SURVEY_STEP && survey != null && survey.canGoBack()) {
+        if (onboardingStep == SURVEY_STEP && survey != null
+                && survey.canGoBack(householdProfile.getDiet(), surveyCatalogDetails())) {
             saveSurvey(survey.back());
         } else if (onboardingStep == SURVEY_STEP && surveyOnly) {
             endOnboarding();

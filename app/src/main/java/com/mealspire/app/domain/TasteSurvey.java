@@ -140,6 +140,21 @@ public final class TasteSurvey {
         return position > committed;
     }
 
+    /**
+     * „Cofnij" z kontrolą poprzedniej pary: oba dania muszą być w aktualnym
+     * katalogu ({@code catalogDetails}) i spełniać dietę. Para sprzed zmiany nazw
+     * lub sprzed zmiany wykluczeń zachowuje odpowiedź, ale nie wraca na ekran.
+     */
+    public boolean canGoBack(DietConstraints diet, Map<String, String> catalogDetails) {
+        if (!canGoBack()) {
+            return false;
+        }
+        Pair previous = pairs.get(position - 1);
+        return catalogDetails.containsKey(previous.dishA) && catalogDetails.containsKey(previous.dishB)
+                && allows(diet, previous.dishA, catalogDetails)
+                && allows(diet, previous.dishB, catalogDetails);
+    }
+
     public TasteSurvey back() {
         return canGoBack()
                 ? new TasteSurvey(pairs, answers, position - 1, committed, dietKey) : this;

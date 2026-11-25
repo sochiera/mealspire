@@ -29,8 +29,13 @@ public final class SharedPreferencesBackendStore implements BackendClient.Config
     public boolean serverNoticeShown() { return prefs.getBoolean("server_notice", false); }
     public void markServerNoticeShown() { prefs.edit().putBoolean("server_notice", true).apply(); }
     public boolean needsCatalog() { return System.currentTimeMillis()-prefs.getLong("catalog_time", 0) > 86400000; }
-    public synchronized void cache(String expectedUrl, JSONObject data) throws IOException {
+    /** Shared by all instances (same preferences file): revision check and write are one step. */
+    private static final Object CATALOG_LOCK = new Object();
+    public void cache(String expectedUrl, JSONObject data) throws IOException {
         try { BackendCodec.catalog(data); } catch (JSONException e) { throw new IOException("Nieprawidłowy katalog.", e); }
+        synchronized (CATALOG_LOCK) { cacheChecked(expectedUrl, data); }
+    }
+    private void cacheChecked(String expectedUrl, JSONObject data) throws IOException {
         // A server older than this build's dish names (e.g. a backend rollback) would bring old names back:
         // keep the current cache or built-in pool instead.
         // Nor older than the catalog already cached (a newer server catalog survives a later rollback).

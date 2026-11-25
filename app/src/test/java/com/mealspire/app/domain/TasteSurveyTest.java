@@ -153,6 +153,28 @@ public class TasteSurveyTest {
     }
 
     @Test
+    public void cofnijNieWracaNaPareSpozaKataloguAniSprzecznaZDieta() {
+        Map<String, String> catalog = new HashMap<>();
+        catalog.put("Rosół", "Składniki: kurczak, marchew.");
+        catalog.put("Pierogi ruskie", "Składniki: ziemniaki, twaróg, masło.");
+        catalog.put("Sałatka grecka", "Składniki: pomidor, ogórek, oliwki.");
+        DietConstraints none = DietConstraints.empty();
+        DietConstraints noLactose = DietConstraints.of(Collections.singletonList(
+                DietConstraints.Exclusion.NO_LACTOSE));
+
+        TasteSurvey stale = TasteSurvey.start(Arrays.asList(
+                new TasteSurvey.Pair("Pierogi z serem i ziemniakami", "Rosół"),
+                new TasteSurvey.Pair("Rosół", "Sałatka grecka")), "[]").answer(TasteSurvey.CHOICE_A);
+        assertFalse("stara nazwa nie wraca", stale.canGoBack(none, catalog));
+
+        TasteSurvey dairy = TasteSurvey.start(Arrays.asList(
+                new TasteSurvey.Pair("Pierogi ruskie", "Rosół"),
+                new TasteSurvey.Pair("Rosół", "Sałatka grecka")), "[]").answer(TasteSurvey.CHOICE_A);
+        assertTrue(dairy.canGoBack(none, catalog));
+        assertFalse("para łamiąca dietę nie wraca", dairy.canGoBack(noLactose, catalog));
+    }
+
+    @Test
     public void danieBezSkladnikowNiePrzechodziPrzezWykluczenieDiety() {
         DietConstraints noLactose = DietConstraints.of(Collections.singletonList(
                 DietConstraints.Exclusion.NO_LACTOSE));
