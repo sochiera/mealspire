@@ -320,6 +320,8 @@ public class MainActivity extends Activity {
     // więc „Cofnij" podmienia wybór zamiast dokładać polubienia.
     private final TasteSurveyPlanner surveyPlanner = new TasteSurveyPlanner();
     private TasteSurveyStore surveyStore;
+    /** Catalog read by the last {@link #ensureSurvey()} (one decode per survey screen). */
+    private Recipe[][] surveySnapshot;
     private TasteSurvey survey;
     // Ankieta otwarta z ekranu startowego/menu, poza quizem: bez pytań profilu
     // i jednorazowych dialogów startowych.
@@ -916,13 +918,15 @@ public class MainActivity extends Activity {
      * and never slips past the diet unchecked.
      */
     private void ensureSurvey() {
+        // One catalog snapshot per survey screen: planning, pruning and rendering see the same dishes.
+        surveySnapshot = surveyCatalog();
         String dietKey = surveyDietKey();
         if (survey == null || survey.isFinished()
                 || (!dietKey.equals(survey.dietKey()) && survey.committed() == 0)) {
             planSurvey();
             return;
         }
-        Recipe[][] catalog = surveyCatalog(); // decoded once per screen
+        Recipe[][] catalog = surveySnapshot;
         java.util.Map<String, String> details = surveyDetailsByTitle(catalog);
         // Pairs are planned from the active catalog only (not the cookbook, which may keep old names).
         java.util.Set<String> catalogTitles = new java.util.HashSet<>();
@@ -945,7 +949,7 @@ public class MainActivity extends Activity {
     }
 
     private void planSurvey() {
-        Recipe[][] pools = surveyCatalog();
+        Recipe[][] pools = surveySnapshot != null ? surveySnapshot : surveyCatalog();
         saveSurvey(TasteSurvey.start(surveyPlanner.plan(pools, householdProfile.getDiet(),
                 appSettings.loadSurveyLength(), random), surveyDietKey()));
     }
@@ -959,9 +963,12 @@ public class MainActivity extends Activity {
         surveyStore.save(updated);
     }
 
-    /** Dish details for the survey's pairs: the shared catalog plus the cookbook. */
+    /**
+     * Dish details for the survey's pairs: the active catalog wins (pairs come only from it, so
+     * diet checks and option texts use its ingredients); the cookbook covers earlier picks.
+     */
     private java.util.Map<String, String> surveyDetailsByTitle() {
-        return surveyDetailsByTitle(surveyCatalog());
+        return surveyDetailsByTitle(surveySnapshot != null ? surveySnapshot : surveyCatalog());
     }
 
     private Recipe[][] surveyCatalog() {
@@ -972,9 +979,7 @@ public class MainActivity extends Activity {
         java.util.Map<String, String> details = BuiltInRecipes.detailsByTitle(cookbook);
         for (Recipe[] meal : catalog) {
             for (Recipe recipe : meal) {
-                if (!details.containsKey(recipe.getTitle())) {
-                    details.put(recipe.getTitle(), recipe.getDetails());
-                }
+                details.put(recipe.getTitle(), recipe.getDetails());
             }
         }
         return details;
