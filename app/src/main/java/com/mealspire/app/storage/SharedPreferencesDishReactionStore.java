@@ -10,7 +10,7 @@ import com.mealspire.app.domain.DishReactionStore;
 /** {@link DishReactionStore} backed by {@link SharedPreferences}; stays on the phone. */
 public final class SharedPreferencesDishReactionStore implements DishReactionStore {
 
-    private static final String PREFS_NAME = "mealspire_reactions";
+    static final String PREFS_NAME = "mealspire_reactions";
     private static final String KEY_REACTIONS = "dish_reactions_json";
 
     private final SharedPreferences sharedPreferences;

@@ -13,7 +13,7 @@ import com.mealspire.app.domain.UserPreferences;
  */
 public final class SharedPreferencesPreferenceStore implements PreferenceStore {
 
-    private static final String PREFS_NAME = "mealspire_preferences";
+    static final String PREFS_NAME = "mealspire_preferences";
     private static final String KEY_PREFERENCES = "user_preferences_json";
 
     private final SharedPreferences sharedPreferences;

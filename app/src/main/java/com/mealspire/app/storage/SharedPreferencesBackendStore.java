@@ -11,18 +11,29 @@ import org.json.*;
  * Also holds the ready (pre-rated) dish pool per meal, see {@link ReadyDishPool}.
  */
 public final class SharedPreferencesBackendStore implements BackendClient.Configuration {
+    static final String PREFS_NAME = "mealspire_backend";
+    private static final String KEY_URL = "url";
+    private static final String KEY_NOTICE = "server_notice";
     private final SharedPreferences prefs;
     private final String endpoint;
     public SharedPreferencesBackendStore(Context context) { this(context, BackendClient.DEFAULT_BASE_URL); }
     public SharedPreferencesBackendStore(Context context, String endpoint) {
-        prefs = context.getApplicationContext().getSharedPreferences("mealspire_backend", Context.MODE_PRIVATE);
+        prefs = context.getApplicationContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         this.endpoint = BackendClient.validateUrl(endpoint);
-        if (!this.endpoint.equals(prefs.getString("url", null))) prefs.edit().clear().putString("url", this.endpoint).apply();
+        if (!this.endpoint.equals(prefs.getString(KEY_URL, null))) prefs.edit().clear().putString(KEY_URL, this.endpoint).apply();
     }
     @Override public String baseUrl() { return endpoint; }
     /** One-time notice that AI goes through the Mealspire server (reset with the endpoint). */
-    public boolean serverNoticeShown() { return prefs.getBoolean("server_notice", false); }
-    public void markServerNoticeShown() { prefs.edit().putBoolean("server_notice", true).apply(); }
+    public boolean serverNoticeShown() { return prefs.getBoolean(KEY_NOTICE, false); }
+    public void markServerNoticeShown() { prefs.edit().putBoolean(KEY_NOTICE, true).apply(); }
+    /** Drops the catalog and every ready pool, while keeping the existing AI consent. */
+    static boolean reset(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        boolean consent = BackendClient.DEFAULT_BASE_URL.equals(prefs.getString(KEY_URL, null))
+                && prefs.getBoolean(KEY_NOTICE, false);
+        return prefs.edit().clear().putString(KEY_URL, BackendClient.DEFAULT_BASE_URL)
+                .putBoolean(KEY_NOTICE, consent).commit();
+    }
     public boolean needsCatalog() { return System.currentTimeMillis()-prefs.getLong("catalog_time", 0) > 86400000; }
     public synchronized void cache(String expectedUrl, JSONObject data) throws IOException {
         try { BackendCodec.catalog(data); } catch (JSONException e) { throw new IOException("Nieprawidłowy katalog.", e); }

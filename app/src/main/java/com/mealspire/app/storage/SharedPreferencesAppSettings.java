@@ -13,7 +13,7 @@ import com.mealspire.app.domain.TasteSurvey;
  */
 public final class SharedPreferencesAppSettings implements AppSettings {
 
-    private static final String PREFS_NAME = "mealspire_settings";
+    static final String PREFS_NAME = "mealspire_settings";
     private static final String KEY_DEFAULT_SERVINGS = "default_servings";
     private static final String KEY_SERVINGS_CHOSEN = "servings_chosen";
     private static final String KEY_ONBOARDING_DONE = "onboarding_done";

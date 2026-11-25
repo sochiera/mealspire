@@ -93,8 +93,9 @@ nie nadpisuj katalogów homepage/ew/PBN. `MEALSPIRE_PORT` wybiera osobny port
 loopback (domyślnie 8794); sprawdź, czy jest wolny. Start przez `bin/backend`
 wymaga JRE 17 i JAVA_HOME. Bind inny niż loopback jest odrzucany.
 Nie loguj nagłówków, tokenów, treści żądań/odpowiedzi ani pełnych błędów OpenAI.
-Serwis jest bezstanowy na dysku; ocena gustu ma ograniczony cache w RAM
-(256 wpisów, 15 min, klucz SHA-256 z tokenu/modelu/preferencji/diety). Restart czyści cache.
+Serwis nie przechowuje danych użytkownika między żądaniami. Wdrożenie
+wersji bez cache oceny gustu usuwa dane z RAM poprzedniego procesu przy restarcie.
+Obsługę resetu w kliencie wydawaj po wdrożeniu tej wersji backendu.
 
 Przed wystawieniem API wymagany jest osobny zatwierdzony reverse proxy TLS:
 oddzielna domena/vhost, certyfikat, limit body 256 KiB, timeout request body 10s,

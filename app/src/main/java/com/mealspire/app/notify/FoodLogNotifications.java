@@ -8,11 +8,13 @@ import android.app.RemoteInput;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.drawable.Icon;
+import android.net.Uri;
 import android.os.Build;
 
 import com.mealspire.app.MainActivity;
 import com.mealspire.app.R;
 import com.mealspire.app.domain.FoodLogReminder;
+import com.mealspire.app.storage.MealspireDataReset;
 import com.mealspire.app.ui.Ui;
 
 /**
@@ -122,6 +124,10 @@ public final class FoodLogNotifications {
     private static PendingIntent replyIntent(Context context) {
         Intent reply = new Intent(context, FoodLogReceiver.class);
         reply.setAction(FoodLogReceiver.ACTION_REPLY);
+        long generation = MealspireDataReset.generation(context);
+        // Different generations must have different PendingIntent identities.
+        reply.setData(Uri.parse("mealspire:food-log-reply/" + generation));
+        reply.putExtra(FoodLogReceiver.EXTRA_DATA_GENERATION, generation);
         // The system writes the typed text into the intent, so it must stay mutable.
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

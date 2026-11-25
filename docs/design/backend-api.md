@@ -36,7 +36,9 @@ Pola opcjonalne mają puste wartości; nieznane pola są ignorowane. `choices`
 to aktualne wybory UI (np. porcja); sygnały eksploracji i antymonotonii pozostają
 kompatybilne z lokalnym dziennikiem. Profil LLM online liczony jest na VPS
 z polubień/diety; wynik zastępuje lokalne zdania profilu przy propozycjach.
-Cache oceny gustu ogranicza powtórne inferencje. Server waliduje dietę i
+Ocena gustu powstaje z bieżącego żądania. Backend nie przechowuje ocen ani
+danych użytkownika między żądaniami i nie synchronizuje lokalnych magazynów.
+Serwer waliduje dietę i
 uzupełnia brakujące propozycje bez kolejnego wywołania LLM; gotowy przepis
 naruszający dietę zwraca 422. Nieznane wykluczenie diety zwraca 400,
 aby nigdy nie zignorować wymagania nowszego klienta.

@@ -1,12 +1,15 @@
 package com.mealspire.app;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import android.app.AlertDialog;
 import android.content.Context;
+import android.os.Looper;
 import android.widget.Button;
 import android.widget.TextView;
 
@@ -35,6 +38,10 @@ import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
+import org.robolectric.android.controller.ActivityController;
+import org.robolectric.shadows.ShadowAlertDialog;
+
+import static org.robolectric.Shadows.shadowOf;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -97,6 +104,49 @@ public class TasteSurveyRobolectricTest {
             dishes.add(reaction.getDish());
         }
         return dishes;
+    }
+
+    @Test
+    public void resetWTrakcieAnkietyAnulowanieILogowanie() {
+        SharedPreferencesAppSettings settings = new SharedPreferencesAppSettings(context);
+        settings.saveSurveyLength(80);
+        SharedPreferencesChatGptSessionStore account =
+                new SharedPreferencesChatGptSessionStore(context);
+        account.save(new ChatGptSession("client", "access", "refresh", "id", Long.MAX_VALUE,
+                "subject", "email", "gpt-6-luna", "gpt-6.1-sol"));
+        String savedSession = account.load().toJson();
+        String hostId = account.hostId();
+
+        ActivityController<MainActivity> controller = Robolectric.buildActivity(MainActivity.class).setup();
+        MainActivity activity = controller.get();
+        answerProfileQuestions(activity);
+        click(activity, R.id.onboarding_option_1);
+        click(activity, R.id.onboarding_option_2);
+        SharedPreferencesTasteSurveyStore surveyStore =
+                new SharedPreferencesTasteSurveyStore(context);
+        String pair = text(activity, R.id.onboarding_option_1);
+        assertEquals("Porównanie 3 z 80", text(activity, R.id.survey_progress));
+        assertEquals(2, surveyStore.load().position());
+
+        click(activity, R.id.reset_data_button);
+        ShadowAlertDialog.getLatestAlertDialog().getButton(AlertDialog.BUTTON_NEGATIVE).performClick();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(pair, text(activity, R.id.onboarding_option_1));
+        assertEquals(2, surveyStore.load().position());
+
+        click(activity, R.id.reset_data_button);
+        ShadowAlertDialog.getLatestAlertDialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertNull(surveyStore.load());
+        assertFalse(settings.isOnboardingDone());
+        assertEquals(savedSession, account.load().toJson());
+        assertEquals(hostId, account.hostId());
+        assertTrue(likes().isEmpty());
+
+        MainActivity fresh = controller.get();
+        assertTrue(activity.isDestroyed());
+        assertNull(fresh.findViewById(R.id.survey_progress));
+        assertEquals("Dla kogo gotujesz?", text(fresh, R.id.onboarding_question));
     }
 
     @Test

@@ -15,7 +15,7 @@ import com.mealspire.app.domain.TasteEventStore;
  */
 public final class SharedPreferencesTasteEventStore implements TasteEventStore {
 
-    private static final String PREFS_NAME = "mealspire_taste_events";
+    static final String PREFS_NAME = "mealspire_taste_events";
     private static final String KEY_EVENTS = "taste_events_json";
     private static final String KEY_AGGREGATE = "taste_aggregate_json";
 

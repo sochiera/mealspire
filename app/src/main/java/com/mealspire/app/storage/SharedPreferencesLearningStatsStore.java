@@ -10,7 +10,7 @@ import com.mealspire.app.domain.LearningStatsStore;
 /** {@link LearningStatsStore} oparty na {@link SharedPreferences}. */
 public final class SharedPreferencesLearningStatsStore implements LearningStatsStore {
 
-    private static final String PREFS_NAME = "mealspire_learning_stats";
+    static final String PREFS_NAME = "mealspire_learning_stats";
     private static final String KEY_STATS = "learning_stats_json";
 
     private final SharedPreferences sharedPreferences;

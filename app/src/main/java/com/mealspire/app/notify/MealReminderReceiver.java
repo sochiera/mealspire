@@ -15,6 +15,7 @@ import com.mealspire.app.domain.Recipe;
 import com.mealspire.app.domain.TasteProfile;
 import com.mealspire.app.domain.TasteProfiler;
 import com.mealspire.app.domain.UserPreferences;
+import com.mealspire.app.storage.MealspireDataReset;
 import com.mealspire.app.storage.SharedPreferencesCookbookStore;
 import com.mealspire.app.storage.SharedPreferencesHouseholdProfileStore;
 import com.mealspire.app.storage.SharedPreferencesMealHistoryStore;
@@ -43,7 +44,7 @@ public final class MealReminderReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         int mealIndex = intent != null ? intent.getIntExtra(EXTRA_MEAL_INDEX, -1) : -1;
         MealSlot slot = MealSlot.byMealIndex(mealIndex);
-        if (slot == null) {
+        if (slot == null || MealspireDataReset.isPending(context)) {
             return;
         }
 

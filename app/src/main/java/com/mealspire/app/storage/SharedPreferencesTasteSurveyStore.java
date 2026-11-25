@@ -10,7 +10,7 @@ import com.mealspire.app.domain.TasteSurveyStore;
 /** {@link TasteSurveyStore} backed by {@link SharedPreferences}; stays on the phone. */
 public final class SharedPreferencesTasteSurveyStore implements TasteSurveyStore {
 
-    private static final String PREFS_NAME = "mealspire_taste_survey";
+    static final String PREFS_NAME = "mealspire_taste_survey";
     private static final String KEY_SURVEY = "taste_survey_json";
 
     private final SharedPreferences sharedPreferences;

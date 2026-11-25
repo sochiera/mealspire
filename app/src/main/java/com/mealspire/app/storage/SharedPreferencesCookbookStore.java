@@ -13,7 +13,7 @@ import com.mealspire.app.domain.CookbookStore;
  */
 public final class SharedPreferencesCookbookStore implements CookbookStore {
 
-    private static final String PREFS_NAME = "mealspire_cookbook";
+    static final String PREFS_NAME = "mealspire_cookbook";
     private static final String KEY_COOKBOOK = "cookbook_json";
 
     private final SharedPreferences sharedPreferences;

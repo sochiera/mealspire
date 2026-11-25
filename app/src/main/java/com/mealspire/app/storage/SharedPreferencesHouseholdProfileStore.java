@@ -13,7 +13,7 @@ import com.mealspire.app.domain.HouseholdProfileStore;
  */
 public final class SharedPreferencesHouseholdProfileStore implements HouseholdProfileStore {
 
-    private static final String PREFS_NAME = "mealspire_household";
+    static final String PREFS_NAME = "mealspire_household";
     private static final String KEY_PROFILE = "household_profile_json";
 
     private final SharedPreferences sharedPreferences;
