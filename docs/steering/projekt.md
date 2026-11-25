@@ -179,6 +179,16 @@ Wszystkie teksty w UI i promptach są po polsku.
 - Intent z powiadomienia konsumuje `EXTRA_MEAL_INDEX` (`removeExtra`), żeby
   ponowne dostarczenie intentu nie wymuszało wyboru posiłku. Przy nieukończonym
   onboardingu posiłek czeka w `pendingMealIndex` i otwiera się po quizie.
+- Powrót z logowania ChatGPT: Android zamraża aplikację w tle, więc
+  przekierowanie na loopback może czekać w kolejce gniazda, aż użytkownik
+  wróci, a przeglądarka zdąży pokazać własny błąd. `LoopbackCallbackServer`
+  odbiera callback z kolejki przed upływem limitu. Błąd zapisu strony do
+  przeglądarki (broken pipe) nie unieważnia odebranego przekierowania. Limit
+  obejmuje oczekiwanie na callback i wymianę kodu. Jego upływ zamyka nasłuch
+  wraz z przyjętym połączeniem. Tylko bieżąca próba może otworzyć przeglądarkę,
+  zapisać zweryfikowaną sesję i zakończyć oczekiwanie. Błąd bieżącej próby
+  pokazuje dialog „Spróbuj ponownie”. Ponowny start zamyka poprzedni nasłuch.
+  `onResume` odświeża chip z magazynu sesji.
 - Systemowe „Cofnij": `MainActivity.onBackPressed()` + czysta decyzja w
   `BackNavigation` (przepis → propozycje → start → wyjście; w quizie poprzednie
   pytanie, z pierwszego jak „Pomiń"). Przepis spoza propozycji (import przez
