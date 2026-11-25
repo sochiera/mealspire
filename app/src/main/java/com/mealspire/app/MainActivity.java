@@ -910,15 +910,29 @@ public class MainActivity extends Activity {
      * moments earlier already filter the pairs. A diet change before anything
      * was saved replans (dropping answers that may now be invalid); after
      * that, only the pairs still ahead that break the diet are dropped.
+     * Pairs ahead with a dish missing from the current catalog (a name saved
+     * before an update renamed it) are dropped the same way — or the survey
+     * is replanned when nothing was answered yet — so a stale name is never shown
+     * and never slips past the diet unchecked.
      */
     private void ensureSurvey() {
         String dietKey = surveyDietKey();
         if (survey == null || survey.isFinished()
                 || (!dietKey.equals(survey.dietKey()) && survey.committed() == 0)) {
             planSurvey();
-        } else if (!dietKey.equals(survey.dietKey())) {
-            saveSurvey(survey.withoutDisallowed(householdProfile.getDiet(),
-                    surveyDetailsByTitle(), dietKey));
+            return;
+        }
+        java.util.Map<String, String> details = surveyDetailsByTitle();
+        TasteSurvey current = survey.withoutUnknownDishes(details.keySet());
+        if (current != survey && current.position() == 0) {
+            planSurvey();
+            return;
+        }
+        if (!dietKey.equals(current.dietKey())) {
+            current = current.withoutDisallowed(householdProfile.getDiet(), details, dietKey);
+        }
+        if (current != survey) {
+            saveSurvey(current);
         }
     }
 

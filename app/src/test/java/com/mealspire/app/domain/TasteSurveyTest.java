@@ -107,4 +107,44 @@ public class TasteSurveyTest {
         assertEquals(1, survey.committed());
         assertEquals(Collections.singletonList(TasteSurvey.NOT_ANSWERED), survey.answers());
     }
+
+    @Test
+    public void paryZDaniemSprzedAktualizacjiOdpadajaPrzejrzaneZostaja() {
+        // Ankieta zapisana przed zmianą nazw: druga, nieprzejrzana para ma starą nazwę.
+        TasteSurvey saved = TasteSurvey.start(Arrays.asList(
+                new TasteSurvey.Pair("Pierogi z serem i ziemniakami", "Rosół"),
+                new TasteSurvey.Pair("Kanapki z pieczarkami duszonymi", "Rosół"),
+                new TasteSurvey.Pair("Rosół", "Pierogi ruskie")), "[]")
+                .answer(TasteSurvey.CHOICE_A).commit();
+        List<String> catalog = Arrays.asList("Rosół", "Pierogi ruskie",
+                "Kanapki z duszonymi pieczarkami");
+
+        TasteSurvey pruned = saved.withoutUnknownDishes(catalog);
+
+        assertEquals(2, pruned.size());
+        assertEquals("przejrzana para zostaje pod nazwą z odpowiedzi",
+                "Pierogi z serem i ziemniakami", pruned.pairs().get(0).getDishA());
+        assertEquals("Pierogi ruskie", pruned.current().getDishB());
+        assertEquals(1, pruned.committed());
+        assertTrue("bez zmian ta sama instancja",
+                pruned.withoutUnknownDishes(catalog) == pruned);
+    }
+
+    @Test
+    public void danieBezSkladnikowNiePrzechodziPrzezWykluczenieDiety() {
+        DietConstraints noLactose = DietConstraints.of(Collections.singletonList(
+                DietConstraints.Exclusion.NO_LACTOSE));
+        Map<String, String> details = new HashMap<>();
+        details.put("Rosół", "Składniki: kurczak, marchew.");
+        // Stara nazwa nie ma wpisu w katalogu — nie wiemy, że jest w niej masło.
+        TasteSurvey survey = TasteSurvey.start(Collections.singletonList(
+                new TasteSurvey.Pair("Kanapki z pieczarkami duszonymi", "Rosół")), "[]")
+                .withoutDisallowed(noLactose, details, "[NO_LACTOSE]");
+
+        assertEquals(0, survey.size());
+        assertEquals("bez wykluczeń nieznane danie nie jest blokowane", 1,
+                TasteSurvey.start(Collections.singletonList(
+                        new TasteSurvey.Pair("Nieznane", "Rosół")), "[]")
+                        .withoutDisallowed(DietConstraints.empty(), details, "[]").size());
+    }
 }

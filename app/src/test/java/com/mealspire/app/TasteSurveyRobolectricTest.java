@@ -150,6 +150,101 @@ public class TasteSurveyRobolectricTest {
         }
     }
 
+    /** Dania posiłku dozwolone przy diecie, z aktualnej wbudowanej puli. */
+    private static List<String> allowedDishes(int meal,
+                                              com.mealspire.app.domain.DietConstraints diet) {
+        List<String> result = new ArrayList<>();
+        for (Recipe recipe : com.mealspire.app.domain.BuiltInRecipes.forMeal(meal)) {
+            if (diet.allows(recipe.getTitle() + "\n" + recipe.getDetails())) {
+                result.add(recipe.getTitle());
+            }
+        }
+        return result;
+    }
+
+    @Test
+    public void poAktualizacjiZapisanaParaZeStaraNazwaNieOmijaWykluczeniaLaktozy() {
+        // Stan z 1.8: ankieta przerwana po jednej parze, dieta bez wykluczeń. Druga para
+        // ma starą nazwę dania z masłem; po aktualizacji użytkownik wyklucza laktozę.
+        com.mealspire.app.domain.DietConstraints noLactose =
+                com.mealspire.app.domain.DietConstraints.of(java.util.Collections.singletonList(
+                        com.mealspire.app.domain.DietConstraints.Exclusion.NO_LACTOSE));
+        new com.mealspire.app.storage.SharedPreferencesHouseholdProfileStore(context).save(
+                com.mealspire.app.domain.HouseholdProfile.empty().withDiet(noLactose));
+        List<String> supper = allowedDishes(2, noLactose);
+        List<TasteSurvey.Pair> pairs = new ArrayList<>();
+        pairs.add(new TasteSurvey.Pair("Pierogi z serem i ziemniakami", "Rosół", 1));
+        pairs.add(new TasteSurvey.Pair("Kanapki z pieczarkami duszonymi", supper.get(0), 2));
+        pairs.add(new TasteSurvey.Pair(supper.get(1), supper.get(2), 2));
+        new SharedPreferencesTasteSurveyStore(context).save(TasteSurvey.start(pairs, "[]")
+                .answer(TasteSurvey.CHOICE_A).commit());
+
+        MainActivity activity = launch();
+
+        assertEquals("para ze starą nazwą odpada, zostaje dozwolona", supper.get(1),
+                text(activity, R.id.onboarding_option_1));
+        assertEquals(supper.get(2), text(activity, R.id.onboarding_option_2));
+        assertEquals("Porównanie 2 z 2", text(activity, R.id.survey_progress));
+        TasteSurvey saved = new SharedPreferencesTasteSurveyStore(context).load();
+        for (TasteSurvey.Pair pair : saved.pairs().subList(saved.position(), saved.size())) {
+            assertNotEquals("Kanapki z pieczarkami duszonymi", pair.getDishA());
+            assertNotEquals("Kanapki z pieczarkami duszonymi", pair.getDishB());
+        }
+    }
+
+    @Test
+    public void poAktualizacjiBezZapisanychOdpowiedziAnkietaPlanujeSieOdNowaZNowymiNazwami() {
+        new SharedPreferencesAppSettings(context).saveSurveyLength(30);
+        List<TasteSurvey.Pair> pairs = new ArrayList<>();
+        pairs.add(new TasteSurvey.Pair("Pierogi z serem i ziemniakami", "Rosół", 1));
+        pairs.add(new TasteSurvey.Pair("Serek wiejski z warzywami na kanapki", "Omlet", 2));
+        new SharedPreferencesTasteSurveyStore(context).save(TasteSurvey.start(pairs, "[]"));
+
+        MainActivity activity = launch();
+
+        assertEquals("Porównanie 1 z 30", text(activity, R.id.survey_progress));
+        Set<String> catalog = com.mealspire.app.domain.BuiltInRecipes.detailsByTitle(null).keySet();
+        assertTrue(catalog.contains(text(activity, R.id.onboarding_option_1)));
+        assertTrue(catalog.contains(text(activity, R.id.onboarding_option_2)));
+    }
+
+    @Test
+    public void katalogZCacheSprzedAktualizacjiNiePokazujeStarychNazwTakzeBezLogowania()
+            throws JSONException {
+        // Katalog pobrany przez 1.8 (bez wersji nazw), świeży — bez sesji ChatGPT nie
+        // zostałby odświeżony. Po aktualizacji ankieta ma pokazać aktualne nazwy.
+        JSONArray meals = new JSONArray();
+        for (int meal = 0; meal < 3; meal++) {
+            JSONArray recipes = new JSONArray();
+            for (Recipe recipe : com.mealspire.app.domain.BuiltInRecipes.forMeal(meal)) {
+                String title = recipe.getTitle().equals("Pierogi ruskie")
+                        ? "Pierogi z serem i ziemniakami"
+                        : recipe.getTitle().equals("Kanapki z serkiem wiejskim i warzywami")
+                        ? "Serek wiejski z warzywami na kanapki" : recipe.getTitle();
+                recipes.put(BackendCodec.recipe(new Recipe(title, recipe.getDetails())));
+            }
+            meals.put(recipes);
+        }
+        context.getSharedPreferences("mealspire_backend", Context.MODE_PRIVATE).edit().clear()
+                .putString("url", com.mealspire.app.backend.BackendClient.DEFAULT_BASE_URL)
+                .putString("catalog", BackendCodec.envelope().put("meals", meals).toString())
+                .putLong("catalog_time", System.currentTimeMillis()).commit();
+        // Brak sesji ChatGPT: refreshCatalog nie pyta serwera, liczy się tylko cache.
+        new SharedPreferencesAppSettings(context).saveSurveyLength(30);
+        MainActivity activity = launch();
+        answerProfileQuestions(activity);
+
+        Set<String> shown = new HashSet<>();
+        for (int i = 0; i < 30; i++) {
+            shown.add(text(activity, R.id.onboarding_option_1));
+            shown.add(text(activity, R.id.onboarding_option_2));
+            click(activity, R.id.onboarding_option_none);
+        }
+
+        assertEquals(com.mealspire.app.domain.BuiltInRecipes.detailsByTitle(null).keySet(), shown);
+        assertTrue(new SharedPreferencesBackendStore(context).needsCatalog());
+    }
+
     @Test
     public void przerwanaAnkietaWznawiaSiePoPonownymUruchomieniu() {
         new SharedPreferencesAppSettings(context).saveSurveyLength(5);

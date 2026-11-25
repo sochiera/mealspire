@@ -17,6 +17,15 @@ import java.util.Map;
  */
 public final class BuiltInRecipes {
 
+    /**
+     * Wersja nazw dań we wspólnej puli (ta sama pula jest w katalogu backendu).
+     * Podbij przy zmianie nazw: katalog z cache zapisany pod inną wersją jest
+     * przy starcie odrzucany ({@code SharedPreferencesBackendStore}), więc
+     * aplikacja wraca do tej puli zamiast pokazywać stare nazwy. 2: naturalne
+     * polskie nazwy („Pierogi ruskie" itd.).
+     */
+    public static final int NAMES_REVISION = 2;
+
     private static final Recipe[][] MEALS = {
             {
                     new Recipe("Jajecznica",

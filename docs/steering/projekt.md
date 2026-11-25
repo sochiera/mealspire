@@ -49,7 +49,10 @@ Wszystkie teksty w UI i promptach są po polsku.
   inny wybór **podmieniał** polubienie; zapisanych odpowiedzi nie da się cofnąć.
   Potem `warmReadyPools()` (zmieniony podpis gustu). Zmiana diety przez „Cofnij"
   przed zapisem przelosowuje pary; po zapisie odpadają tylko dalsze pary
-  łamiące dietę. Przerwana ankieta: przycisk „Dokończ ankietę gustu" na
+  łamiące dietę. Dalsze pary z daniem spoza aktualnego katalogu (nazwa sprzed
+  zmiany nazw) też odpadają (`TasteSurvey.withoutUnknownDishes`), a ankieta bez
+  żadnej odpowiedzi planuje się od nowa; danie bez znanych składników nie
+  przechodzi przez żadne wykluczenie diety. Przerwana ankieta: przycisk „Dokończ ankietę gustu" na
   ekranie startowym i „Więcej…" → „Ankieta gustu" (tam też nowa o wybranej
   długości; tryb `surveyOnly` bez dialogów startowych). Flaga ukończenia w
   `AppSettings.isOnboardingDone()` jest niezależna od profilu; „Pomiń"/„Przerwij"
@@ -206,3 +209,21 @@ z wcześniejszej wersji dostaje raz dialog `SERVER_NOTICE_TITLE` (OK / wyloguj).
 AI rusza dopiero po OK; do tego czasu także start z powiadomienia działa offline.
 Zamknięcie dialogu nie zapamiętuje akceptacji. Po OK posiłek otwarty z powiadomienia
 jest ponownie dobierany przez AI, bez wpisywania adresu.
+
+## Zmiana nazw dań (zamierzone, ograniczone przerwanie zgodności)
+
+Dania są identyfikowane nazwą, bez migracji starych nazw (decyzja Jana przy
+„Naturalnych polskich nazwach dań", 1.9). Przy zmianie nazw we wspólnej puli
+(`BuiltInRecipes` = katalog backendu) podbij `BuiltInRecipes.NAMES_REVISION`
+i wdróż backend **przed** wydaniem APK. Po aktualizacji:
+
+- katalog z cache zapisany pod inną wersją jest przy starcie odrzucany
+  (`SharedPreferencesBackendStore`); do następnego pobrania (po zalogowaniu)
+  działa wbudowana pula z nowymi nazwami — także bez sesji;
+- zapisana ankieta: dalsze pary ze starą nazwą odpadają, przejrzane zostają;
+- historia (reakcje, „lubię", dziennik, `MealHistory`, gotowa pula) zostaje
+  pod starymi nazwami. Stara nazwa nie pasuje do nowej, więc: filtr „ostatnio
+  pokazane" (`RecentlyShownFilter`, 3 dni) może raz pokazać przemianowane danie
+  wcześniej, reakcje pod starą nazwą nie przenoszą się na nową, a wpisy gotowej
+  puli bez dania w katalogu po prostu odpadają przy pobraniu. Dieta zawsze
+  filtruje dania z aktualnego katalogu, więc to przerwanie nie omija wykluczeń.

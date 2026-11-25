@@ -7,7 +7,8 @@ import java.io.IOException;
 import org.json.*;
 /**
  * Last validated catalog survives outages. The endpoint is fixed (no user-entered address);
- * an empty or different address saved by an older version is replaced and its catalog dropped.
+ * an empty or different address saved by an older version is replaced and its catalog dropped,
+ * and so is a catalog cached under another {@link BuiltInRecipes#NAMES_REVISION}.
  * Also holds the ready (pre-rated) dish pool per meal, see {@link ReadyDishPool}.
  */
 public final class SharedPreferencesBackendStore implements BackendClient.Configuration {
@@ -18,6 +19,10 @@ public final class SharedPreferencesBackendStore implements BackendClient.Config
         prefs = context.getApplicationContext().getSharedPreferences("mealspire_backend", Context.MODE_PRIVATE);
         this.endpoint = BackendClient.validateUrl(endpoint);
         if (!this.endpoint.equals(prefs.getString("url", null))) prefs.edit().clear().putString("url", this.endpoint).apply();
+        // Catalog cached before a dish rename would keep old names (also with no session to refresh it):
+        // drop only the catalog; forMeal falls back to the built-in pool until the next validated fetch.
+        if (prefs.getInt("catalog_revision", 0) != BuiltInRecipes.NAMES_REVISION)
+            prefs.edit().remove("catalog").remove("catalog_time").putInt("catalog_revision", BuiltInRecipes.NAMES_REVISION).apply();
     }
     @Override public String baseUrl() { return endpoint; }
     /** One-time notice that AI goes through the Mealspire server (reset with the endpoint). */
@@ -26,7 +31,7 @@ public final class SharedPreferencesBackendStore implements BackendClient.Config
     public boolean needsCatalog() { return System.currentTimeMillis()-prefs.getLong("catalog_time", 0) > 86400000; }
     public synchronized void cache(String expectedUrl, JSONObject data) throws IOException {
         try { BackendCodec.catalog(data); } catch (JSONException e) { throw new IOException("Nieprawidłowy katalog.", e); }
-        if (expectedUrl.equals(baseUrl())) prefs.edit().putString("catalog", data.toString()).putLong("catalog_time", System.currentTimeMillis()).apply();
+        if (expectedUrl.equals(baseUrl())) prefs.edit().putString("catalog", data.toString()).putLong("catalog_time", System.currentTimeMillis()).putInt("catalog_revision", BuiltInRecipes.NAMES_REVISION).apply();
     }
     /**
      * Gotowa pula ocenionych dań posiłku — obok katalogu, bo trzyma tylko nazwy

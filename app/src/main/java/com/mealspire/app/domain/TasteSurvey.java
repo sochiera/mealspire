@@ -1,6 +1,7 @@
 package com.mealspire.app.domain;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -178,6 +179,27 @@ public final class TasteSurvey {
         return new TasteSurvey(keptPairs, keptAnswers, position, committed, newDietKey);
     }
 
+    /**
+     * Usuwa nieprzejrzane pary z daniem spoza aktualnego katalogu, np. zapisane
+     * pod nazwą sprzed aktualizacji (przemianowane dania). Takiego dania nie da
+     * się sprawdzić z dietą ani pokazać pod aktualną nazwą — para odpada, a
+     * przejrzane odpowiedzi zostają bez zmian. Bez zmian zwraca {@code this}.
+     */
+    public TasteSurvey withoutUnknownDishes(Collection<String> knownTitles) {
+        List<Pair> keptPairs = new ArrayList<>();
+        List<Integer> keptAnswers = new ArrayList<>();
+        for (int i = 0; i < pairs.size(); i++) {
+            Pair pair = pairs.get(i);
+            if (i < position || (knownTitles.contains(pair.dishA)
+                    && knownTitles.contains(pair.dishB))) {
+                keptPairs.add(pair);
+                keptAnswers.add(answers.get(i));
+            }
+        }
+        return keptPairs.size() == pairs.size() ? this
+                : new TasteSurvey(keptPairs, keptAnswers, position, committed, dietKey);
+    }
+
     private List<String> picks(int from, int to) {
         List<String> result = new ArrayList<>();
         for (int i = from; i < to; i++) {
@@ -197,7 +219,11 @@ public final class TasteSurvey {
             return true;
         }
         String details = detailsByTitle == null ? null : detailsByTitle.get(dish);
-        return diet.allows(dish + "\n" + (details == null ? "" : details));
+        if (details == null) {
+            // Bez składników nie da się potwierdzić diety — przy wykluczeniach odpada.
+            return diet.isEmpty();
+        }
+        return diet.allows(dish + "\n" + details);
     }
 
     private static int clamp(int value, int min, int max) {
