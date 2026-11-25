@@ -40,6 +40,7 @@ import android.widget.Toast;
 
 import com.mealspire.app.domain.ChatGptAccount;
 import com.mealspire.app.domain.ChatGptOAuth;
+import com.mealspire.app.domain.ChatGptSignInFlow;
 import com.mealspire.app.domain.AppSettings;
 import com.mealspire.app.domain.BackNavigation;
 import com.mealspire.app.domain.Cookbook;
@@ -218,6 +219,11 @@ public class MainActivity extends Activity {
     static final String SIGN_IN_MENU_LABEL = "Zaloguj się kontem ChatGPT";
     static final String MODEL_MENU_PREFIX = "Model AI: ";
     static final String SERVER_NOTICE_TITLE = "AI przez serwer Mealspire";
+    static final String SIGN_IN_FAILED_TITLE = "Logowanie do ChatGPT nie powiodło się";
+    static final String SIGN_IN_PENDING_TITLE = "Logowanie do ChatGPT trwa";
+    static final String SIGN_IN_RETRY_LABEL = "Spróbuj ponownie";
+    static final String SIGN_IN_RESTART_LABEL = "Zacznij od nowa";
+    static final String SIGN_IN_CHIP_LABEL = "Logowanie do ChatGPT…";
     private static final int SIGN_IN_TIMEOUT_MS = 5 * 60 * 1000;
 
     // Test seams (package-private, null in production): replace the network
@@ -239,8 +245,11 @@ public class MainActivity extends Activity {
     private Button moreButton;
 
     private ChatGptAccount chatGptAccount;
-    // Guards against a second browser sign-in while one is waiting for its redirect.
-    private volatile boolean chatGptSignInRunning;
+    // Which browser sign-in the user is waiting for; decides what a late result shows.
+    private final ChatGptSignInFlow signInFlow = new ChatGptSignInFlow();
+    // Loopback listener of the newest attempt; closed when the user starts again.
+    private LoopbackCallbackServer signInServer;
+    private AlertDialog signInFailureDialog;
     private RecipeOperations recipeService;
     private SharedPreferencesBackendStore backendStore;
     private BackendClient backendClient;
@@ -394,6 +403,7 @@ public class MainActivity extends Activity {
         servingsLabel.setOnClickListener(v -> showServingsDialog(true));
         chips.addView(servingsLabel, Ui.wrap());
         aiChip = new Button(this);
+        aiChip.setId(R.id.ai_chip);
         aiChip.setOnClickListener(v -> onAiChipTapped());
         LinearLayout.LayoutParams aiChipParams = Ui.wrap();
         aiChipParams.leftMargin = dp(8);
@@ -523,6 +533,8 @@ public class MainActivity extends Activity {
         String label;
         if (ai) {
             label = "AI · " + chatGptAccount.modelChoice().label;
+        } else if (signInFlow.isRunning()) {
+            label = SIGN_IN_CHIP_LABEL;
         } else {
             label = "Tryb offline";
         }
@@ -531,7 +543,9 @@ public class MainActivity extends Activity {
     }
 
     private void onAiChipTapped() {
-        if (!chatGptAccount.isSignedIn()) {
+        if (signInFlow.isRunning()) {
+            startChatGptSignIn();
+        } else if (!chatGptAccount.isSignedIn()) {
             offerChatGptSignIn();
         } else if (!backendStore.serverNoticeShown()) {
             showServerNotice();
@@ -554,6 +568,15 @@ public class MainActivity extends Activity {
             showServerNotice();
         }
         maybeRequestNotificationPermission();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Back from the browser: the stored session is the truth, whatever was on screen.
+        if (aiChip != null) {
+            updateAiChip();
+        }
     }
 
     @Override
@@ -806,16 +829,35 @@ public class MainActivity extends Activity {
 
     /**
      * Sign in with ChatGPT: a loopback listener catches the browser redirect,
-     * then the code is exchanged (PKCE) for the user's own tokens.
+     * then the code is exchanged (PKCE) for the user's own tokens. While one
+     * attempt waits, a second tap explains it and offers to start over — the
+     * browser page may have shown its own error while the app was frozen.
      */
     private void startChatGptSignIn() {
-        if (chatGptSignInRunning) {
-            toast("Logowanie do ChatGPT już trwa — dokończ je w przeglądarce.");
+        if (!signInFlow.isRunning()) {
+            beginChatGptSignIn();
             return;
         }
-        chatGptSignInRunning = true;
+        new AlertDialog.Builder(this)
+                .setTitle(SIGN_IN_PENDING_TITLE)
+                .setMessage("Dokończ logowanie w przeglądarce i wróć do aplikacji. "
+                        + "Jeśli strona logowania pokazała błąd albo ją zamknięto, "
+                        + "zacznij od nowa.")
+                .setPositiveButton(SIGN_IN_RESTART_LABEL, (dialog, which) -> beginChatGptSignIn())
+                .setNegativeButton("Czekaj", null)
+                .show();
+    }
+
+    private void beginChatGptSignIn() {
+        dismissSignInFailure();
+        final int attempt = signInFlow.start();
+        closeSignInServer();
+        updateAiChip();
         new Thread(() -> {
             try (LoopbackCallbackServer server = new LoopbackCallbackServer()) {
+                if (!adoptSignInServer(attempt, server)) {
+                    throw new IOException("Logowanie zastąpione nowszym.");
+                }
                 final ChatGptOAuth.PendingSignIn pending =
                         chatGptAccount.beginSignIn(server.redirectUri());
                 runOnUiThread(() -> {
@@ -823,29 +865,84 @@ public class MainActivity extends Activity {
                         startActivity(new Intent(Intent.ACTION_VIEW,
                                 Uri.parse(pending.authorizeUrl)));
                     } catch (android.content.ActivityNotFoundException e) {
-                        toast("Brak przeglądarki do zalogowania w ChatGPT.");
+                        if (signInFlow.isCurrent(attempt)) {
+                            closeSignInServer();
+                            onSignInFailed(attempt, "Brak przeglądarki do zalogowania w ChatGPT.");
+                        }
                     }
                 });
                 String query = server.awaitCallbackQuery(SIGN_IN_TIMEOUT_MS);
                 final String email = chatGptAccount.completeSignIn(pending, query).email;
-                runOnUiThread(() -> {
-                    updateAiChip();
-                    warmReadyPools();
-                    // Refresh the open recipe so the AI-only "Zmień przepis" button appears.
-                    if (currentRecipe != null) {
-                        showFullRecipe(currentRecipe);
-                    }
-                    toast(email.isEmpty() ? "Zalogowano do ChatGPT — możesz generować dania."
-                            : "Zalogowano do ChatGPT jako " + email + ".");
-                });
+                runOnUiThread(() -> onSignInSucceeded(attempt, email));
             } catch (IOException e) {
                 final String message = e.getMessage();
-                runOnUiThread(() -> toast(message != null ? message
-                        : "Logowanie do ChatGPT nie powiodło się."));
-            } finally {
-                chatGptSignInRunning = false;
+                runOnUiThread(() -> onSignInFailed(attempt, message));
+            } catch (RuntimeException e) {
+                // Any unexpected failure still ends the wait and offers a retry.
+                runOnUiThread(() -> onSignInFailed(attempt, null));
             }
         }).start();
+    }
+
+    /** Registers the attempt's listener unless the user already started another one. */
+    private synchronized boolean adoptSignInServer(int attempt, LoopbackCallbackServer server) {
+        if (!signInFlow.isCurrent(attempt)) {
+            return false;
+        }
+        signInServer = server;
+        return true;
+    }
+
+    /** Stops the waiting listener, if any; its thread then ends as a silent failure. */
+    private synchronized void closeSignInServer() {
+        if (signInServer != null) {
+            try {
+                signInServer.close();
+            } catch (IOException ignored) {
+                // Already closed.
+            }
+            signInServer = null;
+        }
+    }
+
+    private void onSignInSucceeded(int attempt, String email) {
+        signInFlow.succeeded(attempt);
+        closeSignInServer(); // a newer attempt still listening is no longer needed
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
+        dismissSignInFailure();
+        updateAiChip();
+        warmReadyPools();
+        // Refresh the open recipe so the AI-only "Zmień przepis" button appears.
+        if (currentRecipe != null) {
+            showFullRecipe(currentRecipe);
+        }
+        toast(email.isEmpty() ? "Zalogowano do ChatGPT — możesz generować dania."
+                : "Zalogowano do ChatGPT jako " + email + ".");
+    }
+
+    private void onSignInFailed(int attempt, String message) {
+        if (signInFlow.failed(attempt) != ChatGptSignInFlow.Outcome.SHOW_FAILURE
+                || isFinishing() || isDestroyed()) {
+            return;
+        }
+        updateAiChip();
+        dismissSignInFailure();
+        signInFailureDialog = new AlertDialog.Builder(this)
+                .setTitle(SIGN_IN_FAILED_TITLE)
+                .setMessage(message != null ? message
+                        : "Nie udało się zalogować do ChatGPT. Spróbuj ponownie.")
+                .setPositiveButton(SIGN_IN_RETRY_LABEL, (dialog, which) -> beginChatGptSignIn())
+                .setNegativeButton("Anuluj", null)
+                .show();
+    }
+
+    private void dismissSignInFailure() {
+        if (signInFailureDialog != null && signInFailureDialog.isShowing()) {
+            signInFailureDialog.dismiss();
+        }
+        signInFailureDialog = null;
     }
 
     /** GPT Sol (default) or GPT Luna; a model missing on the account is marked, not swapped. */
