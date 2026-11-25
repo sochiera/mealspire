@@ -219,8 +219,10 @@ i wdróż backend **przed** wydaniem APK. Po aktualizacji:
 
 - katalog z cache zapisany pod inną wersją jest przy starcie odrzucany
   (`SharedPreferencesBackendStore`); do następnego pobrania (po zalogowaniu)
-  działa wbudowana pula z nowymi nazwami — także bez sesji;
-- zapisana ankieta: dalsze pary ze starą nazwą odpadają, przejrzane zostają;
+  działa wbudowana pula z nowymi nazwami — także bez sesji; katalog z serwera
+  o niższym `namesRevision` (np. po rollbacku backendu) nie jest zapisywany;
+- zapisana ankieta: dalsze pary z daniem spoza aktywnego katalogu odpadają
+  (książka kucharska może trzymać starą nazwę — nie liczy się), przejrzane zostają;
 - historia (reakcje, „lubię", dziennik, `MealHistory`, gotowa pula) zostaje
   pod starymi nazwami. Stara nazwa nie pasuje do nowej, więc: filtr „ostatnio
   pokazane" (`RecentlyShownFilter`, 3 dni) może raz pokazać przemianowane danie

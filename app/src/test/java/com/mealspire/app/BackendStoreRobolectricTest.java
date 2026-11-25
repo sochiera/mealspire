@@ -54,6 +54,24 @@ public class BackendStoreRobolectricTest {
             assertTrue(store.needsCatalog());
         }
     }
+    @Test public void catalogFromServerOlderThanDishNamesIsRejected() throws Exception {
+        // E.g. backend rolled back to a build from before the rename: its catalog lacks the revision.
+        SharedPreferencesBackendStore store = new SharedPreferencesBackendStore(context);
+        JSONObject old = catalog(); old.remove("namesRevision");
+        try { store.cache(store.baseUrl(), old); fail(); } catch (java.io.IOException expected) { }
+        JSONObject older = catalog().put("namesRevision", BuiltInRecipes.NAMES_REVISION - 1);
+        try { store.cache(store.baseUrl(), older); fail(); } catch (java.io.IOException expected) { }
+        assertEquals(BuiltInRecipes.forMeal(0)[0].getTitle(), store.forMeal(0)[0].getTitle());
+        assertTrue(store.needsCatalog());
+    }
+    @Test public void catalogCachedBeforeDishRenameIsDroppedAtStartup() throws Exception {
+        context.getSharedPreferences("mealspire_backend", Context.MODE_PRIVATE).edit().clear()
+                .putString("url", BackendClient.DEFAULT_BASE_URL).putString("catalog", catalog().toString())
+                .putLong("catalog_time", System.currentTimeMillis()).commit();
+        SharedPreferencesBackendStore store = new SharedPreferencesBackendStore(context);
+        assertEquals(BuiltInRecipes.forMeal(0)[0].getTitle(), store.forMeal(0)[0].getTitle());
+        assertTrue(store.needsCatalog());
+    }
     @Test public void catalogOfDefaultServerSurvivesUpgradeRestart() throws Exception {
         new SharedPreferencesBackendStore(context).cache(BackendClient.DEFAULT_BASE_URL, catalog());
         SharedPreferencesBackendStore restarted = new SharedPreferencesBackendStore(context);

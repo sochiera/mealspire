@@ -8,7 +8,10 @@ import java.util.*;
 /** Stable v1 data contract. No system prompts or provider URLs cross the client boundary. */
 public final class BackendCodec {
     private BackendCodec() {}
-    public static JSONObject envelope() throws JSONException { return new JSONObject().put("apiVersion", 1); }
+    /** Every response carries the dish-names revision of its build, so a client can reject an older catalog. */
+    public static JSONObject envelope() throws JSONException {
+        return new JSONObject().put("apiVersion", 1).put("namesRevision", BuiltInRecipes.NAMES_REVISION);
+    }
     public static JSONObject response(String body) throws IOException {
         try {
             JSONObject data = new JSONObject(body);

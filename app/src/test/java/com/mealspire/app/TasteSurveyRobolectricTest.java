@@ -193,6 +193,27 @@ public class TasteSurveyRobolectricTest {
     }
 
     @Test
+    public void staraNazwaZapisanaWKsiazceKucharskiejNieZostawiaParyZeStaraNazwa() {
+        // Danie zapisane do książki przed aktualizacją zachowuje tam starą nazwę;
+        // pary ankiety pochodzą z katalogu, więc para ze starą nazwą i tak odpada.
+        new com.mealspire.app.storage.SharedPreferencesCookbookStore(context).save(
+                com.mealspire.app.domain.Cookbook.empty().add(new com.mealspire.app.domain.CookbookEntry(
+                        "Pierogi z serem i ziemniakami", "Składniki: ziemniaki, twaróg.", "")));
+        List<String> dinner = allowedDishes(1, com.mealspire.app.domain.DietConstraints.empty());
+        List<TasteSurvey.Pair> pairs = new ArrayList<>();
+        pairs.add(new TasteSurvey.Pair(dinner.get(0), dinner.get(1), 1));
+        pairs.add(new TasteSurvey.Pair("Pierogi z serem i ziemniakami", dinner.get(2), 1));
+        pairs.add(new TasteSurvey.Pair(dinner.get(3), dinner.get(4), 1));
+        new SharedPreferencesTasteSurveyStore(context).save(TasteSurvey.start(pairs, "[]")
+                .answer(TasteSurvey.CHOICE_A).commit());
+
+        MainActivity activity = launch();
+
+        assertEquals(dinner.get(3), text(activity, R.id.onboarding_option_1));
+        assertEquals("Porównanie 2 z 2", text(activity, R.id.survey_progress));
+    }
+
+    @Test
     public void poAktualizacjiBezZapisanychOdpowiedziAnkietaPlanujeSieOdNowaZNowymiNazwami() {
         new SharedPreferencesAppSettings(context).saveSurveyLength(30);
         List<TasteSurvey.Pair> pairs = new ArrayList<>();

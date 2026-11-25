@@ -31,6 +31,9 @@ public final class SharedPreferencesBackendStore implements BackendClient.Config
     public boolean needsCatalog() { return System.currentTimeMillis()-prefs.getLong("catalog_time", 0) > 86400000; }
     public synchronized void cache(String expectedUrl, JSONObject data) throws IOException {
         try { BackendCodec.catalog(data); } catch (JSONException e) { throw new IOException("Nieprawidłowy katalog.", e); }
+        // A server older than this build's dish names (e.g. a backend rollback) would bring old names back:
+        // keep the current cache or built-in pool instead.
+        if (data.optInt("namesRevision", 0) < BuiltInRecipes.NAMES_REVISION) throw new IOException("Nieaktualny katalog serwera.");
         if (expectedUrl.equals(baseUrl())) prefs.edit().putString("catalog", data.toString()).putLong("catalog_time", System.currentTimeMillis()).putInt("catalog_revision", BuiltInRecipes.NAMES_REVISION).apply();
     }
     /**

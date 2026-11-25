@@ -923,7 +923,14 @@ public class MainActivity extends Activity {
             return;
         }
         java.util.Map<String, String> details = surveyDetailsByTitle();
-        TasteSurvey current = survey.withoutUnknownDishes(details.keySet());
+        // Pairs are planned from the active catalog only (not the cookbook, which may keep old names).
+        java.util.Set<String> catalogTitles = new java.util.HashSet<>();
+        for (int i = 0; i < MEAL_TYPES.length; i++) {
+            for (Recipe recipe : backendStore.forMeal(i)) {
+                catalogTitles.add(recipe.getTitle());
+            }
+        }
+        TasteSurvey current = survey.withoutUnknownDishes(catalogTitles);
         if (current != survey && current.position() == 0) {
             planSurvey();
             return;
