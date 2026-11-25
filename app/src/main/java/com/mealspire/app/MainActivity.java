@@ -1236,6 +1236,9 @@ public class MainActivity extends Activity {
 
     /** One step back in the quiz: the previous pair, question, or out of a standalone survey. */
     private void previousOnboardingStep() {
+        if (onboardingStep == SURVEY_STEP && survey != null) {
+            surveySnapshot = surveyCatalog(); // the catalog the rewound pair is checked against
+        }
         if (onboardingStep == SURVEY_STEP && survey != null
                 && survey.canGoBack(householdProfile.getDiet(), surveyCatalogDetails())) {
             saveSurvey(survey.back());

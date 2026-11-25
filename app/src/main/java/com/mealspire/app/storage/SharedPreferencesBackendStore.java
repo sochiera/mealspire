@@ -19,10 +19,10 @@ public final class SharedPreferencesBackendStore implements BackendClient.Config
         prefs = context.getApplicationContext().getSharedPreferences("mealspire_backend", Context.MODE_PRIVATE);
         this.endpoint = BackendClient.validateUrl(endpoint);
         if (!this.endpoint.equals(prefs.getString("url", null))) prefs.edit().clear().putString("url", this.endpoint).apply();
-        // Catalog cached before a dish rename would keep old names (also with no session to refresh it):
-        // drop only the catalog; forMeal falls back to the built-in pool until the next validated fetch.
-        if (prefs.getInt("catalog_revision", 0) != BuiltInRecipes.NAMES_REVISION)
-            prefs.edit().remove("catalog").remove("catalog_time").remove("catalog_names").putInt("catalog_revision", BuiltInRecipes.NAMES_REVISION).apply();
+        // A cached catalog with dish names older than this build (also kept with no session to refresh it)
+        // is dropped; a newer one stays. forMeal falls back to the built-in pool until the next validated fetch.
+        if (prefs.getInt("catalog_names", 0) < BuiltInRecipes.NAMES_REVISION)
+            prefs.edit().remove("catalog").remove("catalog_time").remove("catalog_names").apply();
     }
     @Override public String baseUrl() { return endpoint; }
     /** One-time notice that AI goes through the Mealspire server (reset with the endpoint). */
@@ -42,7 +42,7 @@ public final class SharedPreferencesBackendStore implements BackendClient.Config
         int names = data.optInt("namesRevision", 0);
         if (names < Math.max(BuiltInRecipes.NAMES_REVISION, prefs.getInt("catalog_names", 0))) throw new IOException("Nieaktualny katalog serwera.");
         if (expectedUrl.equals(baseUrl())) prefs.edit().putString("catalog", data.toString()).putLong("catalog_time", System.currentTimeMillis())
-                .putInt("catalog_revision", BuiltInRecipes.NAMES_REVISION).putInt("catalog_names", names).apply();
+                .putInt("catalog_names", names).apply();
     }
     /**
      * Gotowa pula ocenionych dań posiłku — obok katalogu, bo trzyma tylko nazwy

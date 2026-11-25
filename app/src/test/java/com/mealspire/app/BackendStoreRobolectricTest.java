@@ -78,6 +78,11 @@ public class BackendStoreRobolectricTest {
         store.cache(store.baseUrl(), catalog());
         assertEquals("Nowe danie 2", store.catalog(3)[2][0].getTitle());
     }
+    @Test public void newerCachedCatalogSurvivesRestart() throws Exception {
+        new SharedPreferencesBackendStore(context).cache(BackendClient.DEFAULT_BASE_URL,
+                catalog().put("namesRevision", BuiltInRecipes.NAMES_REVISION + 2));
+        assertEquals("Nowe danie 0", new SharedPreferencesBackendStore(context).forMeal(0)[0].getTitle());
+    }
     @Test public void catalogCachedBeforeDishRenameIsDroppedAtStartup() throws Exception {
         context.getSharedPreferences("mealspire_backend", Context.MODE_PRIVATE).edit().clear()
                 .putString("url", BackendClient.DEFAULT_BASE_URL).putString("catalog", catalog().toString())
