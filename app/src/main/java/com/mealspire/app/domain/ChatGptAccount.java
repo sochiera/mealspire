@@ -72,6 +72,14 @@ public final class ChatGptAccount {
      */
     public ChatGptSession completeSignIn(ChatGptOAuth.PendingSignIn pending, String query)
             throws IOException {
+        ChatGptSession session = exchangeSignIn(pending, query);
+        saveSignIn(session);
+        return session;
+    }
+
+    /** Verifies the browser result and prepares a session for the caller to accept. */
+    public ChatGptSession exchangeSignIn(ChatGptOAuth.PendingSignIn pending, String query)
+            throws IOException {
         ChatGptOAuth.Callback callback = oauth.parseCallback(pending, query);
         ChatGptOAuth.TokenResponse tokens = ChatGptOAuth.parseTokenResponse(
                 transport.postForm(ChatGptOAuth.TOKEN_URL,
@@ -105,11 +113,13 @@ public final class ChatGptAccount {
                     + "modeli GPT Luna ani GPT Sol (potrzebny plan Plus lub Pro).");
         }
 
-        ChatGptSession session = new ChatGptSession(callback.clientId, tokens.accessToken,
+        return new ChatGptSession(callback.clientId, tokens.accessToken,
                 tokens.refreshToken, tokens.idToken,
                 now + tokens.expiresInSeconds * 1000, claims.subject, claims.email, luna, sol);
+    }
+
+    public void saveSignIn(ChatGptSession session) {
         store.save(session);
-        return session;
     }
 
     /**
