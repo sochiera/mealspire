@@ -183,14 +183,15 @@ public final class TasteSurvey {
      * Usuwa nieprzejrzane pary z daniem spoza aktualnego katalogu, np. zapisane
      * pod nazwą sprzed aktualizacji (przemianowane dania). Takiego dania nie da
      * się sprawdzić z dietą ani pokazać pod aktualną nazwą — para odpada, a
-     * przejrzane odpowiedzi zostają bez zmian. Bez zmian zwraca {@code this}.
+     * przejrzane lub już odpowiedziane pary zostają bez zmian. Bez zmian zwraca {@code this}.
      */
     public TasteSurvey withoutUnknownDishes(Collection<String> knownTitles) {
         List<Pair> keptPairs = new ArrayList<>();
         List<Integer> keptAnswers = new ArrayList<>();
         for (int i = 0; i < pairs.size(); i++) {
             Pair pair = pairs.get(i);
-            if (i < position || (knownTitles.contains(pair.dishA)
+            // Odpowiedziane pary zostają także przed pozycją po „Cofnij" (odpowiedź sprzed przerwy).
+            if (i < position || answers.get(i) != NOT_ANSWERED || (knownTitles.contains(pair.dishA)
                     && knownTitles.contains(pair.dishB))) {
                 keptPairs.add(pair);
                 keptAnswers.add(answers.get(i));
