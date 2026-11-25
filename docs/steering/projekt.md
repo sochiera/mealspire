@@ -52,7 +52,8 @@ Wszystkie teksty w UI i promptach są po polsku.
   łamiące dietę. Dalsze pary z daniem spoza aktualnego katalogu (nazwa sprzed
   zmiany nazw) też odpadają (`TasteSurvey.withoutUnknownDishes`), a ankieta bez
   żadnej odpowiedzi planuje się od nowa; danie bez znanych składników nie
-  przechodzi przez żadne wykluczenie diety. Przerwana ankieta: przycisk „Dokończ ankietę gustu" na
+  przechodzi przez żadne wykluczenie diety. Dalsze pary są sprawdzane z dietą
+  na każdym ekranie ankiety (składniki z aktywnego katalogu mogą się zmienić). Przerwana ankieta: przycisk „Dokończ ankietę gustu" na
   ekranie startowym i „Więcej…" → „Ankieta gustu" (tam też nowa o wybranej
   długości; tryb `surveyOnly` bez dialogów startowych). Flaga ukończenia w
   `AppSettings.isOnboardingDone()` jest niezależna od profilu; „Pomiń"/„Przerwij"

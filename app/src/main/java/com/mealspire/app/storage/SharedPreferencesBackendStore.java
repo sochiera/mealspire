@@ -21,8 +21,10 @@ public final class SharedPreferencesBackendStore implements BackendClient.Config
         if (!this.endpoint.equals(prefs.getString("url", null))) prefs.edit().clear().putString("url", this.endpoint).apply();
         // A cached catalog with dish names older than this build (also kept with no session to refresh it)
         // is dropped; a newer one stays. forMeal falls back to the built-in pool until the next validated fetch.
-        if (prefs.getInt("catalog_names", 0) < BuiltInRecipes.NAMES_REVISION)
-            prefs.edit().remove("catalog").remove("catalog_time").remove("catalog_names").apply();
+        synchronized (CATALOG_LOCK) {
+            if (prefs.getInt("catalog_names", 0) < BuiltInRecipes.NAMES_REVISION)
+                prefs.edit().remove("catalog").remove("catalog_time").remove("catalog_names").apply();
+        }
     }
     @Override public String baseUrl() { return endpoint; }
     /** One-time notice that AI goes through the Mealspire server (reset with the endpoint). */

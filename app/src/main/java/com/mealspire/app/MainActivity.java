@@ -322,6 +322,8 @@ public class MainActivity extends Activity {
     private TasteSurveyStore surveyStore;
     /** Catalog read by the last {@link #ensureSurvey()} (one decode per survey screen). */
     private Recipe[][] surveySnapshot;
+    /** Set by Back so the next {@link #ensureSurvey()} keeps the snapshot that approved the pair. */
+    private boolean surveySnapshotPinned;
     private TasteSurvey survey;
     // Ankieta otwarta z ekranu startowego/menu, poza quizem: bez pytań profilu
     // i jednorazowych dialogów startowych.
@@ -918,8 +920,12 @@ public class MainActivity extends Activity {
      * and never slips past the diet unchecked.
      */
     private void ensureSurvey() {
-        // One catalog snapshot per survey screen: planning, pruning and rendering see the same dishes.
-        surveySnapshot = surveyCatalog();
+        // One catalog snapshot per survey screen: planning, pruning and rendering see the same dishes
+        // (after Back: the snapshot the rewound pair was approved against).
+        if (!surveySnapshotPinned || surveySnapshot == null) {
+            surveySnapshot = surveyCatalog();
+        }
+        surveySnapshotPinned = false;
         String dietKey = surveyDietKey();
         if (survey == null || survey.isFinished()
                 || (!dietKey.equals(survey.dietKey()) && survey.committed() == 0)) {
@@ -940,8 +946,10 @@ public class MainActivity extends Activity {
             planSurvey();
             return;
         }
-        if (!dietKey.equals(current.dietKey())) {
-            current = current.withoutDisallowed(householdProfile.getDiet(), details, dietKey);
+        // Pairs ahead are rechecked on every screen: the diet or the catalog's ingredients may change.
+        TasteSurvey filtered = current.withoutDisallowed(householdProfile.getDiet(), details, dietKey);
+        if (filtered.size() != current.size() || !dietKey.equals(current.dietKey())) {
+            current = filtered;
         }
         if (current != survey) {
             saveSurvey(current);
@@ -1241,6 +1249,7 @@ public class MainActivity extends Activity {
         }
         if (onboardingStep == SURVEY_STEP && survey != null
                 && survey.canGoBack(householdProfile.getDiet(), surveyCatalogDetails())) {
+            surveySnapshotPinned = true;
             saveSurvey(survey.back());
         } else if (onboardingStep == SURVEY_STEP && surveyOnly) {
             endOnboarding();

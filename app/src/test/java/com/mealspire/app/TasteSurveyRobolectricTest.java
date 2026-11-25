@@ -240,6 +240,29 @@ public class TasteSurveyRobolectricTest {
     }
 
     @Test
+    public void paryPrzedNamiSprawdzaneZDietaTakzeBezZmianyWykluczen() {
+        // Dieta bez zmian, ale składniki dania w katalogu się zmieniły (tu: ankieta zapisana
+        // z parą, która przy obecnym katalogu łamie wykluczenie laktozy) — para odpada.
+        com.mealspire.app.domain.DietConstraints noLactose =
+                com.mealspire.app.domain.DietConstraints.of(java.util.Collections.singletonList(
+                        com.mealspire.app.domain.DietConstraints.Exclusion.NO_LACTOSE));
+        new com.mealspire.app.storage.SharedPreferencesHouseholdProfileStore(context).save(
+                com.mealspire.app.domain.HouseholdProfile.empty().withDiet(noLactose));
+        List<String> dinner = allowedDishes(1, noLactose);
+        List<TasteSurvey.Pair> pairs = new ArrayList<>();
+        pairs.add(new TasteSurvey.Pair(dinner.get(0), dinner.get(1), 1));
+        pairs.add(new TasteSurvey.Pair("Pierogi ruskie", dinner.get(2), 1));
+        pairs.add(new TasteSurvey.Pair(dinner.get(3), dinner.get(4), 1));
+        new SharedPreferencesTasteSurveyStore(context).save(TasteSurvey.start(pairs,
+                noLactose.getExclusions().toString()).answer(TasteSurvey.CHOICE_A).commit());
+
+        MainActivity activity = launch();
+
+        assertEquals(dinner.get(3), text(activity, R.id.onboarding_option_1));
+        assertEquals("Porównanie 2 z 2", text(activity, R.id.survey_progress));
+    }
+
+    @Test
     public void poAktualizacjiBezZapisanychOdpowiedziAnkietaPlanujeSieOdNowaZNowymiNazwami() {
         new SharedPreferencesAppSettings(context).saveSurveyLength(30);
         List<TasteSurvey.Pair> pairs = new ArrayList<>();
