@@ -182,13 +182,13 @@ Wszystkie teksty w UI i promptach są po polsku.
 - Powrót z logowania ChatGPT: Android zamraża aplikację w tle, więc
   przekierowanie na loopback może czekać w kolejce gniazda, aż użytkownik
   wróci, a przeglądarka zdąży pokazać własny błąd. `LoopbackCallbackServer`
-  odbiera callback z kolejki także po terminie i nie przerywa logowania, gdy
-  zapis strony do przeglądarki się nie uda (broken pipe). Strona nie twierdzi
-  „Gotowe”, bo wymiana kodu dzieje się dopiero potem. Co pokazać decyduje czysta
-  `ChatGptSignInFlow`: sukces kończy oczekiwanie zawsze (sesja jest prawdziwa),
-  błąd tylko dla bieżącej próby (dialog `SIGN_IN_FAILED_TITLE` ze
-  „Spróbuj ponownie”); ponowny start zamyka nasłuch starej próby, a jej koniec
-  jest wyciszany. `onResume` odświeża chip z magazynu sesji.
+  odbiera callback z kolejki przed upływem limitu. Błąd zapisu strony do
+  przeglądarki (broken pipe) nie unieważnia odebranego przekierowania. Limit
+  obejmuje oczekiwanie na callback i wymianę kodu. Jego upływ zamyka nasłuch
+  wraz z przyjętym połączeniem. Tylko bieżąca próba może otworzyć przeglądarkę,
+  zapisać zweryfikowaną sesję i zakończyć oczekiwanie. Błąd bieżącej próby
+  pokazuje dialog „Spróbuj ponownie”. Ponowny start zamyka poprzedni nasłuch.
+  `onResume` odświeża chip z magazynu sesji.
 - Systemowe „Cofnij": `MainActivity.onBackPressed()` + czysta decyzja w
   `BackNavigation` (przepis → propozycje → start → wyjście; w quizie poprzednie
   pytanie, z pierwszego jak „Pomiń"). Przepis spoza propozycji (import przez

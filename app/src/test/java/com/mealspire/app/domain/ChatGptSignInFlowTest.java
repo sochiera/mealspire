@@ -43,15 +43,23 @@ public class ChatGptSignInFlowTest {
     }
 
     @Test
-    public void supersededAttemptThatStillSucceedsSignsTheUserIn() {
+    public void supersededSuccessKeepsTheNewAttemptRunning() {
         int first = flow.start();
         int second = flow.start();
 
-        // The browser finished the first sign-in after all: the session is real.
-        assertEquals(ChatGptSignInFlow.Outcome.SHOW_SUCCESS, flow.succeeded(first));
+        assertEquals(ChatGptSignInFlow.Outcome.IGNORE, flow.succeeded(first));
+        assertTrue(flow.isCurrent(second));
+        assertEquals(ChatGptSignInFlow.Outcome.SHOW_SUCCESS, flow.succeeded(second));
+    }
+
+    @Test
+    public void cancelledAttemptCannotFinish() {
+        int attempt = flow.start();
+        flow.cancel();
+
+        assertEquals(ChatGptSignInFlow.Outcome.IGNORE, flow.succeeded(attempt));
+        assertEquals(ChatGptSignInFlow.Outcome.IGNORE, flow.failed(attempt));
         assertFalse(flow.isRunning());
-        // The abandoned retry must not then report an error over a working account.
-        assertEquals(ChatGptSignInFlow.Outcome.IGNORE, flow.failed(second));
     }
 
     @Test

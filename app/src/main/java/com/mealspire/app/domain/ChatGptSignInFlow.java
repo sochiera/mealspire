@@ -1,14 +1,6 @@
 package com.mealspire.app.domain;
 
-/**
- * State of the in-app "Sign in with ChatGPT" wait. The browser may come back
- * late (the app was in the background, the token endpoint was slow), the
- * user may give up and start again, and the earlier attempt may still finish.
- * This decides what the screen shows so it always matches the stored session:
- * a success ends the wait and is shown even from a superseded attempt (the
- * session is real), a failure ends the wait and offers a retry only when it
- * belongs to the attempt the user is still waiting for.
- */
+/** Tracks which sign-in attempt may still finish or report an error. */
 public final class ChatGptSignInFlow {
 
     public enum Outcome { SHOW_SUCCESS, SHOW_FAILURE, IGNORE }
@@ -33,15 +25,22 @@ public final class ChatGptSignInFlow {
         return running && attempt == latest;
     }
 
+    public synchronized void cancel() {
+        running = false;
+    }
+
     /** Attempt {@code attempt} saved a session. */
     public synchronized Outcome succeeded(int attempt) {
+        if (!isCurrent(attempt)) {
+            return Outcome.IGNORE;
+        }
         running = false;
         return Outcome.SHOW_SUCCESS;
     }
 
     /** Attempt {@code attempt} ended without a session (error, timeout, cancelled). */
     public synchronized Outcome failed(int attempt) {
-        if (attempt != latest || !running) {
+        if (!isCurrent(attempt)) {
             return Outcome.IGNORE;
         }
         running = false;

@@ -8,8 +8,11 @@ import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.SocketTimeoutException;
+import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * One-shot HTTP listener on 127.0.0.1 that receives the Sign in with ChatGPT
@@ -28,7 +31,19 @@ public final class LoopbackCallbackServer implements Closeable {
     private static final String TIMEOUT_MESSAGE =
             "Logowanie do ChatGPT trwało zbyt długo — spróbuj ponownie.";
 
+    private static final ScheduledThreadPoolExecutor TIMEOUTS = new ScheduledThreadPoolExecutor(
+            1, task -> {
+                Thread thread = new Thread(task, "loopback-callback-timeout");
+                thread.setDaemon(true);
+                return thread;
+            });
+
+    static {
+        TIMEOUTS.setRemoveOnCancelPolicy(true);
+    }
+
     private final ServerSocket serverSocket;
+    private Socket activeSocket;
 
     public LoopbackCallbackServer() throws IOException {
         serverSocket = new ServerSocket(0, 4, InetAddress.getByName("127.0.0.1"));
@@ -39,38 +54,55 @@ public final class LoopbackCallbackServer implements Closeable {
     }
 
     /**
-     * Blocks until the browser hits {@code /callback} and returns its query
-     * string. Other paths (e.g. favicon) get a 404 and are ignored.
-     *
-     * <p>The browser may come back late: Android freezes a backgrounded app,
-     * so the redirect can sit in the socket backlog until the user returns.
-     * A callback already waiting there is still taken after the deadline,
-     * and a browser that gave up before getting the page (broken pipe) does
-     * not lose the sign-in — the query already arrived.
+     * Waits for a callback within the given time and closes this one-shot listener
+     * when done. An unreadable request or a browser that disconnects before receiving
+     * the response page does not invalidate a query already received in time.
      *
      * @throws IOException on timeout or when {@link #close()} was called
      */
     public String awaitCallbackQuery(int timeoutMs) throws IOException {
-        long deadline = System.currentTimeMillis() + timeoutMs;
-        while (true) {
-            long left = deadline - System.currentTimeMillis();
-            // Past the deadline only connections already queued are taken.
-            serverSocket.setSoTimeout((int) Math.max(1, Math.min(left, Integer.MAX_VALUE)));
-            Socket socket;
-            try {
-                socket = serverSocket.accept();
-            } catch (SocketTimeoutException e) {
-                throw new IOException(TIMEOUT_MESSAGE, e);
-            }
-            try {
-                String query = handle(socket);
-                if (query != null) {
-                    return query;
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
+        // Closing both sockets also unblocks a client that stalls in the middle of a request.
+        ScheduledFuture<?> timeout = TIMEOUTS.schedule(this::closeQuietly,
+                timeoutMs, TimeUnit.MILLISECONDS);
+        try {
+            while (true) {
+                checkDeadline(deadline);
+                try (Socket socket = serverSocket.accept()) {
+                    registerActiveSocket(socket);
+                    String query = handle(socket);
+                    checkDeadline(deadline);
+                    if (query != null) {
+                        return query;
+                    }
+                } finally {
+                    clearActiveSocket();
                 }
-            } finally {
-                closeQuietly(socket);
             }
+        } catch (IOException e) {
+            checkDeadline(deadline);
+            throw e;
+        } finally {
+            timeout.cancel(false);
+            close();
         }
+    }
+
+    private static void checkDeadline(long deadline) throws IOException {
+        if (System.nanoTime() - deadline >= 0) {
+            throw new IOException(TIMEOUT_MESSAGE);
+        }
+    }
+
+    private synchronized void registerActiveSocket(Socket socket) throws SocketException {
+        if (serverSocket.isClosed()) {
+            throw new SocketException("Callback listener closed");
+        }
+        activeSocket = socket;
+    }
+
+    private synchronized void clearActiveSocket() {
+        activeSocket = null;
     }
 
     /** Returns the callback's query, or null for any other (or unreadable) request. */
@@ -99,11 +131,11 @@ public final class LoopbackCallbackServer implements Closeable {
         return q < 0 ? "" : target.substring(q + 1);
     }
 
-    private static void closeQuietly(Socket socket) {
+    private void closeQuietly() {
         try {
-            socket.close();
+            close();
         } catch (IOException ignored) {
-            // Nothing left to do with this connection.
+            // The waiting thread will report the timeout.
         }
     }
 
@@ -128,7 +160,13 @@ public final class LoopbackCallbackServer implements Closeable {
     }
 
     @Override
-    public void close() throws IOException {
-        serverSocket.close();
+    public synchronized void close() throws IOException {
+        try {
+            serverSocket.close();
+        } finally {
+            if (activeSocket != null) {
+                activeSocket.close();
+            }
+        }
     }
 }

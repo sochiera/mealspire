@@ -3,6 +3,7 @@ package com.mealspire.app.net;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertThrows;
 
 import org.junit.Test;
 
@@ -10,13 +11,16 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.Socket;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 public class LoopbackCallbackServerTest {
 
@@ -55,15 +59,31 @@ public class LoopbackCallbackServerTest {
     }
 
     @Test
-    public void callbackQueuedWhileAppWasFrozenIsTakenEvenAfterTheDeadline() throws Exception {
+    public void expiredWaitRejectsEvenAQueuedCallbackAndClosesThePort() throws Exception {
         try (LoopbackCallbackServer server = new LoopbackCallbackServer();
              Socket browser = connect(server)) {
-            // The redirect arrived while the app's thread was not running (Android froze
-            // the backgrounded process); the thread wakes up only after the deadline.
             send(browser, "/callback?code=late&state=s");
-            Thread.sleep(50);
 
-            assertEquals("code=late&state=s", server.awaitCallbackQuery(0));
+            assertThrows(IOException.class, () -> server.awaitCallbackQuery(0));
+            assertThrows(ConnectException.class, () -> connect(server));
+        }
+    }
+
+    @Test
+    public void incompleteRequestCannotExtendTheDeadlineOrKeepThePortOpen() throws Exception {
+        ExecutorService worker = Executors.newSingleThreadExecutor();
+        try (LoopbackCallbackServer server = new LoopbackCallbackServer();
+             Socket browser = connect(server)) {
+            browser.getOutputStream().write("GET /callback?".getBytes(StandardCharsets.US_ASCII));
+            browser.getOutputStream().flush();
+
+            Future<String> callback = worker.submit(() -> server.awaitCallbackQuery(250));
+            ExecutionException failure = assertThrows(ExecutionException.class,
+                    () -> callback.get(3, TimeUnit.SECONDS));
+            assertTrue(failure.getCause().getMessage().contains("trwało zbyt długo"));
+            assertThrows(ConnectException.class, () -> connect(server));
+        } finally {
+            worker.shutdownNow();
         }
     }
 
