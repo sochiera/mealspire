@@ -126,6 +126,31 @@ public class TasteSurveyRobolectricTest {
     }
 
     @Test
+    public void ankietaWyswietlaNaturalnePolskieNazwyDan() {
+        // 30 par po 10 na porę posiłku przegląda całą wbudowaną pulę (3 × 20 dań).
+        new SharedPreferencesAppSettings(context).saveSurveyLength(30);
+        MainActivity activity = launch();
+        answerProfileQuestions(activity);
+
+        Set<String> catalog = com.mealspire.app.domain.BuiltInRecipes.detailsByTitle(null).keySet();
+        Set<String> shown = new HashSet<>();
+        for (int i = 0; i < 30; i++) {
+            shown.add(text(activity, R.id.onboarding_option_1));
+            shown.add(text(activity, R.id.onboarding_option_2));
+            click(activity, R.id.onboarding_option_none);
+        }
+
+        assertEquals("ankieta pokazuje całą pulę dań", catalog, shown);
+        assertTrue(shown.contains("Pierogi ruskie"));
+        assertTrue(shown.contains("Kanapki z serkiem wiejskim i warzywami"));
+        for (String dish : shown) {
+            assertTrue("kalka w ankiecie: " + dish, !dish.endsWith("na kanapki"));
+            assertTrue("opisowa nazwa w ankiecie: " + dish,
+                    !dish.startsWith("Pierogi z serem i ziemniakami"));
+        }
+    }
+
+    @Test
     public void przerwanaAnkietaWznawiaSiePoPonownymUruchomieniu() {
         new SharedPreferencesAppSettings(context).saveSurveyLength(5);
         MainActivity first = launch();
