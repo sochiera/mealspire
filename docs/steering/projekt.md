@@ -224,7 +224,8 @@ i wdróż backend **przed** wydaniem APK. Po aktualizacji:
   rollbacku backendu) nie jest zapisywany; backendu nie cofamy poniżej
   `NAMES_REVISION` opublikowanego APK (BACKEND-RUNBOOK);
 - zapisana ankieta: dalsze pary z daniem spoza aktywnego katalogu odpadają
-  (książka kucharska może trzymać starą nazwę — nie liczy się), przejrzane zostają;
+  (książka kucharska może trzymać starą nazwę — nie liczy się), przejrzane zostają,
+  ale „Cofnij" nie wraca na parę spoza katalogu ani łamiącą obecną dietę;
 - historia (reakcje, „lubię", dziennik, `MealHistory`, gotowa pula) zostaje
   pod starymi nazwami. Stara nazwa nie pasuje do nowej, więc: filtr „ostatnio
   pokazane" (`RecentlyShownFilter`, 3 dni) może raz pokazać przemianowane danie

@@ -131,17 +131,20 @@ public class TasteSurveyTest {
     }
 
     @Test
-    public void cofnijNaOdpowiedzianaPareZeStaraNazwaJejNieUsuwa() {
-        // Odpowiedź sprzed aktualizacji, niezapisana; użytkownik cofa się na tę parę.
+    public void paraNaKursorzePoCofnijZeStaraNazwaOdpadaBezUtratyWyboru() {
+        // Przed aktualizacją: odpowiedź, „Cofnij", zamknięcie aplikacji. Kursor stoi
+        // na odpowiedzianej parze ze starą nazwą — ta odpowiedź nie jest wyborem.
         TasteSurvey back = TasteSurvey.start(Arrays.asList(
                 new TasteSurvey.Pair("Pierogi z serem i ziemniakami", "Rosół"),
                 new TasteSurvey.Pair("Rosół", "Pierogi ruskie")), "[]")
                 .answer(TasteSurvey.CHOICE_A).back();
+        assertTrue(back.pendingPicks().isEmpty());
 
         TasteSurvey pruned = back.withoutUnknownDishes(Arrays.asList("Rosół", "Pierogi ruskie"));
 
-        assertTrue("nic nie odpada", pruned == back);
-        assertEquals(TasteSurvey.CHOICE_A, (int) pruned.answers().get(0));
+        assertEquals(1, pruned.size());
+        assertEquals("Pierogi ruskie", pruned.current().getDishB());
+        assertTrue(pruned.pendingPicks().isEmpty());
     }
 
     @Test
