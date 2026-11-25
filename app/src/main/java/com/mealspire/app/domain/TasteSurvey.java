@@ -17,6 +17,11 @@ import java.util.Map;
  */
 public final class TasteSurvey {
 
+    /**
+     * Długość jednej serii: po tylu odpowiedziach (i po każdej kolejnej serii)
+     * ankieta pyta „Dalej" czy „Na razie wystarczy", zamiast ciągnąć całość.
+     */
+    public static final int SERIES_PAIRS = 20;
     /** Domyślna długość ankiety; użytkownik zmienia ją w „Więcej…". */
     public static final int DEFAULT_PAIRS = 40;
     /** Długości do wyboru w „Więcej…" → „Ankieta gustu". */
@@ -69,9 +74,16 @@ public final class TasteSurvey {
     private final int position;
     private final int committed;
     private final String dietKey;
+    /** Pozycja, przy której wybrano „Dalej" — tam nie pytamy drugi raz. */
+    private final int continuedAt;
 
     public TasteSurvey(List<Pair> pairs, List<Integer> answers, int position, int committed,
                        String dietKey) {
+        this(pairs, answers, position, committed, dietKey, 0);
+    }
+
+    public TasteSurvey(List<Pair> pairs, List<Integer> answers, int position, int committed,
+                       String dietKey, int continuedAt) {
         this.pairs = Collections.unmodifiableList(new ArrayList<>(pairs));
         List<Integer> fixed = new ArrayList<>();
         for (int i = 0; i < this.pairs.size(); i++) {
@@ -83,6 +95,7 @@ public final class TasteSurvey {
         this.position = clamp(position, 0, this.pairs.size());
         this.committed = clamp(committed, 0, this.position);
         this.dietKey = dietKey == null ? "" : dietKey;
+        this.continuedAt = Math.max(0, continuedAt);
     }
 
     /** Nowa ankieta: same pary, bez odpowiedzi. */
@@ -131,7 +144,7 @@ public final class TasteSurvey {
         }
         List<Integer> next = new ArrayList<>(answers);
         next.set(position, choice);
-        return new TasteSurvey(pairs, next, position + 1, committed, dietKey);
+        return new TasteSurvey(pairs, next, position + 1, committed, dietKey, continuedAt);
     }
 
     /** „Cofnij" działa tylko w obrębie odpowiedzi, które nie są jeszcze zapisane. */
@@ -141,7 +154,8 @@ public final class TasteSurvey {
 
     public TasteSurvey back() {
         return canGoBack()
-                ? new TasteSurvey(pairs, answers, position - 1, committed, dietKey) : this;
+                ? new TasteSurvey(pairs, answers, position - 1, committed, dietKey, continuedAt)
+                : this;
     }
 
     /** Wybrane dania z odpowiedzi czekających na zapis (kolejność odpowiedzi). */
@@ -151,7 +165,39 @@ public final class TasteSurvey {
 
     /** Zapisane — od teraz odpowiedzi do bieżącej pary są ostateczne. */
     public TasteSurvey commit() {
-        return new TasteSurvey(pairs, answers, position, position, dietKey);
+        return new TasteSurvey(pairs, answers, position, position, dietKey, continuedAt);
+    }
+
+    public int continuedAt() {
+        return continuedAt;
+    }
+
+    /** Ostatnia para bieżącej serii (licznik „Porównanie N z …"), najwyżej rozmiar ankiety. */
+    public int seriesEnd() {
+        return Math.min(pairs.size(), (position / SERIES_PAIRS + 1) * SERIES_PAIRS);
+    }
+
+    /**
+     * Koniec serii, a dalej są jeszcze pary: pokaż „Dalej" / „Na razie wystarczy"
+     * zamiast kolejnej pary.
+     */
+    public boolean awaitsDecision() {
+        return !isFinished() && position > 0 && position % SERIES_PAIRS == 0
+                && continuedAt != position;
+    }
+
+    /** „Dalej": kolejna seria; udzielone odpowiedzi zostają bez zmian. */
+    public TasteSurvey continueSeries() {
+        return new TasteSurvey(pairs, answers, position, committed, dietKey, position);
+    }
+
+    /**
+     * „Na razie wystarczy": ankieta kończy się na udzielonych odpowiedziach —
+     * dalsze pary odpadają, wybory czekają na zapis jak przy zwykłym końcu.
+     */
+    public TasteSurvey finishEarly() {
+        return new TasteSurvey(pairs.subList(0, position), answers.subList(0, position),
+                position, committed, dietKey, continuedAt);
     }
 
     /** Grupa lubianych dań z tej ankiety: każde wybrane danie raz. */
@@ -175,7 +221,8 @@ public final class TasteSurvey {
                 keptAnswers.add(answers.get(i));
             }
         }
-        return new TasteSurvey(keptPairs, keptAnswers, position, committed, newDietKey);
+        return new TasteSurvey(keptPairs, keptAnswers, position, committed, newDietKey,
+                continuedAt);
     }
 
     private List<String> picks(int from, int to) {

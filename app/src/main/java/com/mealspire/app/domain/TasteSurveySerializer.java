@@ -30,6 +30,7 @@ public final class TasteSurveySerializer {
                     .put("position", survey.position())
                     .put("committed", survey.committed())
                     .put("diet", survey.dietKey())
+                    .put("continuedAt", survey.continuedAt())
                     .toString();
         } catch (JSONException e) {
             return null;
@@ -54,7 +55,8 @@ public final class TasteSurveySerializer {
                         ? TasteSurvey.NOT_ANSWERED : answersJson.optInt(i, TasteSurvey.NOT_ANSWERED));
             }
             return new TasteSurvey(pairs, answers, object.optInt("position", 0),
-                    object.optInt("committed", 0), object.optString("diet", ""));
+                    object.optInt("committed", 0), object.optString("diet", ""),
+                    object.optInt("continuedAt", 0));
         } catch (JSONException e) {
             return null;
         }

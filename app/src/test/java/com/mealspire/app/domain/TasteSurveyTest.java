@@ -107,4 +107,87 @@ public class TasteSurveyTest {
         assertEquals(1, survey.committed());
         assertEquals(Collections.singletonList(TasteSurvey.NOT_ANSWERED), survey.answers());
     }
+    private static TasteSurvey longSurvey(int size) {
+        List<TasteSurvey.Pair> pairs = new java.util.ArrayList<>();
+        for (int i = 0; i < size; i++) {
+            pairs.add(new TasteSurvey.Pair("A" + i, "B" + i, i % 3));
+        }
+        return TasteSurvey.start(pairs, "[]");
+    }
+
+    private static TasteSurvey answered(TasteSurvey survey, int count) {
+        for (int i = 0; i < count; i++) {
+            survey = survey.answer(i % 2 == 0 ? TasteSurvey.CHOICE_A : TasteSurvey.CHOICE_B);
+        }
+        return survey;
+    }
+
+    @Test
+    public void pierwszaSeriaMa20ParIPostepLiczyDoKoncaSerii() {
+        assertEquals(20, TasteSurvey.SERIES_PAIRS);
+        TasteSurvey survey = longSurvey(80);
+        assertEquals(20, survey.seriesEnd());
+        assertEquals(20, answered(survey, 19).seriesEnd());
+        assertEquals("krótsza ankieta kończy serię na swoim końcu", 5, longSurvey(5).seriesEnd());
+    }
+
+    @Test
+    public void po20OdpowiedziachAnkietaCzekaNaDecyzjeDalejAlboWystarczy() {
+        TasteSurvey survey = answered(longSurvey(80), 19);
+        assertFalse(survey.awaitsDecision());
+        survey = survey.answer(TasteSurvey.CHOICE_A);
+        assertTrue(survey.awaitsDecision());
+        assertEquals(20, survey.position());
+        assertFalse(survey.isFinished());
+    }
+
+    @Test
+    public void dalejZachowujeOdpowiedziIOtwieraKolejnaSerie() {
+        TasteSurvey atCheckpoint = answered(longSurvey(80), 20);
+        TasteSurvey next = atCheckpoint.continueSeries();
+
+        assertFalse(next.awaitsDecision());
+        assertEquals(20, next.position());
+        assertEquals(atCheckpoint.answers(), next.answers());
+        assertEquals(atCheckpoint.pendingPicks(), next.pendingPicks());
+        assertEquals(40, next.seriesEnd());
+        assertTrue("kolejna seria też kończy się decyzją",
+                answered(next, 20).awaitsDecision());
+    }
+
+    @Test
+    public void naRazieWystarczyKonczyAnkieteZZebranymiOdpowiedziami() {
+        TasteSurvey atCheckpoint = answered(longSurvey(80), 20);
+        TasteSurvey done = atCheckpoint.finishEarly();
+
+        assertTrue(done.isFinished());
+        assertFalse(done.awaitsDecision());
+        assertEquals(20, done.size());
+        assertEquals(atCheckpoint.pendingPicks(), done.pendingPicks());
+        assertEquals(20, done.pendingPicks().size());
+    }
+
+    @Test
+    public void zakonczeniePrzed20PytaniemZachowujeOdpowiedzi() {
+        TasteSurvey done = answered(longSurvey(80), 7).finishEarly();
+        assertTrue(done.isFinished());
+        assertEquals(7, done.size());
+        assertEquals(7, done.likedDishes().size());
+    }
+
+    @Test
+    public void ostatniaParaNieCzekaNaDecyzje() {
+        assertFalse(answered(longSurvey(20), 20).awaitsDecision());
+        assertTrue(answered(longSurvey(20), 20).isFinished());
+    }
+
+    @Test
+    public void decyzjaPoSeriiPrzezywaZapis() {
+        TasteSurveySerializer serializer = new TasteSurveySerializer();
+        TasteSurvey continued = answered(longSurvey(40), 20).continueSeries();
+        TasteSurvey restored = serializer.fromJson(serializer.toJson(continued));
+        assertFalse(restored.awaitsDecision());
+        TasteSurvey waiting = serializer.fromJson(serializer.toJson(answered(longSurvey(40), 20)));
+        assertTrue(waiting.awaitsDecision());
+    }
 }

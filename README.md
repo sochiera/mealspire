@@ -26,12 +26,16 @@ przyciski, na każdym kroku widoczny przycisk **„Pomiń"**):
 8. **Ile chcecie wydawać na zakupy?** — oszczędnie / bez szaleństw / nie liczę.
 9. **Klasyki czy nowości?** — sprawdzone klasyki / pół na pół / ciągle coś nowego.
 10. **Ankieta gustu „Co wolisz na śniadanie / obiad / kolację?” — A czy B.**
-   Seria par dań (domyślnie 40, długość do zmiany), każda para inna; oba dania
+   Seria par dań (domyślnie 40 w seriach po 20, długość do zmiany), każda para inna; oba dania
    w parze są z tej samej pory posiłku, a pary krążą po śniadaniu, obiedzie
    i kolacji. W każdej porze kolejne pary kontrastują na zmianę bazą
    (mięso/ryba/bezmięsne), charakterem (zupa/zapiekane/świeże) i kuchnią,
    a dania przewijają się równomiernie przez cały katalog. Pasek i licznik
-   („Porównanie 7 z 40”) pokazują postęp. Wybrane danie zapisuje się jako
+   („Porównanie 7 z 20”) pokazują postęp w bieżącej serii. Po każdych 20
+   porównaniach ankieta pyta: **„Dalej”** (kolejna seria, dotychczasowe
+   odpowiedzi zostają) albo **„Na razie wystarczy”** — ankieta kończy się na
+   zebranych odpowiedziach i propozycje od razu z nich korzystają, bez
+   przypominania o reszcie. Wybrane danie zapisuje się jako
    reakcja „lubię” na tej samej liście, z której AI ocenia kolejne dania —
    tak powstaje początkowa grupa lubianych dań; **„Żadne z tych"** uczciwie
    nie zapisuje nic. Pary respektują wykluczenia z pytania 2.

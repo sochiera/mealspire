@@ -70,6 +70,24 @@ public class UiScreenshotTest {
         save(activity, "03-quiz-dishes");
     }
 
+    /** Ankieta gustu: para z licznikiem serii i decyzja „Dalej" / „Na razie wystarczy". */
+    @Test
+    public void surveyCheckpoint() throws IOException {
+        MainActivity activity = Robolectric.buildActivity(MainActivity.class).setup().get();
+        int[] profile = {R.id.onboarding_option_1, R.id.onboarding_next_button,
+                R.id.onboarding_option_2, R.id.onboarding_option_2, R.id.onboarding_next_button,
+                R.id.onboarding_option_2, R.id.onboarding_option_2, R.id.onboarding_option_2,
+                R.id.onboarding_option_2};
+        for (int id : profile) {
+            activity.<Button>findViewById(id).performClick();
+        }
+        save(activity, "18-survey-pair");
+        for (int i = 0; i < 20; i++) {
+            activity.<Button>findViewById(R.id.onboarding_option_1).performClick();
+        }
+        save(activity, "19-survey-checkpoint");
+    }
+
     @Test
     public void everydayFlow() throws IOException {
         Context context = ApplicationProvider.getApplicationContext();

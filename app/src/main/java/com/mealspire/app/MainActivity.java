@@ -960,6 +960,8 @@ public class MainActivity extends Activity {
             if (survey.isFinished()) {
                 // Empty survey (diet excludes the whole pool): nothing to ask.
                 advanceOnboarding();
+            } else if (survey.awaitsDecision()) {
+                renderSurveyCheckpoint();
             } else {
                 renderSurveyPair();
             }
@@ -1141,10 +1143,11 @@ public class MainActivity extends Activity {
                     + "z odpowiedzi zbiorę dania, które lubicie, i od nich zacznę "
                     + "propozycje. Możesz przerwać i dokończyć później."), marginTop(6));
         }
-        contentContainer.addView(buildProgressBar(survey.position(), survey.size()),
+        // Postęp liczony do końca bieżącej serii (domyślnie 20), nie całej ankiety.
+        contentContainer.addView(buildProgressBar(survey.position(), survey.seriesEnd()),
                 marginTop(survey.position() == 0 ? 18 : 4));
         TextView progress = Ui.text(this, "Porównanie " + (survey.position() + 1) + " z "
-                + survey.size(), 14, Ui.INK_SOFT);
+                + survey.seriesEnd(), 14, Ui.INK_SOFT);
         progress.setId(R.id.survey_progress);
         contentContainer.addView(progress, marginTop(10));
 
@@ -1172,6 +1175,46 @@ public class MainActivity extends Activity {
         contentContainer.addView(none, marginTop(12));
 
         addQuizSkipButton("Przerwij — dokończę później");
+    }
+
+    /**
+     * End of a series: carry on with the next one ("Dalej", answers kept) or
+     * finish with what was answered ("Na razie wystarczy") — the recommender
+     * learns from the partial survey, nothing forces the rest.
+     */
+    private void renderSurveyCheckpoint() {
+        int next = Math.min(TasteSurvey.SERIES_PAIRS, survey.size() - survey.position());
+        contentContainer.addView(Ui.overline(this, "Ankieta gustu"), matchWrap());
+        contentContainer.addView(buildProgressBar(1, 1), marginTop(18));
+        TextView question = Ui.headline(this, "Masz za sobą " + survey.position()
+                + " porównań. Gramy dalej?", 24);
+        question.setId(R.id.onboarding_question);
+        contentContainer.addView(question, marginTop(10));
+        contentContainer.addView(Ui.body(this, "Z tego, co już wybraliście, zacznę "
+                + "propozycje. Kolejne " + next + " porównań pomoże lepiej poznać Wasz "
+                + "gust — ale nie musisz."), marginTop(6));
+
+        Button more = new Button(this);
+        more.setId(R.id.survey_continue_button);
+        more.setText("Dalej");
+        more.setTextSize(16);
+        Ui.primary(more);
+        more.setOnClickListener(v -> {
+            saveSurvey(survey.continueSeries());
+            renderOnboardingStep();
+        });
+        contentContainer.addView(more, marginTop(18));
+
+        Button enough = new Button(this);
+        enough.setId(R.id.survey_enough_button);
+        enough.setText("Na razie wystarczy");
+        enough.setTextSize(16);
+        Ui.outlinedButton(enough);
+        enough.setOnClickListener(v -> {
+            saveSurvey(survey.finishEarly());
+            advanceOnboarding();
+        });
+        contentContainer.addView(enough, marginTop(10));
     }
 
     private void addSurveyOption(int index, String dish, String details, int choice) {

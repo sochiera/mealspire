@@ -37,6 +37,12 @@ Wszystkie teksty w UI i promptach są po polsku.
   `backendStore.forMeal`, dieta bezwzględnie;
   długość `AppSettings.loadSurveyLength()`, domyślnie
   `TasteSurvey.DEFAULT_PAIRS`; „Żadne z tych" nie zapisuje nic).
+  **Serie po `TasteSurvey.SERIES_PAIRS` = 20**: licznik/pasek liczą do
+  `seriesEnd()`, a po każdej pełnej serii (gdy zostały pary)
+  `awaitsDecision()` pokazuje „Dalej" (`continueSeries()`, odpowiedzi bez
+  zmian, `continuedAt` w zapisie) albo „Na razie wystarczy" (`finishEarly()`
+  — ucina nieprzejrzane pary, ankieta jest ukończona, bez przycisku
+  „Dokończ…"; wybory idą przez `commitSurveyPicks` jak przy zwykłym końcu).
   Odpowiedzi 1–9 → `HouseholdProfile` (środkowe odpowiedzi nowych pytań nie
   dokładają zdań do promptu) (wpływa na prompty przez
   `RecipeRequest.getHouseholdProfile()`, także na „Zmień przepis"). Ankieta
