@@ -81,6 +81,10 @@ z fałszywym tokenem (oczekiwane 401 `unauthorized` = TLS do OpenAI działa;
 502 = brak `jdk.crypto.ec` lub awaria upstream).
 
 Rollback backendu: `ln -sfn` current na poprzedni release i restart usługi.
+Nie cofaj backendu do release'u z niższym `BuiltInRecipes.NAMES_REVISION` niż
+opublikowany APK (od 1.9: release ≥ zmiany „naturalne nazwy dań”, revision 2):
+klient odrzuci jego katalog, ale nowe dania z `/v1/proposals` mogłyby wrócić
+pod starymi nazwami (dieta nadal filtruje). Przy konieczności: poprawka w przód.
 Wycofanie całości: `systemctl disable --now mealspire-backend`, przywróć
 `/root/nginx-backup-mealspire-20261008/pbn.orig` do `sites-enabled/pbn`, usuń
 oba pliki nginx Mealspire, `nginx -t` i `systemctl reload nginx`.

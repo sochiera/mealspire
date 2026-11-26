@@ -338,6 +338,10 @@ public class MainActivity extends Activity {
     // więc „Cofnij" podmienia wybór zamiast dokładać polubienia.
     private final TasteSurveyPlanner surveyPlanner = new TasteSurveyPlanner();
     private TasteSurveyStore surveyStore;
+    /** Catalog read by the last {@link #ensureSurvey()} (one decode per survey screen). */
+    private Recipe[][] surveySnapshot;
+    /** Set by Back so the next {@link #ensureSurvey()} keeps the snapshot that approved the pair. */
+    private boolean surveySnapshotPinned;
     private TasteSurvey survey;
     // Ankieta otwarta z ekranu startowego/menu, poza quizem: bez pytań profilu
     // i jednorazowych dialogów startowych.
@@ -1080,23 +1084,50 @@ public class MainActivity extends Activity {
      * moments earlier already filter the pairs. A diet change before anything
      * was saved replans (dropping answers that may now be invalid); after
      * that, only the pairs still ahead that break the diet are dropped.
+     * Pairs ahead with a dish missing from the current catalog (a name saved
+     * before an update renamed it) are dropped the same way — or the survey
+     * is replanned when it has no answer at all — so a stale name is never shown
+     * and never slips past the diet unchecked.
      */
     private void ensureSurvey() {
+        // One catalog snapshot per survey screen: planning, pruning and rendering see the same dishes
+        // (after Back: the snapshot the rewound pair was approved against).
+        if (!surveySnapshotPinned || surveySnapshot == null) {
+            surveySnapshot = surveyCatalog();
+        }
+        surveySnapshotPinned = false;
         String dietKey = surveyDietKey();
         if (survey == null || survey.isFinished()
                 || (!dietKey.equals(survey.dietKey()) && survey.committed() == 0)) {
             planSurvey();
-        } else if (!dietKey.equals(survey.dietKey())) {
-            saveSurvey(survey.withoutDisallowed(householdProfile.getDiet(),
-                    surveyDetailsByTitle(), dietKey));
+            return;
+        }
+        Recipe[][] catalog = surveySnapshot;
+        java.util.Map<String, String> details = surveyDetailsByTitle(catalog);
+        // Pairs are planned from the active catalog only (not the cookbook, which may keep old names).
+        java.util.Set<String> catalogTitles = new java.util.HashSet<>();
+        for (Recipe[] meal : catalog) {
+            for (Recipe recipe : meal) {
+                catalogTitles.add(recipe.getTitle());
+            }
+        }
+        TasteSurvey current = survey.withoutUnknownDishes(catalogTitles);
+        if (current != survey && current.committed() == 0 && !current.hasAnswers()) {
+            planSurvey();
+            return;
+        }
+        // Pairs ahead are rechecked on every screen: the diet or the catalog's ingredients may change.
+        TasteSurvey filtered = current.withoutDisallowed(householdProfile.getDiet(), details, dietKey);
+        if (filtered.size() != current.size() || !dietKey.equals(current.dietKey())) {
+            current = filtered;
+        }
+        if (current != survey) {
+            saveSurvey(current);
         }
     }
 
     private void planSurvey() {
-        Recipe[][] pools = new Recipe[MEAL_TYPES.length][];
-        for (int i = 0; i < pools.length; i++) {
-            pools[i] = backendStore.forMeal(i);
-        }
+        Recipe[][] pools = surveySnapshot != null ? surveySnapshot : surveyCatalog();
         saveSurvey(TasteSurvey.start(surveyPlanner.plan(pools, householdProfile.getDiet(),
                 appSettings.loadSurveyLength(), random), surveyDietKey()));
     }
@@ -1110,14 +1141,34 @@ public class MainActivity extends Activity {
         surveyStore.save(updated);
     }
 
-    /** Dish details for the survey's pairs: the shared catalog plus the cookbook. */
+    /**
+     * Dish details for the survey's pairs: the active catalog wins (pairs come only from it, so
+     * diet checks and option texts use its ingredients); the cookbook covers earlier picks.
+     */
     private java.util.Map<String, String> surveyDetailsByTitle() {
+        return surveyDetailsByTitle(surveySnapshot != null ? surveySnapshot : surveyCatalog());
+    }
+
+    /** Details of the active catalog only (no cookbook): what a survey pair may show. */
+    private java.util.Map<String, String> surveyCatalogDetails() {
+        java.util.Map<String, String> details = new java.util.HashMap<>();
+        for (Recipe[] meal : surveySnapshot != null ? surveySnapshot : surveyCatalog()) {
+            for (Recipe recipe : meal) {
+                details.put(recipe.getTitle(), recipe.getDetails());
+            }
+        }
+        return details;
+    }
+
+    private Recipe[][] surveyCatalog() {
+        return backendStore.catalog(MEAL_TYPES.length);
+    }
+
+    private java.util.Map<String, String> surveyDetailsByTitle(Recipe[][] catalog) {
         java.util.Map<String, String> details = BuiltInRecipes.detailsByTitle(cookbook);
-        for (int i = 0; i < MEAL_TYPES.length; i++) {
-            for (Recipe recipe : backendStore.forMeal(i)) {
-                if (!details.containsKey(recipe.getTitle())) {
-                    details.put(recipe.getTitle(), recipe.getDetails());
-                }
+        for (Recipe[] meal : catalog) {
+            for (Recipe recipe : meal) {
+                details.put(recipe.getTitle(), recipe.getDetails());
             }
         }
         return details;
@@ -1363,7 +1414,12 @@ public class MainActivity extends Activity {
 
     /** One step back in the quiz: the previous pair, question, or out of a standalone survey. */
     private void previousOnboardingStep() {
-        if (onboardingStep == SURVEY_STEP && survey != null && survey.canGoBack()) {
+        if (onboardingStep == SURVEY_STEP && survey != null) {
+            surveySnapshot = surveyCatalog(); // the catalog the rewound pair is checked against
+        }
+        if (onboardingStep == SURVEY_STEP && survey != null
+                && survey.canGoBack(householdProfile.getDiet(), surveyCatalogDetails())) {
+            surveySnapshotPinned = true;
             saveSurvey(survey.back());
         } else if (onboardingStep == SURVEY_STEP && surveyOnly) {
             endOnboarding();

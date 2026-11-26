@@ -17,6 +17,15 @@ import java.util.Map;
  */
 public final class BuiltInRecipes {
 
+    /**
+     * Wersja nazw dań we wspólnej puli (ta sama pula jest w katalogu backendu).
+     * Podbij przy zmianie nazw: katalog z cache zapisany pod inną wersją jest
+     * przy starcie odrzucany ({@code SharedPreferencesBackendStore}), więc
+     * aplikacja wraca do tej puli zamiast pokazywać stare nazwy. 2: naturalne
+     * polskie nazwy („Pierogi ruskie" itd.).
+     */
+    public static final int NAMES_REVISION = 2;
+
     private static final Recipe[][] MEALS = {
             {
                     new Recipe("Jajecznica",
@@ -78,7 +87,7 @@ public final class BuiltInRecipes {
                             "Składniki: twaróg, jajko, mąka, cukier, szczypta soli, olej do smażenia.\n\n"
                                     + "Wymieszaj twaróg z jajkiem, mąką i cukrem na gładką masę, formuj "
                                     + "placki i smaż na oleju z obu stron do zrumienienia."),
-                    new Recipe("Kanapki klasyczne z wędliną i serem",
+                    new Recipe("Kanapki z wędliną i serem",
                             "Składniki: pieczywo, masło, wędlina, ser żółty, warzywa (pomidor, "
                                     + "ogórek).\n\n"
                                     + "Posmaruj pieczywo masłem, ułóż wędlinę, ser i warzywa."),
@@ -94,7 +103,7 @@ public final class BuiltInRecipes {
                             "Składniki: parówki, pieczywo, musztarda lub ketchup.\n\n"
                                     + "Ugotuj lub podgrzej parówki i podaj z pieczywem oraz ulubionym "
                                     + "sosem."),
-                    new Recipe("Ryż na mleko",
+                    new Recipe("Ryż na mleku",
                             "Składniki: ryż, mleko, cukier, wanilia lub cynamon.\n\n"
                                     + "Gotuj ryż w mleku na małym ogniu, aż zmięknie i zgęstnieje. "
                                     + "Dodatki (opcjonalnie): cynamon, owoce, dżem."),
@@ -136,7 +145,7 @@ public final class BuiltInRecipes {
                                     + "kasza.\n\n"
                                     + "Podsmaż mięso z cebulą, dodaj paprykę i koncentrat, duś pod "
                                     + "przykryciem do miękkości. Podaj z kaszą."),
-                    new Recipe("Pierogi z serem i ziemniakami",
+                    new Recipe("Pierogi ruskie",
                             "Składniki: ciasto pierogowe, ziemniaki, twaróg, cebula, masło.\n\n"
                                     + "Ugniecione ziemniaki wymieszaj z twarogiem, zawiń w ciasto, "
                                     + "ugotuj we wrzątku. Podaj polane cebulką podsmażoną na maśle."),
@@ -152,7 +161,7 @@ public final class BuiltInRecipes {
                             "Składniki: makaron, ser żółty, szynka, śmietana, masło.\n\n"
                                     + "Ugotuj makaron, wymieszaj na gorąco z masłem, startym serem i "
                                     + "pokrojoną szynką, dopraw śmietaną."),
-                    new Recipe("Ryż z kurczakiem curry",
+                    new Recipe("Kurczak curry z ryżem",
                             "Składniki: pierś z kurczaka, ryż, curry w proszku, mleko kokosowe lub "
                                     + "śmietana, cebula.\n\n"
                                     + "Podsmaż kurczaka z cebulą, dopraw curry, dolej mleko kokosowe i "
@@ -206,7 +215,7 @@ public final class BuiltInRecipes {
                             "Składniki: warzywa gotowane (marchew, ziemniak, groszek), jajko, majonez.\n\n"
                                     + "Pokrój ugotowane warzywa i jajko w kostkę, wymieszaj z majonezem, "
                                     + "dopraw do smaku."),
-                    new Recipe("Twarożek ze szczypiorkiem i rzodkiewką na kanapki",
+                    new Recipe("Twarożek ze szczypiorkiem i rzodkiewką",
                             "Składniki: twaróg, jogurt, rzodkiewka, szczypiorek, pieczywo.\n\n"
                                     + "Rozgnieć twaróg z jogurtem, dodaj pokrojoną rzodkiewkę i "
                                     + "szczypiorek, podawaj z pieczywem."),
@@ -246,15 +255,15 @@ public final class BuiltInRecipes {
                             "Składniki: makrela wędzona, twaróg lub serek, cebula, pieczywo.\n\n"
                                     + "Rozgnieć oczyszczoną makrelę z twarogiem i drobno posiekaną "
                                     + "cebulą, nałóż na pieczywo."),
-                    new Recipe("Serek wiejski z warzywami na kanapki",
+                    new Recipe("Kanapki z serkiem wiejskim i warzywami",
                             "Składniki: serek wiejski, pomidor, ogórek, szczypiorek, pieczywo.\n\n"
-                                    + "Wymieszaj serek z pokrojonymi warzywami i szczypiorkiem, podawaj "
-                                    + "z pieczywem."),
+                                    + "Wymieszaj serek z pokrojonymi warzywami i szczypiorkiem, nałóż "
+                                    + "na pieczywo."),
                     new Recipe("Omlet z szynką i serem",
                             "Składniki: jajka, mleko, szynka, ser żółty, masło.\n\n"
                                     + "Roztrzep jajka z mlekiem, wylej na rozgrzane masło, na wierzch "
                                     + "połóż szynkę i ser, smaż do ścięcia i złóż na pół."),
-                    new Recipe("Kanapki z pieczarkami duszonymi",
+                    new Recipe("Kanapki z duszonymi pieczarkami",
                             "Składniki: pieczarki, cebula, masło, pieczywo, sól, pieprz.\n\n"
                                     + "Podduś pokrojone pieczarki z cebulą na maśle, dopraw i nałóż na "
                                     + "pieczywo."),
