@@ -36,9 +36,11 @@ public final class SharedPreferencesTasteEventStore implements TasteEventStore {
 
     @Override
     public void save(TasteEventLog log) {
+        // commit(), nie apply(): zapis wyborów z ankiety zatwierdza ankietę dopiero po
+        // utrwaleniu tego pliku — kolejka apply() mogłaby zginąć razem z procesem.
         sharedPreferences.edit()
                 .putString(KEY_EVENTS, serializer.toJson(log))
-                .apply();
+                .commit();
     }
 
     @Override

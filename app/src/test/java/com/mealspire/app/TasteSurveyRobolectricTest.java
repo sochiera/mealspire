@@ -135,6 +135,9 @@ public class TasteSurveyRobolectricTest {
         Set<String> catalog = com.mealspire.app.domain.BuiltInRecipes.detailsByTitle(null).keySet();
         Set<String> shown = new HashSet<>();
         for (int i = 0; i < 30; i++) {
+            if (i == TasteSurvey.SERIES_PAIRS) {
+                click(activity, R.id.survey_continue_button); // koniec serii: „Dalej”
+            }
             shown.add(text(activity, R.id.onboarding_option_1));
             shown.add(text(activity, R.id.onboarding_option_2));
             click(activity, R.id.onboarding_option_none);
@@ -272,7 +275,8 @@ public class TasteSurveyRobolectricTest {
 
         MainActivity activity = launch();
 
-        assertEquals("Porównanie 1 z 30", text(activity, R.id.survey_progress));
+        assertEquals("postęp w pierwszej serii", "Porównanie 1 z 20",
+                text(activity, R.id.survey_progress));
         Set<String> catalog = com.mealspire.app.domain.BuiltInRecipes.detailsByTitle(null).keySet();
         assertTrue(catalog.contains(text(activity, R.id.onboarding_option_1)));
         assertTrue(catalog.contains(text(activity, R.id.onboarding_option_2)));
@@ -306,6 +310,9 @@ public class TasteSurveyRobolectricTest {
 
         Set<String> shown = new HashSet<>();
         for (int i = 0; i < 30; i++) {
+            if (i == TasteSurvey.SERIES_PAIRS) {
+                click(activity, R.id.survey_continue_button); // koniec serii: „Dalej”
+            }
             shown.add(text(activity, R.id.onboarding_option_1));
             shown.add(text(activity, R.id.onboarding_option_2));
             click(activity, R.id.onboarding_option_none);

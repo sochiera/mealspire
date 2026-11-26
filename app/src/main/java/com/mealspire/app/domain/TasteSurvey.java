@@ -75,8 +75,17 @@ public final class TasteSurvey {
     private final int position;
     private final int committed;
     private final String dietKey;
-    /** Pozycja, przy której wybrano „Dalej" — tam nie pytamy drugi raz. */
+    /**
+     * Najdalszy checkpoint, przy którym wybrano „Dalej" — tam nie pytamy drugi raz.
+     * Ponowna akceptacja wcześniejszego (po „Cofnij") go nie obniża.
+     */
     private final int continuedAt;
+    /**
+     * Znacznik zapisu wyborów w toku (0 = brak). Ustawiany przed dopisaniem reakcji
+     * i zdarzeń, czyszczony przez {@link #commit()} — po zabiciu procesu w środku
+     * zapisu ponowienie rozpoznaje po nim, co z tej partii już trafiło do dzienników.
+     */
+    private final long commitStamp;
 
     public TasteSurvey(List<Pair> pairs, List<Integer> answers, int position, int committed,
                        String dietKey) {
@@ -85,6 +94,11 @@ public final class TasteSurvey {
 
     public TasteSurvey(List<Pair> pairs, List<Integer> answers, int position, int committed,
                        String dietKey, int continuedAt) {
+        this(pairs, answers, position, committed, dietKey, continuedAt, 0L);
+    }
+
+    public TasteSurvey(List<Pair> pairs, List<Integer> answers, int position, int committed,
+                       String dietKey, int continuedAt, long commitStamp) {
         this.pairs = Collections.unmodifiableList(new ArrayList<>(pairs));
         List<Integer> fixed = new ArrayList<>();
         for (int i = 0; i < this.pairs.size(); i++) {
@@ -97,6 +111,7 @@ public final class TasteSurvey {
         this.committed = clamp(committed, 0, this.position);
         this.dietKey = dietKey == null ? "" : dietKey;
         this.continuedAt = Math.max(0, continuedAt);
+        this.commitStamp = Math.max(0L, commitStamp);
     }
 
     /** Nowa ankieta: same pary, bez odpowiedzi. */
@@ -145,7 +160,8 @@ public final class TasteSurvey {
         }
         List<Integer> next = new ArrayList<>(answers);
         next.set(position, choice);
-        return new TasteSurvey(pairs, next, position + 1, committed, dietKey, continuedAt);
+        return new TasteSurvey(pairs, next, position + 1, committed, dietKey, continuedAt,
+                commitStamp);
     }
 
     /** „Cofnij" działa tylko w obrębie odpowiedzi, które nie są jeszcze zapisane. */
@@ -170,7 +186,8 @@ public final class TasteSurvey {
 
     public TasteSurvey back() {
         return canGoBack()
-                ? new TasteSurvey(pairs, answers, position - 1, committed, dietKey, continuedAt)
+                ? new TasteSurvey(pairs, answers, position - 1, committed, dietKey, continuedAt,
+                        commitStamp)
                 : this;
     }
 
@@ -191,30 +208,94 @@ public final class TasteSurvey {
 
     /** Zapisane — od teraz odpowiedzi do bieżącej pary są ostateczne. */
     public TasteSurvey commit() {
-        return new TasteSurvey(pairs, answers, position, position, dietKey, continuedAt);
+        return new TasteSurvey(pairs, answers, position, position, dietKey, continuedAt, 0L);
+    }
+
+    /**
+     * Początek zapisu wyborów czekających na zapis: utrwal ten stan przed dopisaniem
+     * reakcji. Zapis już rozpoczęty (ponowienie po zabiciu procesu) zachowuje swój
+     * znacznik.
+     */
+    public TasteSurvey beginCommit(long stamp) {
+        return isCommitting() ? this
+                : new TasteSurvey(pairs, answers, position, committed, dietKey, continuedAt,
+                        Math.max(1L, stamp));
+    }
+
+    /** Czy zapis wyborów został rozpoczęty i nie zakończył się {@link #commit()}. */
+    public boolean isCommitting() {
+        return commitStamp > 0;
+    }
+
+    public long commitStamp() {
+        return commitStamp;
+    }
+
+    /**
+     * Czy przy starcie trzeba dokończyć zapis: przerwany w trakcie albo ankieta
+     * zakończona (także „Na razie wystarczy"), a jej wybory jeszcze niezapisane.
+     */
+    public boolean needsCommitRecovery() {
+        return isCommitting() || (isFinished() && committed < position);
+    }
+
+    /**
+     * Wybory, których brakuje w już zapisanych z tej partii (multizbiór: to samo
+     * danie wybrane dwa razy liczy się dwa razy) — ponowienie zapisu nie dubluje.
+     */
+    public static List<String> missingFrom(List<String> picks, List<String> alreadyRecorded) {
+        List<String> remaining = new ArrayList<>(alreadyRecorded);
+        List<String> missing = new ArrayList<>();
+        for (String pick : picks) {
+            if (!remaining.remove(pick)) {
+                missing.add(pick);
+            }
+        }
+        return missing;
     }
 
     public int continuedAt() {
         return continuedAt;
     }
 
-    /** Ostatnia para bieżącej serii (licznik „Porównanie N z …"), najwyżej rozmiar ankiety. */
+    /** Ostatnia para bieżącej serii, najwyżej rozmiar ankiety. */
     public int seriesEnd() {
-        return Math.min(pairs.size(), (position / SERIES_PAIRS + 1) * SERIES_PAIRS);
+        return Math.min(pairs.size(), seriesStart() + SERIES_PAIRS);
+    }
+
+    /** Pierwsza para bieżącej serii (indeks od 0). */
+    public int seriesStart() {
+        return position / SERIES_PAIRS * SERIES_PAIRS;
+    }
+
+    /** Przejrzane pary w bieżącej serii — licznik „Porównanie N z …" liczy od niej. */
+    public int seriesPosition() {
+        return position - seriesStart();
+    }
+
+    /** Liczba par w bieżącej serii (ostatnia może być krótsza niż 20). */
+    public int seriesLength() {
+        return seriesEnd() - seriesStart();
     }
 
     /**
      * Koniec serii, a dalej są jeszcze pary: pokaż „Dalej" / „Na razie wystarczy"
-     * zamiast kolejnej pary.
+     * zamiast kolejnej pary. Checkpointy do najdalszego zaakceptowanego włącznie
+     * nie pytają ponownie (np. po „Cofnij" przez checkpoint i ponownej odpowiedzi).
      */
     public boolean awaitsDecision() {
         return !isFinished() && position > 0 && position % SERIES_PAIRS == 0
-                && continuedAt != position;
+                && position > continuedAt;
     }
 
-    /** „Dalej": kolejna seria; udzielone odpowiedzi zostają bez zmian. */
+    /**
+     * „Dalej": kolejna seria; udzielone odpowiedzi zostają bez zmian. Zapamiętany
+     * zostaje najdalszy zaakceptowany checkpoint — ponowne „Dalej" przy wcześniejszym
+     * (po „Cofnij") go nie nadpisuje.
+     */
     public TasteSurvey continueSeries() {
-        return new TasteSurvey(pairs, answers, position, committed, dietKey, position);
+        return new TasteSurvey(pairs, answers, position, committed, dietKey,
+                Math.max(continuedAt, position), commitStamp);
     }
 
     /**
@@ -223,7 +304,7 @@ public final class TasteSurvey {
      */
     public TasteSurvey finishEarly() {
         return new TasteSurvey(pairs.subList(0, position), answers.subList(0, position),
-                position, committed, dietKey, continuedAt);
+                position, committed, dietKey, continuedAt, commitStamp);
     }
 
     /** Grupa lubianych dań z tej ankiety: każde wybrane danie raz. */
@@ -248,7 +329,7 @@ public final class TasteSurvey {
             }
         }
         return new TasteSurvey(keptPairs, keptAnswers, position, committed, newDietKey,
-                continuedAt);
+                continuedAt, commitStamp);
     }
 
     /**
@@ -272,7 +353,8 @@ public final class TasteSurvey {
             }
         }
         return keptPairs.size() == pairs.size() ? this
-                : new TasteSurvey(keptPairs, keptAnswers, position, committed, dietKey);
+                : new TasteSurvey(keptPairs, keptAnswers, position, committed, dietKey,
+                        continuedAt, commitStamp);
     }
 
     private List<String> picks(int from, int to) {

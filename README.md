@@ -33,9 +33,12 @@ przyciski, na każdym kroku widoczny przycisk **„Pomiń"**):
    a dania przewijają się równomiernie przez cały katalog. Pasek i licznik
    („Porównanie 7 z 20”) pokazują postęp w bieżącej serii. Po każdych 20
    porównaniach ankieta pyta: **„Dalej”** (kolejna seria, dotychczasowe
-   odpowiedzi zostają) albo **„Na razie wystarczy”** — ankieta kończy się na
+   odpowiedzi zostają), **„Na razie wystarczy”** — ankieta kończy się na
    zebranych odpowiedziach i propozycje od razu z nich korzystają, bez
-   przypominania o reszcie. Wybrane danie zapisuje się jako
+   przypominania o reszcie — albo **„Przerwij — dokończę później”** (odpowiedzi
+   zostają, a po powrocie ankieta wraca do tego samego wyboru). Odpowiedzi nie
+   giną ani nie dublują się, nawet gdy telefon zamknie aplikację w trakcie
+   zapisu. Wybrane danie zapisuje się jako
    reakcja „lubię” na tej samej liście, z której AI ocenia kolejne dania —
    tak powstaje początkowa grupa lubianych dań; **„Żadne z tych"** uczciwie
    nie zapisuje nic. Pary respektują wykluczenia z pytania 2.

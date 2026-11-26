@@ -37,12 +37,24 @@ Wszystkie teksty w UI i promptach są po polsku.
   `backendStore.forMeal`, dieta bezwzględnie;
   długość `AppSettings.loadSurveyLength()`, domyślnie
   `TasteSurvey.DEFAULT_PAIRS`; „Żadne z tych" nie zapisuje nic).
-  **Serie po `TasteSurvey.SERIES_PAIRS` = 20**: licznik/pasek liczą do
-  `seriesEnd()`, a po każdej pełnej serii (gdy zostały pary)
-  `awaitsDecision()` pokazuje „Dalej" (`continueSeries()`, odpowiedzi bez
-  zmian, `continuedAt` w zapisie) albo „Na razie wystarczy" (`finishEarly()`
-  — ucina nieprzejrzane pary, ankieta jest ukończona, bez przycisku
-  „Dokończ…"; wybory idą przez `commitSurveyPicks` jak przy zwykłym końcu).
+  **Serie po `TasteSurvey.SERIES_PAIRS` = 20**: licznik/pasek są lokalne
+  dla serii (`seriesPosition()` z `seriesLength()`, np. „Porównanie 1 z 20”
+  na starcie drugiej serii, ostatnia może być krótsza), a po każdej pełnej
+  serii (gdy zostały pary) `awaitsDecision()` pokazuje „Dalej"
+  (`continueSeries()`, odpowiedzi bez zmian; `continuedAt` = najdalszy
+  zaakceptowany checkpoint, `max` — ponowne „Dalej” po „Cofnij” go nie
+  obniża, a checkpointy ≤ `continuedAt` nie pytają drugi raz), „Na razie
+  wystarczy" (`finishEarly()` — ucina nieprzejrzane pary, ankieta jest
+  ukończona, bez przycisku „Dokończ…") albo „Przerwij — dokończę później”
+  (pauza: wybory zapisane, wznowienie wraca do decyzji).
+  **Zapis wyborów jest odporny na zabicie procesu**: `commitSurveyPicks`
+  najpierw utrwala `beginCommit(stamp)`, dopisuje reakcje/zdarzenia
+  `ONBOARDING_PICK` ze znacznikiem `stamp` tylko w brakującej liczbie
+  (`TasteSurvey.missingFrom`), a na końcu `commit()` czyści znacznik.
+  `onCreate` dokańcza zapis, gdy `needsCommitRecovery()` (przerwany zapis
+  albo ukończona ankieta z niezapisanymi wyborami; bez ukończonego
+  onboardingu — przez `endOnboarding()`). Reakcje, polubienia i zdarzenia
+  zapisują się `commit()`, nie `apply()`.
   Odpowiedzi 1–9 → `HouseholdProfile` (środkowe odpowiedzi nowych pytań nie
   dokładają zdań do promptu) (wpływa na prompty przez
   `RecipeRequest.getHouseholdProfile()`, także na „Zmień przepis"). Ankieta
