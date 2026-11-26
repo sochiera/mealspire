@@ -457,7 +457,8 @@ public class MainActivity extends Activity {
 
         boolean recoverSurvey = survey != null && survey.needsCommitRecovery();
         boolean surveyAnswered = survey != null && survey.isFinished() && survey.position() > 0;
-        if (!appSettings.isOnboardingDone() && surveyAnswered) {
+        boolean surveyPaused = survey != null && !survey.isFinished() && survey.isPaused();
+        if (!appSettings.isOnboardingDone() && (surveyAnswered || surveyPaused)) {
             // Proces zginął między zakończeniem ankiety („Na razie wystarczy” albo
             // ostatnia para) a zapisem wyborów lub flagi: ankieta jest ostatnim krokiem quizu,
             // więc kończymy go tak, jak zrobiłby to przerwany ekran — wybory trafiają
@@ -1582,8 +1583,12 @@ public class MainActivity extends Activity {
     private void endOnboarding() {
         boolean standalone = surveyOnly;
         surveyOnly = false;
-        // Najpierw zapis wyborów (z trwałym znacznikiem), dopiero potem flaga: zabicie
-        // procesu pomiędzy nie zostawi pauzy z niezapisanymi wyborami bez odzyskania.
+        // Najpierw zapis wyborów (z trwałym znacznikiem i zamiarem pauzy), dopiero potem
+        // flaga: zabicie procesu pomiędzy nie zostawi pauzy bez odzyskania ani nie
+        // otworzy ankiety ponownie przy starcie.
+        if (survey != null && !survey.isFinished() && !survey.isPaused()) {
+            saveSurvey(survey.withPaused(true));
+        }
         boolean learned = commitSurveyPicks();
         appSettings.markOnboardingDone();
         onboardingStep = -1;
@@ -1687,6 +1692,9 @@ public class MainActivity extends Activity {
             if (survey == null || !survey.needsCommitRecovery()) {
                 survey = null; // ensureSurvey plans a fresh one
             }
+        }
+        if (survey != null && survey.isPaused()) {
+            saveSurvey(survey.withPaused(false)); // wznowienie kończy pauzę
         }
         surveyOnly = true;
         contentEpoch++;

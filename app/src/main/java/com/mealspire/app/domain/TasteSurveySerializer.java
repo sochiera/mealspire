@@ -32,6 +32,7 @@ public final class TasteSurveySerializer {
                     .put("diet", survey.dietKey())
                     .put("continuedAt", survey.continuedAt())
                     .put("commitStamp", survey.commitStamp())
+                    .put("paused", survey.isPaused())
                     .toString();
         } catch (JSONException e) {
             return null;
@@ -57,7 +58,8 @@ public final class TasteSurveySerializer {
             }
             return new TasteSurvey(pairs, answers, object.optInt("position", 0),
                     object.optInt("committed", 0), object.optString("diet", ""),
-                    object.optInt("continuedAt", 0), object.optLong("commitStamp", 0L));
+                    object.optInt("continuedAt", 0), object.optLong("commitStamp", 0L),
+                    object.optBoolean("paused", false));
         } catch (JSONException e) {
             return null;
         }

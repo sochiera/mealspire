@@ -60,6 +60,10 @@ Wszystkie teksty w UI i promptach są po polsku.
   przy starcie); pierwszy nieudany zapis zostawia znacznik do ponowienia,
   a stara ankieta nie jest zastępowana nową, dopóki zapis się nie uda.
   Dziennik po kompakcji i agregat zapisują się jedną transakcją.
+  W trakcie niedokończonego zapisu `canGoBack()` = false (partia tylko do
+  odczytu). Pauza zapisuje `paused` w stanie ankiety przed flagą onboardingu;
+  start z `paused` bez flagi kończy quiz na ekran główny, wznowienie
+  (`openSurvey`) czyści `paused`.
   `endOnboarding()` zapisuje wybory przed flagą `onboarding_done`.
   Odpowiedzi 1–9 → `HouseholdProfile` (środkowe odpowiedzi nowych pytań nie
   dokładają zdań do promptu) (wpływa na prompty przez

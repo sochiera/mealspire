@@ -593,6 +593,32 @@ public class TasteSurveyEarlyFinishRobolectricTest {
         assertEquals(picks, allReactionDishes());
     }
 
+    @Test
+    public void pauzaPierwszegoQuizuPrzetrwaZabicieProcesuPrzedFlaga() throws Exception {
+        // „Przerwij — dokończę później” w pierwszym quizie: wybory zapisane razem
+        // z zamiarem pauzy, proces zginął przed zapisem flagi onboardingu.
+        List<TasteSurvey.Pair> pairs = new ArrayList<>();
+        for (int i = 0; i < 40; i++) {
+            pairs.add(new TasteSurvey.Pair("Danie A" + i, "Danie B" + i, i % 3));
+        }
+        TasteSurvey survey = TasteSurvey.start(pairs, "[]");
+        for (int i = 0; i < 5; i++) {
+            survey = survey.answer(TasteSurvey.CHOICE_A);
+        }
+        String json = new JSONObject(new TasteSurveySerializer().toJson(survey.commit()))
+                .put("paused", true).toString();
+        context.getSharedPreferences("mealspire_taste_survey", Context.MODE_PRIVATE).edit()
+                .putString("taste_survey_json", json).commit();
+
+        MainActivity activity = launch();
+
+        assertNull("pauza zostaje pauzą — bez ponownego otwarcia ankiety",
+                activity.findViewById(R.id.survey_progress));
+        assertNotNull("na ekranie startowym można wrócić do ankiety",
+                activity.findViewById(R.id.survey_resume_button));
+        assertTrue(new SharedPreferencesAppSettings(context).isOnboardingDone());
+    }
+
     private static void runAll(List<Runnable> tasks) {
         while (!tasks.isEmpty()) {
             tasks.remove(0).run();

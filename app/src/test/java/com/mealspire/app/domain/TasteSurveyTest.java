@@ -354,4 +354,13 @@ public class TasteSurveyTest {
         assertEquals(Collections.emptyList(), TasteSurvey.missingFrom(
                 Arrays.asList("A", "B"), Arrays.asList("B", "A")));
     }
+
+    @Test
+    public void wTrakcieNiedokonczonegoZapisuOdpowiedziNieDaSieZmienic() {
+        TasteSurvey committing = answered(longSurvey(40), 5).beginCommit(7L);
+        assertFalse("partia w zapisie jest tylko do odczytu", committing.canGoBack());
+        assertTrue(committing.back() == committing);
+        assertTrue("po zatwierdzeniu i nowej odpowiedzi „Cofnij” znów działa",
+                committing.commit().answer(TasteSurvey.CHOICE_A).canGoBack());
+    }
 }
