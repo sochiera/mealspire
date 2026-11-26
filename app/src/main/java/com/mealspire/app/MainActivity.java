@@ -240,6 +240,8 @@ public class MainActivity extends Activity {
     static com.mealspire.app.domain.HttpTransport backendTransportOverride;
     static Executor readyPoolExecutorOverride;
     static Executor signInExecutorOverride;
+    static DishReactionStore reactionStoreOverride;
+    static TasteEventStore tasteEventStoreOverride;
 
     private final Random random = new Random();
     private Button servingsLabel;
@@ -358,14 +360,16 @@ public class MainActivity extends Activity {
         history = historyStore.load();
         cookbookStore = new SharedPreferencesCookbookStore(this);
         cookbook = cookbookStore.load();
-        reactionStore = new SharedPreferencesDishReactionStore(this);
+        reactionStore = reactionStoreOverride != null ? reactionStoreOverride
+                : new SharedPreferencesDishReactionStore(this);
         reactions = reactionStore.load();
         dataManager = new DataManager(preferenceStore, historyStore, cookbookStore,
                 reactionStore);
         householdProfileStore = new SharedPreferencesHouseholdProfileStore(this);
         householdProfile = householdProfileStore.load();
         appSettings = new SharedPreferencesAppSettings(this);
-        tasteEventStore = new SharedPreferencesTasteEventStore(this);
+        tasteEventStore = tasteEventStoreOverride != null ? tasteEventStoreOverride
+                : new SharedPreferencesTasteEventStore(this);
         tasteEvents = tasteEventStore.load();
         tasteAggregate = tasteEventStore.loadAggregate();
         learningStatsStore = new SharedPreferencesLearningStatsStore(this);
@@ -451,12 +455,28 @@ public class MainActivity extends Activity {
         updateServingsLabel();
         updateAiChip();
 
-        if (appSettings.isOnboardingDone()) {
+        boolean recoverSurvey = survey != null && survey.needsCommitRecovery();
+        boolean surveyAnswered = survey != null && survey.isFinished() && survey.position() > 0;
+        boolean surveyPaused = survey != null && !survey.isFinished() && survey.isPaused();
+        if (!appSettings.isOnboardingDone() && (surveyAnswered || surveyPaused)) {
+            // Proces zginął między zakończeniem ankiety („Na razie wystarczy” albo
+            // ostatnia para) a zapisem wyborów lub flagi: ankieta jest ostatnim krokiem quizu,
+            // więc kończymy go tak, jak zrobiłby to przerwany ekran — wybory trafiają
+            // do reakcji raz, a quiz nie zaczyna się od nowa.
+            endOnboarding();
+            maybeCheckForUpdate();
+        } else if (appSettings.isOnboardingDone()) {
+            if (recoverSurvey) {
+                commitSurveyPicks(); // dokończ przerwany zapis wyborów (bez duplikatów)
+            }
             showStartScreen();
             showStartupPrompts();
             maybeCheckForUpdate();
             warmReadyPools();
         } else {
+            if (recoverSurvey) {
+                commitSurveyPicks(); // przerwany zapis przy „Przerwij” w trakcie quizu
+            }
             // Fresh install: a short taste quiz first; every one-time dialog
             // (servings, ChatGPT sign-in, notification permission) waits until
             // it is finished or skipped. An interrupted survey resumes where it stopped.
@@ -1097,6 +1117,14 @@ public class MainActivity extends Activity {
         }
         surveySnapshotPinned = false;
         String dietKey = surveyDietKey();
+        if (survey != null && survey.needsCommitRecovery()) {
+            commitSurveyPicks(); // nowa ankieta nie może zgubić niezapisanych wyborów
+            if (survey.needsCommitRecovery()) {
+                // Zapis nadal się nie udaje: ankieta zostaje nietknięta (bez przeplanowania
+                // i filtrowania), a ponowienie przyjdzie przy następnym ekranie lub starcie.
+                return;
+            }
+        }
         if (survey == null || survey.isFinished()
                 || (!dietKey.equals(survey.dietKey()) && survey.committed() == 0)) {
             planSurvey();
@@ -1181,6 +1209,8 @@ public class MainActivity extends Activity {
             if (survey.isFinished()) {
                 // Empty survey (diet excludes the whole pool): nothing to ask.
                 advanceOnboarding();
+            } else if (survey.awaitsDecision()) {
+                renderSurveyCheckpoint();
             } else {
                 renderSurveyPair();
             }
@@ -1362,10 +1392,11 @@ public class MainActivity extends Activity {
                     + "z odpowiedzi zbiorę dania, które lubicie, i od nich zacznę "
                     + "propozycje. Możesz przerwać i dokończyć później."), marginTop(6));
         }
-        contentContainer.addView(buildProgressBar(survey.position(), survey.size()),
+        // Postęp lokalny dla bieżącej serii (1–20, ostatnia może być krótsza), nie całej ankiety.
+        contentContainer.addView(buildProgressBar(survey.seriesPosition(), survey.seriesLength()),
                 marginTop(survey.position() == 0 ? 18 : 4));
-        TextView progress = Ui.text(this, "Porównanie " + (survey.position() + 1) + " z "
-                + survey.size(), 14, Ui.INK_SOFT);
+        TextView progress = Ui.text(this, "Porównanie " + (survey.seriesPosition() + 1) + " z "
+                + survey.seriesLength(), 14, Ui.INK_SOFT);
         progress.setId(R.id.survey_progress);
         contentContainer.addView(progress, marginTop(10));
 
@@ -1392,6 +1423,48 @@ public class MainActivity extends Activity {
         none.setOnClickListener(v -> answerSurvey(TasteSurvey.CHOICE_NEITHER));
         contentContainer.addView(none, marginTop(12));
 
+        addQuizSkipButton("Przerwij — dokończę później");
+    }
+
+    /**
+     * End of a series: carry on with the next one ("Dalej", answers kept) or
+     * finish with what was answered ("Na razie wystarczy") — the recommender
+     * learns from the partial survey, nothing forces the rest.
+     */
+    private void renderSurveyCheckpoint() {
+        int next = Math.min(TasteSurvey.SERIES_PAIRS, survey.size() - survey.position());
+        contentContainer.addView(Ui.overline(this, "Ankieta gustu"), matchWrap());
+        contentContainer.addView(buildProgressBar(1, 1), marginTop(18));
+        TextView question = Ui.headline(this, "Masz za sobą " + survey.position()
+                + " porównań. Gramy dalej?", 24);
+        question.setId(R.id.onboarding_question);
+        contentContainer.addView(question, marginTop(10));
+        contentContainer.addView(Ui.body(this, "Z tego, co już wybraliście, zacznę "
+                + "propozycje. Kolejne " + next + " porównań pomoże lepiej poznać Wasz "
+                + "gust — ale nie musisz."), marginTop(6));
+
+        Button more = new Button(this);
+        more.setId(R.id.survey_continue_button);
+        more.setText("Dalej");
+        more.setTextSize(16);
+        Ui.primary(more);
+        more.setOnClickListener(v -> {
+            saveSurvey(survey.continueSeries());
+            renderOnboardingStep();
+        });
+        contentContainer.addView(more, marginTop(18));
+
+        Button enough = new Button(this);
+        enough.setId(R.id.survey_enough_button);
+        enough.setText("Na razie wystarczy");
+        enough.setTextSize(16);
+        Ui.outlinedButton(enough);
+        enough.setOnClickListener(v -> {
+            saveSurvey(survey.finishEarly());
+            advanceOnboarding();
+        });
+        contentContainer.addView(enough, marginTop(10));
+        // Pauza: odpowiedzi się zapisują, a wznowienie wraca do tej samej decyzji.
         addQuizSkipButton("Przerwij — dokończę później");
     }
 
@@ -1512,9 +1585,15 @@ public class MainActivity extends Activity {
     private void endOnboarding() {
         boolean standalone = surveyOnly;
         surveyOnly = false;
+        // Najpierw zapis wyborów (z trwałym znacznikiem i zamiarem pauzy), dopiero potem
+        // flaga: zabicie procesu pomiędzy nie zostawi pauzy bez odzyskania ani nie
+        // otworzy ankiety ponownie przy starcie.
+        if (survey != null && !survey.isFinished() && !survey.isPaused()) {
+            saveSurvey(survey.withPaused(true));
+        }
+        boolean learned = commitSurveyPicks();
         appSettings.markOnboardingDone();
         onboardingStep = -1;
-        boolean learned = commitSurveyPicks();
         homeSection.setVisibility(View.VISIBLE);
         Ui.setEnabledWithFade(moreButton, true);
         if (survey != null && survey.isFinished() && learned) {
@@ -1547,22 +1626,66 @@ public class MainActivity extends Activity {
      * final. Returns whether anything new was learned.
      */
     private boolean commitSurveyPicks() {
-        if (survey == null || survey.committed() == survey.position()) {
+        if (survey == null) {
             return false;
         }
+        if (survey.committed() == survey.position()) {
+            if (survey.isCommitting()) {
+                saveSurvey(survey.commit());
+            }
+            return false;
+        }
+        // Najpierw utrwal znacznik tej partii: po zabiciu procesu w trakcie zapisu
+        // ponowienie dopisze tylko to, czego z niej jeszcze brakuje. Bez trwałego
+        // znacznika nic nie dopisujemy — ponowienie nie umiałoby uniknąć duplikatów.
+        survey = survey.beginCommit(System.currentTimeMillis());
+        if (!surveyStore.saveDurably(survey)) {
+            return false;
+        }
+        long stamp = survey.commitStamp();
         List<String> picks = survey.pendingPicks();
+        List<String> recordedReactions = new ArrayList<>();
+        for (DishReaction reaction : reactions.all()) {
+            if (reaction.isLiked() && reaction.getTimeMillis() == stamp) {
+                recordedReactions.add(reaction.getDish());
+            }
+        }
+        List<String> recordedEvents = new ArrayList<>();
+        for (TasteEvent event : tasteEvents.events()) {
+            if (event.getType() == TasteEvent.Type.ONBOARDING_PICK
+                    && event.getTimestamp() == stamp) {
+                recordedEvents.add(event.getDishTitle());
+            }
+        }
         java.util.Map<String, String> detailsByTitle = surveyDetailsByTitle();
-        long now = System.currentTimeMillis();
-        for (String pick : picks) {
+        for (String pick : TasteSurvey.missingFrom(picks, recordedReactions)) {
             reactions = reactions.append(new DishReaction(pick,
-                    DishReaction.describe(detailsByTitle.get(pick)), true, now));
-            preferences = preferences.withLike(pick);
-            recordTasteEvent(TasteEvent.Type.ONBOARDING_PICK, pick, TasteEvent.NO_MEAL);
+                    DishReaction.describe(detailsByTitle.get(pick)), true, stamp));
         }
-        if (!picks.isEmpty()) {
-            preferenceStore.save(preferences);
-            reactionStore.save(reactions);
+        // Polubienia przygotowane lokalnie: trafiają do żywego stanu dopiero po udanym
+        // zapisie, żeby inny zapis polubień nie utrwalił ich przed reakcjami.
+        UserPreferences staged = preferences;
+        for (String pick : picks) {
+            staged = staged.withLike(pick);
         }
+        List<TasteEvent> newEvents = new ArrayList<>();
+        for (String pick : TasteSurvey.missingFrom(picks, recordedEvents)) {
+            newEvents.add(new TasteEvent(TasteEvent.Type.ONBOARDING_PICK, pick,
+                    TasteEvent.NO_MEAL, stamp, false));
+        }
+        // Kolejność: reakcje, zdarzenia (jeden zapis), polubienia na końcu — to polubienia
+        // uruchamiają przy starcie migracje do pustych reakcji/dziennika, więc nie mogą
+        // trafić na dysk przed nimi. Pierwszy nieudany zapis przerywa resztę.
+        boolean durable = picks.isEmpty() || reactionStore.saveDurably(reactions);
+        // Zapis dziennika także przy pustej partii: zdarzenia z nieudanej próby są już
+        // w pamięci, ale nie na dysku.
+        durable = durable && (picks.isEmpty() || appendTasteEvents(newEvents, true));
+        durable = durable && (picks.isEmpty() || preferenceStore.saveDurably(staged));
+        if (!durable) {
+            // Znacznik zostaje: start aplikacji (albo następna próba) dokończy zapis.
+            return false;
+        }
+        preferences = staged;
         saveSurvey(survey.commit());
         return !picks.isEmpty();
     }
@@ -1571,7 +1694,13 @@ public class MainActivity extends Activity {
     private void openSurvey(int newLength) {
         if (newLength > 0) {
             appSettings.saveSurveyLength(newLength);
-            survey = null; // ensureSurvey plans a fresh one
+            commitSurveyPicks(); // wybory starej ankiety zostają, zanim zniknie
+            if (survey == null || !survey.needsCommitRecovery()) {
+                survey = null; // ensureSurvey plans a fresh one
+            }
+        }
+        if (survey != null && survey.isPaused()) {
+            saveSurvey(survey.withPaused(false)); // wznowienie kończy pauzę
         }
         surveyOnly = true;
         contentEpoch++;
@@ -2293,8 +2422,20 @@ public class MainActivity extends Activity {
     /** The single place taste events are appended, compacted and persisted. */
     private void recordTasteEvent(TasteEvent.Type type, String dish, int mealIndex,
                                   boolean exploratory) {
-        tasteEvents = tasteEvents.append(new TasteEvent(
-                type, dish, mealIndex, System.currentTimeMillis(), exploratory));
+        appendTasteEvents(java.util.Collections.singletonList(new TasteEvent(
+                type, dish, mealIndex, System.currentTimeMillis(), exploratory)), false);
+    }
+
+    /**
+     * Appends a batch of events, compacts once and persists log (+ aggregate) in one
+     * write. Routine events save asynchronously; {@code durable} (survey commit) waits
+     * for the disk and returns whether the write succeeded.
+     */
+    private boolean appendTasteEvents(List<TasteEvent> events, boolean durable) {
+        boolean compactedNow = false;
+        for (TasteEvent event : events) {
+            tasteEvents = tasteEvents.append(event);
+        }
         if (tasteEvents.size() > TasteEventLog.MAX_EVENTS) {
             // Najstarsze zdarzenia zwijają się do zamrożonego agregatu —
             // model liczony dalej wychodzi ten sam, dziennik nie puchnie.
@@ -2304,9 +2445,20 @@ public class MainActivity extends Activity {
                     System.currentTimeMillis(), TasteEventLog.MAX_EVENTS);
             tasteEvents = compacted.getLog();
             tasteAggregate = compacted.getAggregate();
-            tasteEventStore.saveAggregate(tasteAggregate);
+            compactedNow = true;
+        }
+        if (compactedNow) {
+            if (durable) {
+                return tasteEventStore.saveDurably(tasteEvents, tasteAggregate);
+            }
+            tasteEventStore.save(tasteEvents, tasteAggregate);
+            return true;
+        }
+        if (durable) {
+            return tasteEventStore.saveDurably(tasteEvents);
         }
         tasteEventStore.save(tasteEvents);
+        return true;
     }
 
     // ----- Modify the shown recipe ----------------------------------------

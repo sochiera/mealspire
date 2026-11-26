@@ -108,6 +108,90 @@ public class TasteSurveyTest {
         assertEquals(Collections.singletonList(TasteSurvey.NOT_ANSWERED), survey.answers());
     }
 
+    private static TasteSurvey longSurvey(int size) {
+        List<TasteSurvey.Pair> pairs = new java.util.ArrayList<>();
+        for (int i = 0; i < size; i++) {
+            pairs.add(new TasteSurvey.Pair("A" + i, "B" + i, i % 3));
+        }
+        return TasteSurvey.start(pairs, "[]");
+    }
+
+    private static TasteSurvey answered(TasteSurvey survey, int count) {
+        for (int i = 0; i < count; i++) {
+            survey = survey.answer(i % 2 == 0 ? TasteSurvey.CHOICE_A : TasteSurvey.CHOICE_B);
+        }
+        return survey;
+    }
+
+    @Test
+    public void pierwszaSeriaMa20ParIPostepLiczyDoKoncaSerii() {
+        assertEquals(20, TasteSurvey.SERIES_PAIRS);
+        TasteSurvey survey = longSurvey(80);
+        assertEquals(20, survey.seriesEnd());
+        assertEquals(20, answered(survey, 19).seriesEnd());
+        assertEquals("krótsza ankieta kończy serię na swoim końcu", 5, longSurvey(5).seriesEnd());
+    }
+
+    @Test
+    public void po20OdpowiedziachAnkietaCzekaNaDecyzjeDalejAlboWystarczy() {
+        TasteSurvey survey = answered(longSurvey(80), 19);
+        assertFalse(survey.awaitsDecision());
+        survey = survey.answer(TasteSurvey.CHOICE_A);
+        assertTrue(survey.awaitsDecision());
+        assertEquals(20, survey.position());
+        assertFalse(survey.isFinished());
+    }
+
+    @Test
+    public void dalejZachowujeOdpowiedziIOtwieraKolejnaSerie() {
+        TasteSurvey atCheckpoint = answered(longSurvey(80), 20);
+        TasteSurvey next = atCheckpoint.continueSeries();
+
+        assertFalse(next.awaitsDecision());
+        assertEquals(20, next.position());
+        assertEquals(atCheckpoint.answers(), next.answers());
+        assertEquals(atCheckpoint.pendingPicks(), next.pendingPicks());
+        assertEquals(40, next.seriesEnd());
+        assertTrue("kolejna seria też kończy się decyzją",
+                answered(next, 20).awaitsDecision());
+    }
+
+    @Test
+    public void naRazieWystarczyKonczyAnkieteZZebranymiOdpowiedziami() {
+        TasteSurvey atCheckpoint = answered(longSurvey(80), 20);
+        TasteSurvey done = atCheckpoint.finishEarly();
+
+        assertTrue(done.isFinished());
+        assertFalse(done.awaitsDecision());
+        assertEquals(20, done.size());
+        assertEquals(atCheckpoint.pendingPicks(), done.pendingPicks());
+        assertEquals(20, done.pendingPicks().size());
+    }
+
+    @Test
+    public void zakonczeniePrzed20PytaniemZachowujeOdpowiedzi() {
+        TasteSurvey done = answered(longSurvey(80), 7).finishEarly();
+        assertTrue(done.isFinished());
+        assertEquals(7, done.size());
+        assertEquals(7, done.likedDishes().size());
+    }
+
+    @Test
+    public void ostatniaParaNieCzekaNaDecyzje() {
+        assertFalse(answered(longSurvey(20), 20).awaitsDecision());
+        assertTrue(answered(longSurvey(20), 20).isFinished());
+    }
+
+    @Test
+    public void decyzjaPoSeriiPrzezywaZapis() {
+        TasteSurveySerializer serializer = new TasteSurveySerializer();
+        TasteSurvey continued = answered(longSurvey(40), 20).continueSeries();
+        TasteSurvey restored = serializer.fromJson(serializer.toJson(continued));
+        assertFalse(restored.awaitsDecision());
+        TasteSurvey waiting = serializer.fromJson(serializer.toJson(answered(longSurvey(40), 20)));
+        assertTrue(waiting.awaitsDecision());
+    }
+
     @Test
     public void paryZDaniemSprzedAktualizacjiOdpadajaPrzejrzaneZostaja() {
         // Ankieta zapisana przed zmianą nazw: druga, nieprzejrzana para ma starą nazwę.
@@ -193,5 +277,90 @@ public class TasteSurveyTest {
                 TasteSurvey.start(Collections.singletonList(
                         new TasteSurvey.Pair("Nieznane", "Rosół")), "[]")
                         .withoutDisallowed(DietConstraints.empty(), details, "[]").size());
+    }
+
+    @Test
+    public void ponownaAkceptacjaWczesniejszegoCheckpointuNieCofaNajdalszego() {
+        TasteSurvey survey = answered(answered(longSurvey(60), 20).continueSeries(), 20)
+                .continueSeries();
+        assertEquals(40, survey.continuedAt());
+        survey = survey.answer(TasteSurvey.CHOICE_A);
+        for (int i = 0; i < 22; i++) {
+            survey = survey.back();
+        }
+        assertEquals(19, survey.position());
+        survey = survey.answer(TasteSurvey.CHOICE_B);
+        assertFalse("checkpoint przed najdalszym zaakceptowanym nie pyta ponownie",
+                survey.awaitsDecision());
+        survey = survey.continueSeries(); // ponowna akceptacja wcześniejszego
+        assertEquals("najdalszy zaakceptowany checkpoint zostaje", 40, survey.continuedAt());
+        survey = answered(survey, 20);
+        assertEquals(40, survey.position());
+        assertFalse("przy 40 „Dalej” już było", survey.awaitsDecision());
+    }
+
+    @Test
+    public void usuniecieParSpozaKataloguZachowujeDecyzjeDalej() {
+        List<TasteSurvey.Pair> pairs = new java.util.ArrayList<>();
+        List<String> catalog = new java.util.ArrayList<>();
+        for (int i = 0; i < 40; i++) {
+            pairs.add(new TasteSurvey.Pair("A" + i, "B" + i, i % 3));
+            if (i != 30) {
+                catalog.add("A" + i);
+                catalog.add("B" + i);
+            }
+        }
+        TasteSurvey continued = answered(TasteSurvey.start(pairs, "[]"), 20).continueSeries();
+        TasteSurvey pruned = continued.withoutUnknownDishes(catalog);
+        assertEquals(39, pruned.size());
+        assertEquals(20, pruned.continuedAt());
+        assertFalse(pruned.awaitsDecision());
+    }
+
+    @Test
+    public void postepJestLokalnyDlaBiezacejSerii() {
+        TasteSurvey second = answered(longSurvey(30), 20).continueSeries();
+        assertEquals(0, second.seriesPosition());
+        assertEquals("ostatnia seria krótsza", 10, second.seriesLength());
+        assertEquals(3, answered(second, 3).seriesPosition());
+        assertEquals(19, answered(longSurvey(80), 19).seriesPosition());
+        assertEquals(20, answered(longSurvey(80), 19).seriesLength());
+    }
+
+    @Test
+    public void rozpoczetyZapisPrzetrwaSerializacjeIZnikaPoZatwierdzeniu() {
+        TasteSurveySerializer serializer = new TasteSurveySerializer();
+        TasteSurvey committing = answered(longSurvey(40), 22).finishEarly().beginCommit(123L);
+        assertTrue(committing.needsCommitRecovery());
+        assertEquals("ponowienie zachowuje znacznik", 123L,
+                committing.beginCommit(999L).commitStamp());
+        TasteSurvey restored = serializer.fromJson(serializer.toJson(committing));
+        assertEquals(123L, restored.commitStamp());
+        assertEquals(committing.pendingPicks(), restored.pendingPicks());
+        TasteSurvey done = restored.commit();
+        assertFalse(done.isCommitting());
+        assertFalse(done.needsCommitRecovery());
+        assertEquals(22, done.committed());
+        assertFalse("niezakończona ankieta bez zapisu w toku nie wymaga odzyskania",
+                answered(longSurvey(40), 5).needsCommitRecovery());
+        assertTrue("zakończona z niezapisanymi wyborami wymaga",
+                answered(longSurvey(40), 5).finishEarly().needsCommitRecovery());
+    }
+
+    @Test
+    public void brakujaceWyboryLiczoneJakoMultizbior() {
+        assertEquals(Arrays.asList("B", "A"), TasteSurvey.missingFrom(
+                Arrays.asList("A", "B", "A", "C"), Arrays.asList("C", "A")).subList(0, 2));
+        assertEquals(Collections.emptyList(), TasteSurvey.missingFrom(
+                Arrays.asList("A", "B"), Arrays.asList("B", "A")));
+    }
+
+    @Test
+    public void wTrakcieNiedokonczonegoZapisuOdpowiedziNieDaSieZmienic() {
+        TasteSurvey committing = answered(longSurvey(40), 5).beginCommit(7L);
+        assertFalse("partia w zapisie jest tylko do odczytu", committing.canGoBack());
+        assertTrue(committing.back() == committing);
+        assertTrue("po zatwierdzeniu i nowej odpowiedzi „Cofnij” znów działa",
+                committing.commit().answer(TasteSurvey.CHOICE_A).canGoBack());
     }
 }

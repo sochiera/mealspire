@@ -36,9 +36,19 @@ public final class SharedPreferencesTasteEventStore implements TasteEventStore {
 
     @Override
     public void save(TasteEventLog log) {
+        // Zwykły zapis asynchronicznie (bez blokowania UI); ankieta używa saveDurably.
         sharedPreferences.edit()
                 .putString(KEY_EVENTS, serializer.toJson(log))
                 .apply();
+    }
+
+    @Override
+    public boolean saveDurably(TasteEventLog log) {
+        // commit(): zapis wyborów z ankiety zatwierdza ankietę dopiero po utrwaleniu
+        // tego pliku — kolejka apply() mogłaby zginąć razem z procesem.
+        return sharedPreferences.edit()
+                .putString(KEY_EVENTS, serializer.toJson(log))
+                .commit();
     }
 
     @Override
@@ -52,5 +62,23 @@ public final class SharedPreferencesTasteEventStore implements TasteEventStore {
         sharedPreferences.edit()
                 .putString(KEY_AGGREGATE, aggregateSerializer.toJson(aggregate))
                 .apply();
+    }
+
+    @Override
+    public void save(TasteEventLog log, FrozenTasteAggregate aggregate) {
+        withAggregate(log, aggregate).apply();
+    }
+
+    @Override
+    public boolean saveDurably(TasteEventLog log, FrozenTasteAggregate aggregate) {
+        return withAggregate(log, aggregate).commit();
+    }
+
+    /** Jedna transakcja: po kompakcji dziennik i agregat nie mogą się rozjechać. */
+    private SharedPreferences.Editor withAggregate(TasteEventLog log,
+                                                   FrozenTasteAggregate aggregate) {
+        return sharedPreferences.edit()
+                .putString(KEY_EVENTS, serializer.toJson(log))
+                .putString(KEY_AGGREGATE, aggregateSerializer.toJson(aggregate));
     }
 }

@@ -37,6 +37,37 @@ Wszystkie teksty w UI i promptach są po polsku.
   `backendStore.forMeal`, dieta bezwzględnie;
   długość `AppSettings.loadSurveyLength()`, domyślnie
   `TasteSurvey.DEFAULT_PAIRS`; „Żadne z tych" nie zapisuje nic).
+  **Serie po `TasteSurvey.SERIES_PAIRS` = 20**: licznik/pasek są lokalne
+  dla serii (`seriesPosition()` z `seriesLength()`, np. „Porównanie 1 z 20”
+  na starcie drugiej serii, ostatnia może być krótsza), a po każdej pełnej
+  serii (gdy zostały pary) `awaitsDecision()` pokazuje „Dalej"
+  (`continueSeries()`, odpowiedzi bez zmian; `continuedAt` = najdalszy
+  zaakceptowany checkpoint, `max` — ponowne „Dalej” po „Cofnij” go nie
+  obniża, a checkpointy ≤ `continuedAt` nie pytają drugi raz), „Na razie
+  wystarczy" (`finishEarly()` — ucina nieprzejrzane pary, ankieta jest
+  ukończona, bez przycisku „Dokończ…") albo „Przerwij — dokończę później”
+  (pauza: wybory zapisane, wznowienie wraca do decyzji).
+  **Zapis wyborów jest odporny na zabicie procesu**: `commitSurveyPicks`
+  najpierw utrwala `beginCommit(stamp)`, dopisuje reakcje/zdarzenia
+  `ONBOARDING_PICK` ze znacznikiem `stamp` tylko w brakującej liczbie
+  (`TasteSurvey.missingFrom`), a na końcu `commit()` czyści znacznik.
+  `onCreate` dokańcza zapis, gdy `needsCommitRecovery()` (przerwany zapis
+  albo ukończona ankieta z niezapisanymi wyborami; bez ukończonego
+  onboardingu — przez `endOnboarding()`; ukończona ankieta bez flagi
+  onboardingu też kończy quiz). Zapis ankiety idzie przez `saveDurably`
+  (`commit()`, zwraca wynik; zwykłe zapisy zostają na `apply()`): kolejno reakcje,
+  zdarzenia (jeden zapis partii), polubienia na końcu (wyzwalają migracje
+  przy starcie); pierwszy nieudany zapis zostawia znacznik do ponowienia,
+  a stara ankieta nie jest zastępowana nową, dopóki zapis się nie uda.
+  Dziennik po kompakcji i agregat zapisują się jedną transakcją.
+  W trakcie niedokończonego zapisu `canGoBack()` = false (partia tylko do
+  odczytu). Pauza zapisuje `paused` w stanie ankiety przed flagą onboardingu;
+  start z `paused` bez flagi kończy quiz na ekran główny, wznowienie
+  (`openSurvey`) czyści `paused`. Wstrzymana ankieta z niezapisanymi wyborami
+  też wymaga odzyskania; dopóki zapis się nie uda, `ensureSurvey` nie
+  przeplanowuje ani nie filtruje ankiety, a polubienia trafiają do żywego
+  stanu dopiero po udanym zapisie.
+  `endOnboarding()` zapisuje wybory przed flagą `onboarding_done`.
   Odpowiedzi 1–9 → `HouseholdProfile` (środkowe odpowiedzi nowych pytań nie
   dokładają zdań do promptu) (wpływa na prompty przez
   `RecipeRequest.getHouseholdProfile()`, także na „Zmień przepis"). Ankieta
