@@ -31,13 +31,16 @@ public final class SharedPreferencesPreferenceStore implements PreferenceStore {
 
     @Override
     public void save(UserPreferences preferences) {
-        saveDurably(preferences);
+        // Zwykły zapis asynchronicznie (bez blokowania UI); ankieta używa saveDurably.
+        sharedPreferences.edit()
+                .putString(KEY_PREFERENCES, serializer.toJson(preferences))
+                .apply();
     }
 
     @Override
     public boolean saveDurably(UserPreferences preferences) {
-        // commit(), nie apply(): zapis wyborów z ankiety zatwierdza ankietę dopiero po
-        // utrwaleniu tego pliku — kolejka apply() mogłaby zginąć razem z procesem.
+        // commit(): zapis wyborów z ankiety zatwierdza ankietę dopiero po utrwaleniu
+        // tego pliku — kolejka apply() mogłaby zginąć razem z procesem.
         return sharedPreferences.edit()
                 .putString(KEY_PREFERENCES, serializer.toJson(preferences))
                 .commit();

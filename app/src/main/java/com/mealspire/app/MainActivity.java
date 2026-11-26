@@ -241,6 +241,7 @@ public class MainActivity extends Activity {
     static Executor readyPoolExecutorOverride;
     static Executor signInExecutorOverride;
     static DishReactionStore reactionStoreOverride;
+    static TasteEventStore tasteEventStoreOverride;
 
     private final Random random = new Random();
     private Button servingsLabel;
@@ -367,7 +368,8 @@ public class MainActivity extends Activity {
         householdProfileStore = new SharedPreferencesHouseholdProfileStore(this);
         householdProfile = householdProfileStore.load();
         appSettings = new SharedPreferencesAppSettings(this);
-        tasteEventStore = new SharedPreferencesTasteEventStore(this);
+        tasteEventStore = tasteEventStoreOverride != null ? tasteEventStoreOverride
+                : new SharedPreferencesTasteEventStore(this);
         tasteEvents = tasteEventStore.load();
         tasteAggregate = tasteEventStore.loadAggregate();
         learningStatsStore = new SharedPreferencesLearningStatsStore(this);
@@ -454,9 +456,10 @@ public class MainActivity extends Activity {
         updateAiChip();
 
         boolean recoverSurvey = survey != null && survey.needsCommitRecovery();
-        if (!appSettings.isOnboardingDone() && recoverSurvey && survey.isFinished()) {
+        boolean surveyAnswered = survey != null && survey.isFinished() && survey.position() > 0;
+        if (!appSettings.isOnboardingDone() && surveyAnswered) {
             // Proces zginął między zakończeniem ankiety („Na razie wystarczy” albo
-            // ostatnia para) a zapisem wyborów: ankieta jest ostatnim krokiem quizu,
+            // ostatnia para) a zapisem wyborów lub flagi: ankieta jest ostatnim krokiem quizu,
             // więc kończymy go tak, jak zrobiłby to przerwany ekran — wybory trafiają
             // do reakcji raz, a quiz nie zaczyna się od nowa.
             endOnboarding();
@@ -1115,6 +1118,9 @@ public class MainActivity extends Activity {
         String dietKey = surveyDietKey();
         if (survey != null && survey.needsCommitRecovery()) {
             commitSurveyPicks(); // nowa ankieta nie może zgubić niezapisanych wyborów
+            if (survey.isFinished() && survey.needsCommitRecovery()) {
+                return; // zapis nadal się nie udaje: stara ankieta zostaje do ponowienia
+            }
         }
         if (survey == null || survey.isFinished()
                 || (!dietKey.equals(survey.dietKey()) && survey.committed() == 0)) {
@@ -1661,7 +1667,9 @@ public class MainActivity extends Activity {
         // uruchamiają przy starcie migracje do pustych reakcji/dziennika, więc nie mogą
         // trafić na dysk przed nimi. Pierwszy nieudany zapis przerywa resztę.
         boolean durable = picks.isEmpty() || reactionStore.saveDurably(reactions);
-        durable = durable && (newEvents.isEmpty() || appendTasteEvents(newEvents));
+        // Zapis dziennika także przy pustej partii: zdarzenia z nieudanej próby są już
+        // w pamięci, ale nie na dysku.
+        durable = durable && (picks.isEmpty() || appendTasteEvents(newEvents, true));
         durable = durable && (picks.isEmpty() || preferenceStore.saveDurably(preferences));
         if (!durable) {
             // Znacznik zostaje: start aplikacji (albo następna próba) dokończy zapis.
@@ -1676,7 +1684,9 @@ public class MainActivity extends Activity {
         if (newLength > 0) {
             appSettings.saveSurveyLength(newLength);
             commitSurveyPicks(); // wybory starej ankiety zostają, zanim zniknie
-            survey = null; // ensureSurvey plans a fresh one
+            if (survey == null || !survey.needsCommitRecovery()) {
+                survey = null; // ensureSurvey plans a fresh one
+            }
         }
         surveyOnly = true;
         contentEpoch++;
@@ -2399,11 +2409,16 @@ public class MainActivity extends Activity {
     private void recordTasteEvent(TasteEvent.Type type, String dish, int mealIndex,
                                   boolean exploratory) {
         appendTasteEvents(java.util.Collections.singletonList(new TasteEvent(
-                type, dish, mealIndex, System.currentTimeMillis(), exploratory)));
+                type, dish, mealIndex, System.currentTimeMillis(), exploratory)), false);
     }
 
-    /** Appends a batch of events, compacts once and persists the log once; true when durable. */
-    private boolean appendTasteEvents(List<TasteEvent> events) {
+    /**
+     * Appends a batch of events, compacts once and persists log (+ aggregate) in one
+     * write. Routine events save asynchronously; {@code durable} (survey commit) waits
+     * for the disk and returns whether the write succeeded.
+     */
+    private boolean appendTasteEvents(List<TasteEvent> events, boolean durable) {
+        boolean compactedNow = false;
         for (TasteEvent event : events) {
             tasteEvents = tasteEvents.append(event);
         }
@@ -2416,9 +2431,20 @@ public class MainActivity extends Activity {
                     System.currentTimeMillis(), TasteEventLog.MAX_EVENTS);
             tasteEvents = compacted.getLog();
             tasteAggregate = compacted.getAggregate();
-            tasteEventStore.saveAggregate(tasteAggregate);
+            compactedNow = true;
         }
-        return tasteEventStore.saveDurably(tasteEvents);
+        if (compactedNow) {
+            if (durable) {
+                return tasteEventStore.saveDurably(tasteEvents, tasteAggregate);
+            }
+            tasteEventStore.save(tasteEvents, tasteAggregate);
+            return true;
+        }
+        if (durable) {
+            return tasteEventStore.saveDurably(tasteEvents);
+        }
+        tasteEventStore.save(tasteEvents);
+        return true;
     }
 
     // ----- Modify the shown recipe ----------------------------------------

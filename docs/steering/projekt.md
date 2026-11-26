@@ -53,10 +53,13 @@ Wszystkie teksty w UI i promptach są po polsku.
   (`TasteSurvey.missingFrom`), a na końcu `commit()` czyści znacznik.
   `onCreate` dokańcza zapis, gdy `needsCommitRecovery()` (przerwany zapis
   albo ukończona ankieta z niezapisanymi wyborami; bez ukończonego
-  onboardingu — przez `endOnboarding()`). Reakcje, polubienia i zdarzenia
-  zapisują się `commit()` (`saveDurably` zwraca wynik): kolejno reakcje,
+  onboardingu — przez `endOnboarding()`; ukończona ankieta bez flagi
+  onboardingu też kończy quiz). Zapis ankiety idzie przez `saveDurably`
+  (`commit()`, zwraca wynik; zwykłe zapisy zostają na `apply()`): kolejno reakcje,
   zdarzenia (jeden zapis partii), polubienia na końcu (wyzwalają migracje
-  przy starcie); pierwszy nieudany zapis zostawia znacznik do ponowienia.
+  przy starcie); pierwszy nieudany zapis zostawia znacznik do ponowienia,
+  a stara ankieta nie jest zastępowana nową, dopóki zapis się nie uda.
+  Dziennik po kompakcji i agregat zapisują się jedną transakcją.
   `endOnboarding()` zapisuje wybory przed flagą `onboarding_done`.
   Odpowiedzi 1–9 → `HouseholdProfile` (środkowe odpowiedzi nowych pytań nie
   dokładają zdań do promptu) (wpływa na prompty przez

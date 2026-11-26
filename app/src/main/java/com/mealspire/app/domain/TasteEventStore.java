@@ -19,4 +19,16 @@ public interface TasteEventStore {
     FrozenTasteAggregate loadAggregate();
 
     void saveAggregate(FrozenTasteAggregate aggregate);
+
+    /** Dziennik po kompakcji razem z agregatem — oba albo żaden (jeden zapis). */
+    default void save(TasteEventLog log, FrozenTasteAggregate aggregate) {
+        saveAggregate(aggregate);
+        save(log);
+    }
+
+    /** Jak {@link #save(TasteEventLog, FrozenTasteAggregate)}, ale czeka na dysk. */
+    default boolean saveDurably(TasteEventLog log, FrozenTasteAggregate aggregate) {
+        saveAggregate(aggregate);
+        return saveDurably(log);
+    }
 }

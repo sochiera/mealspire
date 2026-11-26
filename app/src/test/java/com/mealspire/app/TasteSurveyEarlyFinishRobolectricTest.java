@@ -21,7 +21,10 @@ import com.mealspire.app.domain.DishReactionLog;
 import com.mealspire.app.domain.DishReactionStore;
 import com.mealspire.app.domain.HttpTransport;
 import com.mealspire.app.domain.Recipe;
+import com.mealspire.app.domain.FrozenTasteAggregate;
 import com.mealspire.app.domain.TasteEvent;
+import com.mealspire.app.domain.TasteEventLog;
+import com.mealspire.app.domain.TasteEventStore;
 import com.mealspire.app.domain.TasteSurvey;
 import com.mealspire.app.domain.TasteSurveySerializer;
 import com.mealspire.app.storage.SharedPreferencesAppSettings;
@@ -35,6 +38,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.junit.After;
+import org.robolectric.shadows.ShadowAlertDialog;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
@@ -64,6 +68,7 @@ public class TasteSurveyEarlyFinishRobolectricTest {
         MainActivity.backendTransportOverride = null;
         MainActivity.readyPoolExecutorOverride = null;
         MainActivity.reactionStoreOverride = null;
+        MainActivity.tasteEventStoreOverride = null;
     }
 
     private static MainActivity launch() {
@@ -479,6 +484,113 @@ public class TasteSurveyEarlyFinishRobolectricTest {
         stored = new SharedPreferencesTasteSurveyStore(context).load();
         assertEquals(5, stored.committed());
         assertEquals(0L, stored.commitStamp());
+    }
+
+    // ----- Druga runda review (Sol) dla 6505e41 -----
+
+    /** Klika pozycję listy w ostatnim dialogu: po prefiksie albo (null) pierwszą. */
+    private static void clickDialogItem(String prefix) {
+        android.app.AlertDialog dialog = ShadowAlertDialog.getLatestAlertDialog();
+        android.widget.ListAdapter adapter = dialog.getListView().getAdapter();
+        for (int i = 0; i < adapter.getCount(); i++) {
+            if (prefix == null || String.valueOf(adapter.getItem(i)).startsWith(prefix)) {
+                dialog.getListView().performItemClick(null, i, i);
+                return;
+            }
+        }
+        throw new AssertionError("Brak pozycji: " + prefix);
+    }
+
+    /** „Więcej…” → „Ankieta gustu” → pierwsza długość: nowa ankieta zamiast ukończonej. */
+    private static void startNewSurveyFromMenu(MainActivity activity) {
+        click(activity, R.id.more_button);
+        clickDialogItem("Ankieta gustu");
+        clickDialogItem(null);
+    }
+
+    /** Dziennik zdarzeń, którego zapis można chwilowo zepsuć. */
+    private final class FlakyTasteEventStore implements TasteEventStore {
+        private final SharedPreferencesTasteEventStore real =
+                new SharedPreferencesTasteEventStore(context);
+        boolean failing = true;
+
+        @Override
+        public TasteEventLog load() {
+            return real.load();
+        }
+
+        @Override
+        public void save(TasteEventLog log) {
+            saveDurably(log);
+        }
+
+        @Override
+        public boolean saveDurably(TasteEventLog log) {
+            return !failing && real.saveDurably(log);
+        }
+
+        @Override
+        public FrozenTasteAggregate loadAggregate() {
+            return real.loadAggregate();
+        }
+
+        @Override
+        public void saveAggregate(FrozenTasteAggregate aggregate) {
+            if (!failing) {
+                real.saveAggregate(aggregate);
+            }
+        }
+    }
+
+    @Test
+    public void ukonczonaIZapisanaAnkietaBezFlagiOnboardinguNieZaczynaQuizuOdNowa() {
+        // Proces zginął po zatwierdzeniu wyborów, a przed zapisem flagi onboardingu.
+        new SharedPreferencesTasteSurveyStore(context).save(finishedEarlyNotCommitted(22).commit());
+
+        MainActivity activity = launch();
+
+        assertNull("quiz nie zaczyna się od pytania 1",
+                activity.findViewById(R.id.onboarding_question));
+        assertTrue(new SharedPreferencesAppSettings(context).isOnboardingDone());
+    }
+
+    @Test
+    public void nieudanePonowienieZapisuNieNadpisujeAnkietyNowa() {
+        MainActivity.reactionStoreOverride = new FailingReactionStore();
+        new SharedPreferencesAppSettings(context).markOnboardingDone();
+        TasteSurvey pending = finishedEarlyNotCommitted(22);
+        List<String> picks = pending.pendingPicks();
+        new SharedPreferencesTasteSurveyStore(context).save(pending);
+
+        MainActivity activity = launch();
+        startNewSurveyFromMenu(activity);
+
+        TasteSurvey stored = new SharedPreferencesTasteSurveyStore(context).load();
+        assertEquals("niezapisane odpowiedzi nie znikają pod nową ankietą", 22, stored.size());
+        assertEquals(0, stored.committed());
+
+        MainActivity.reactionStoreOverride = null;
+        launch();
+        assertEquals(picks, allReactionDishes());
+    }
+
+    @Test
+    public void ponowienieWTejSamejSesjiZapisujeZdarzeniaNaDysk() {
+        FlakyTasteEventStore events = new FlakyTasteEventStore();
+        MainActivity.tasteEventStoreOverride = events;
+        new SharedPreferencesAppSettings(context).markOnboardingDone();
+        TasteSurvey pending = finishedEarlyNotCommitted(22);
+        List<String> picks = pending.pendingPicks();
+        new SharedPreferencesTasteSurveyStore(context).save(pending);
+
+        MainActivity activity = launch(); // odzyskanie: zapis zdarzeń się nie udaje
+        assertTrue(new SharedPreferencesTasteSurveyStore(context).load().commitStamp() > 0);
+
+        events.failing = false;
+        startNewSurveyFromMenu(activity); // ponowienie w tej samej aktywności
+
+        assertEquals("zdarzenia z pamięci trafiły na dysk", picks, onboardingPickEvents());
+        assertEquals(picks, allReactionDishes());
     }
 
     private static void runAll(List<Runnable> tasks) {
