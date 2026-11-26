@@ -54,7 +54,10 @@ Wszystkie teksty w UI i promptach są po polsku.
   `onCreate` dokańcza zapis, gdy `needsCommitRecovery()` (przerwany zapis
   albo ukończona ankieta z niezapisanymi wyborami; bez ukończonego
   onboardingu — przez `endOnboarding()`). Reakcje, polubienia i zdarzenia
-  zapisują się `commit()`, nie `apply()`.
+  zapisują się `commit()` (`saveDurably` zwraca wynik): kolejno reakcje,
+  zdarzenia (jeden zapis partii), polubienia na końcu (wyzwalają migracje
+  przy starcie); pierwszy nieudany zapis zostawia znacznik do ponowienia.
+  `endOnboarding()` zapisuje wybory przed flagą `onboarding_done`.
   Odpowiedzi 1–9 → `HouseholdProfile` (środkowe odpowiedzi nowych pytań nie
   dokładają zdań do promptu) (wpływa na prompty przez
   `RecipeRequest.getHouseholdProfile()`, także na „Zmień przepis"). Ankieta

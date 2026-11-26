@@ -28,8 +28,13 @@ public final class SharedPreferencesTasteSurveyStore implements TasteSurveyStore
 
     @Override
     public void save(TasteSurvey survey) {
+        saveDurably(survey);
+    }
+
+    @Override
+    public boolean saveDurably(TasteSurvey survey) {
         // commit(), nie apply(): odpowiedź ma przetrwać zabicie procesu tuż po kliknięciu.
-        sharedPreferences.edit()
+        return sharedPreferences.edit()
                 .putString(KEY_SURVEY, serializer.toJson(survey))
                 .commit();
     }

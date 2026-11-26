@@ -28,9 +28,14 @@ public final class SharedPreferencesDishReactionStore implements DishReactionSto
 
     @Override
     public void save(DishReactionLog log) {
+        saveDurably(log);
+    }
+
+    @Override
+    public boolean saveDurably(DishReactionLog log) {
         // commit(), nie apply(): zapis wyborów z ankiety zatwierdza ankietę dopiero po
         // utrwaleniu tego pliku — kolejka apply() mogłaby zginąć razem z procesem.
-        sharedPreferences.edit()
+        return sharedPreferences.edit()
                 .putString(KEY_REACTIONS, serializer.toJson(log))
                 .commit();
     }

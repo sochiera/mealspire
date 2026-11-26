@@ -240,6 +240,7 @@ public class MainActivity extends Activity {
     static com.mealspire.app.domain.HttpTransport backendTransportOverride;
     static Executor readyPoolExecutorOverride;
     static Executor signInExecutorOverride;
+    static DishReactionStore reactionStoreOverride;
 
     private final Random random = new Random();
     private Button servingsLabel;
@@ -358,7 +359,8 @@ public class MainActivity extends Activity {
         history = historyStore.load();
         cookbookStore = new SharedPreferencesCookbookStore(this);
         cookbook = cookbookStore.load();
-        reactionStore = new SharedPreferencesDishReactionStore(this);
+        reactionStore = reactionStoreOverride != null ? reactionStoreOverride
+                : new SharedPreferencesDishReactionStore(this);
         reactions = reactionStore.load();
         dataManager = new DataManager(preferenceStore, historyStore, cookbookStore,
                 reactionStore);
@@ -1574,9 +1576,11 @@ public class MainActivity extends Activity {
     private void endOnboarding() {
         boolean standalone = surveyOnly;
         surveyOnly = false;
+        // Najpierw zapis wyborów (z trwałym znacznikiem), dopiero potem flaga: zabicie
+        // procesu pomiędzy nie zostawi pauzy z niezapisanymi wyborami bez odzyskania.
+        boolean learned = commitSurveyPicks();
         appSettings.markOnboardingDone();
         onboardingStep = -1;
-        boolean learned = commitSurveyPicks();
         homeSection.setVisibility(View.VISIBLE);
         Ui.setEnabledWithFade(moreButton, true);
         if (survey != null && survey.isFinished() && learned) {
@@ -1619,8 +1623,12 @@ public class MainActivity extends Activity {
             return false;
         }
         // Najpierw utrwal znacznik tej partii: po zabiciu procesu w trakcie zapisu
-        // ponowienie dopisze tylko to, czego z niej jeszcze brakuje.
-        saveSurvey(survey.beginCommit(System.currentTimeMillis()));
+        // ponowienie dopisze tylko to, czego z niej jeszcze brakuje. Bez trwałego
+        // znacznika nic nie dopisujemy — ponowienie nie umiałoby uniknąć duplikatów.
+        survey = survey.beginCommit(System.currentTimeMillis());
+        if (!surveyStore.saveDurably(survey)) {
+            return false;
+        }
         long stamp = survey.commitStamp();
         List<String> picks = survey.pendingPicks();
         List<String> recordedReactions = new ArrayList<>();
@@ -1644,13 +1652,20 @@ public class MainActivity extends Activity {
         for (String pick : picks) {
             preferences = preferences.withLike(pick);
         }
+        List<TasteEvent> newEvents = new ArrayList<>();
         for (String pick : TasteSurvey.missingFrom(picks, recordedEvents)) {
-            recordTasteEvent(TasteEvent.Type.ONBOARDING_PICK, pick, TasteEvent.NO_MEAL,
-                    false, stamp);
+            newEvents.add(new TasteEvent(TasteEvent.Type.ONBOARDING_PICK, pick,
+                    TasteEvent.NO_MEAL, stamp, false));
         }
-        if (!picks.isEmpty()) {
-            preferenceStore.save(preferences);
-            reactionStore.save(reactions);
+        // Kolejność: reakcje, zdarzenia (jeden zapis), polubienia na końcu — to polubienia
+        // uruchamiają przy starcie migracje do pustych reakcji/dziennika, więc nie mogą
+        // trafić na dysk przed nimi. Pierwszy nieudany zapis przerywa resztę.
+        boolean durable = picks.isEmpty() || reactionStore.saveDurably(reactions);
+        durable = durable && (newEvents.isEmpty() || appendTasteEvents(newEvents));
+        durable = durable && (picks.isEmpty() || preferenceStore.saveDurably(preferences));
+        if (!durable) {
+            // Znacznik zostaje: start aplikacji (albo następna próba) dokończy zapis.
+            return false;
         }
         saveSurvey(survey.commit());
         return !picks.isEmpty();
@@ -2383,13 +2398,15 @@ public class MainActivity extends Activity {
     /** The single place taste events are appended, compacted and persisted. */
     private void recordTasteEvent(TasteEvent.Type type, String dish, int mealIndex,
                                   boolean exploratory) {
-        recordTasteEvent(type, dish, mealIndex, exploratory, System.currentTimeMillis());
+        appendTasteEvents(java.util.Collections.singletonList(new TasteEvent(
+                type, dish, mealIndex, System.currentTimeMillis(), exploratory)));
     }
 
-    private void recordTasteEvent(TasteEvent.Type type, String dish, int mealIndex,
-                                  boolean exploratory, long timestamp) {
-        tasteEvents = tasteEvents.append(new TasteEvent(
-                type, dish, mealIndex, timestamp, exploratory));
+    /** Appends a batch of events, compacts once and persists the log once; true when durable. */
+    private boolean appendTasteEvents(List<TasteEvent> events) {
+        for (TasteEvent event : events) {
+            tasteEvents = tasteEvents.append(event);
+        }
         if (tasteEvents.size() > TasteEventLog.MAX_EVENTS) {
             // Najstarsze zdarzenia zwijają się do zamrożonego agregatu —
             // model liczony dalej wychodzi ten sam, dziennik nie puchnie.
@@ -2401,7 +2418,7 @@ public class MainActivity extends Activity {
             tasteAggregate = compacted.getAggregate();
             tasteEventStore.saveAggregate(tasteAggregate);
         }
-        tasteEventStore.save(tasteEvents);
+        return tasteEventStore.saveDurably(tasteEvents);
     }
 
     // ----- Modify the shown recipe ----------------------------------------

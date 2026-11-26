@@ -7,6 +7,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.widget.Button;
 import android.widget.TextView;
 
@@ -17,6 +18,7 @@ import com.mealspire.app.domain.ChatGptSession;
 import com.mealspire.app.domain.DishRating;
 import com.mealspire.app.domain.DishReaction;
 import com.mealspire.app.domain.DishReactionLog;
+import com.mealspire.app.domain.DishReactionStore;
 import com.mealspire.app.domain.HttpTransport;
 import com.mealspire.app.domain.Recipe;
 import com.mealspire.app.domain.TasteEvent;
@@ -61,6 +63,7 @@ public class TasteSurveyEarlyFinishRobolectricTest {
     public void tearDown() {
         MainActivity.backendTransportOverride = null;
         MainActivity.readyPoolExecutorOverride = null;
+        MainActivity.reactionStoreOverride = null;
     }
 
     private static MainActivity launch() {
@@ -392,6 +395,90 @@ public class TasteSurveyEarlyFinishRobolectricTest {
         assertNull("przy 40 „Dalej” już zaakceptowane",
                 activity.findViewById(R.id.survey_continue_button));
         assertEquals("Porównanie 1 z 20", text(activity, R.id.survey_progress));
+    }
+
+    // ----- Uwagi z niezależnego review (Sol) dla 6abf59f -----
+
+    /** Trzyma słuchaczy (SharedPreferences pamięta je słabo). */
+    private final List<SharedPreferences.OnSharedPreferenceChangeListener> listeners =
+            new ArrayList<>();
+
+    private void record(String prefs, List<String> log) {
+        SharedPreferences.OnSharedPreferenceChangeListener listener =
+                (shared, key) -> log.add(prefs + ":" + key);
+        listeners.add(listener);
+        context.getSharedPreferences(prefs, Context.MODE_PRIVATE)
+                .registerOnSharedPreferenceChangeListener(listener);
+    }
+
+    @Test
+    public void pauzaUtrwalaZapisAnkietyPrzedFlagaUkonczonegoOnboardingu() {
+        MainActivity activity = launch();
+        answerProfileQuestions(activity);
+        answerPairs(activity, 1, 5, 20);
+        List<String> writes = new ArrayList<>();
+        record("mealspire_settings", writes);
+        record("mealspire_taste_survey", writes);
+        click(activity, R.id.onboarding_skip_button);
+
+        int survey = writes.indexOf("mealspire_taste_survey:taste_survey_json");
+        int done = writes.indexOf("mealspire_settings:onboarding_done");
+        assertTrue(writes.toString(), survey >= 0 && done >= 0);
+        assertTrue("zabity proces po fladze nie może zostawić niezapisanej pauzy: " + writes,
+                survey < done);
+    }
+
+    @Test
+    public void zapisWyborowZapisujeDziennikZdarzenJedenRaz() {
+        MainActivity activity = launch();
+        answerProfileQuestions(activity);
+        List<String> picks = answerPairs(activity, 1, 20, 20);
+        List<String> writes = new ArrayList<>();
+        record("mealspire_taste_events", writes);
+        click(activity, R.id.survey_enough_button);
+
+        assertEquals(picks, onboardingPickEvents());
+        assertEquals("jeden zapis dziennika na partię, nie na każdy wybór",
+                1, java.util.Collections.frequency(writes, "mealspire_taste_events:taste_events_json"));
+    }
+
+    /** Magazyn reakcji, którego zapis się nie udaje (np. pełna pamięć). */
+    private final class FailingReactionStore implements DishReactionStore {
+        @Override
+        public DishReactionLog load() {
+            return new SharedPreferencesDishReactionStore(context).load();
+        }
+
+        @Override
+        public void save(DishReactionLog log) {
+            // zapis przepada
+        }
+
+        public boolean saveDurably(DishReactionLog log) {
+            return false;
+        }
+    }
+
+    @Test
+    public void nieudanyZapisReakcjiZostawiaZnacznikIPonowienieGoDokancza() {
+        MainActivity.reactionStoreOverride = new FailingReactionStore();
+        MainActivity activity = launch();
+        answerProfileQuestions(activity);
+        List<String> picks = answerPairs(activity, 1, 5, 20);
+        click(activity, R.id.onboarding_skip_button);
+
+        TasteSurvey stored = new SharedPreferencesTasteSurveyStore(context).load();
+        assertEquals("nic nie zatwierdzone, skoro reakcje się nie zapisały", 0, stored.committed());
+        assertTrue("znacznik zostaje do ponowienia", stored.commitStamp() > 0);
+
+        MainActivity.reactionStoreOverride = null;
+        launch();
+        List<String> liked = new ArrayList<>(new LinkedHashSet<>(picks));
+        assertEquals(liked, new ArrayList<>(likedReactions()));
+        assertEquals(picks.size(), allReactionDishes().size());
+        stored = new SharedPreferencesTasteSurveyStore(context).load();
+        assertEquals(5, stored.committed());
+        assertEquals(0L, stored.commitStamp());
     }
 
     private static void runAll(List<Runnable> tasks) {

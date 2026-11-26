@@ -7,4 +7,13 @@ public interface TasteSurveyStore {
     TasteSurvey load();
 
     void save(TasteSurvey survey);
+
+    /**
+     * Zapis, który mówi, czy dane naprawdę są trwałe (np. {@code commit()} zamiast
+     * {@code apply()}); zapis wyborów z ankiety zatwierdza ją dopiero przy {@code true}.
+     */
+    default boolean saveDurably(TasteSurvey survey) {
+        save(survey);
+        return true;
+    }
 }

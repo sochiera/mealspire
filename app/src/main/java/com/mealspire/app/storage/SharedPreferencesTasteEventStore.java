@@ -36,9 +36,14 @@ public final class SharedPreferencesTasteEventStore implements TasteEventStore {
 
     @Override
     public void save(TasteEventLog log) {
+        saveDurably(log);
+    }
+
+    @Override
+    public boolean saveDurably(TasteEventLog log) {
         // commit(), nie apply(): zapis wyborów z ankiety zatwierdza ankietę dopiero po
         // utrwaleniu tego pliku — kolejka apply() mogłaby zginąć razem z procesem.
-        sharedPreferences.edit()
+        return sharedPreferences.edit()
                 .putString(KEY_EVENTS, serializer.toJson(log))
                 .commit();
     }
@@ -53,6 +58,6 @@ public final class SharedPreferencesTasteEventStore implements TasteEventStore {
     public void saveAggregate(FrozenTasteAggregate aggregate) {
         sharedPreferences.edit()
                 .putString(KEY_AGGREGATE, aggregateSerializer.toJson(aggregate))
-                .apply();
+                .commit(); // agregat i dziennik muszą przetrwać razem
     }
 }
