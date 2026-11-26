@@ -257,10 +257,11 @@ public final class TasteSurvey {
 
     /**
      * Czy przy starcie trzeba dokończyć zapis: przerwany w trakcie albo ankieta
-     * zakończona (także „Na razie wystarczy"), a jej wybory jeszcze niezapisane.
+     * zakończona (także „Na razie wystarczy") lub wstrzymana („Przerwij”), a jej
+     * wybory jeszcze niezapisane.
      */
     public boolean needsCommitRecovery() {
-        return isCommitting() || (isFinished() && committed < position);
+        return isCommitting() || ((isFinished() || paused) && committed < position);
     }
 
     /**

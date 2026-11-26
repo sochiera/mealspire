@@ -619,6 +619,57 @@ public class TasteSurveyEarlyFinishRobolectricTest {
         assertTrue(new SharedPreferencesAppSettings(context).isOnboardingDone());
     }
 
+    /** Ankieta 40 par (nazwy spoza katalogu), {@code answered} odpowiedzi A, niezatwierdzona. */
+    private static TasteSurvey answeredSurvey(int answered, String dietKey) {
+        List<TasteSurvey.Pair> pairs = new ArrayList<>();
+        for (int i = 0; i < 40; i++) {
+            pairs.add(new TasteSurvey.Pair("Danie A" + i, "Danie B" + i, i % 3));
+        }
+        TasteSurvey survey = TasteSurvey.start(pairs, dietKey);
+        for (int i = 0; i < answered; i++) {
+            survey = survey.answer(TasteSurvey.CHOICE_A);
+        }
+        return survey;
+    }
+
+    private void saveSurveyJson(TasteSurvey survey, String key, Object value) throws Exception {
+        String json = new JSONObject(new TasteSurveySerializer().toJson(survey))
+                .put(key, value).toString();
+        context.getSharedPreferences("mealspire_taste_survey", Context.MODE_PRIVATE).edit()
+                .putString("taste_survey_json", json).commit();
+    }
+
+    @Test
+    public void pauzaZNiezapisanymiWyboramiPoOnboardinguJestOdzyskiwana() throws Exception {
+        // Pauza ankiety otwartej z ekranu głównego: zamiar pauzy zapisany, proces zginął
+        // przed znacznikiem zapisu wyborów.
+        new SharedPreferencesAppSettings(context).markOnboardingDone();
+        TasteSurvey survey = answeredSurvey(5, "[]");
+        List<String> picks = survey.pendingPicks();
+        saveSurveyJson(survey, "paused", true);
+
+        launch();
+
+        assertEquals(picks, allReactionDishes());
+        assertEquals(5, new SharedPreferencesTasteSurveyStore(context).load().committed());
+    }
+
+    @Test
+    public void nieudanyZapisNieDopuszczaPrzeplanowaniaNiedokonczonejAnkiety() throws Exception {
+        FlakyTasteEventStore events = new FlakyTasteEventStore();
+        MainActivity.tasteEventStoreOverride = events;
+        new SharedPreferencesAppSettings(context).markOnboardingDone();
+        // Inna dieta niż obecna i nic niezatwierdzone: bez blokady ankieta by się przeplanowała.
+        saveSurveyJson(answeredSurvey(5, "[STARA_DIETA]"), "commitStamp", 42L);
+
+        MainActivity activity = launch();
+        click(activity, R.id.survey_resume_button);
+
+        TasteSurvey stored = new SharedPreferencesTasteSurveyStore(context).load();
+        assertEquals("odpowiedzi i znacznik zostają do ponowienia", 5, stored.position());
+        assertEquals(42L, stored.commitStamp());
+    }
+
     private static void runAll(List<Runnable> tasks) {
         while (!tasks.isEmpty()) {
             tasks.remove(0).run();

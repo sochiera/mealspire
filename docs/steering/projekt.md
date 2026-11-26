@@ -63,7 +63,10 @@ Wszystkie teksty w UI i promptach są po polsku.
   W trakcie niedokończonego zapisu `canGoBack()` = false (partia tylko do
   odczytu). Pauza zapisuje `paused` w stanie ankiety przed flagą onboardingu;
   start z `paused` bez flagi kończy quiz na ekran główny, wznowienie
-  (`openSurvey`) czyści `paused`.
+  (`openSurvey`) czyści `paused`. Wstrzymana ankieta z niezapisanymi wyborami
+  też wymaga odzyskania; dopóki zapis się nie uda, `ensureSurvey` nie
+  przeplanowuje ani nie filtruje ankiety, a polubienia trafiają do żywego
+  stanu dopiero po udanym zapisie.
   `endOnboarding()` zapisuje wybory przed flagą `onboarding_done`.
   Odpowiedzi 1–9 → `HouseholdProfile` (środkowe odpowiedzi nowych pytań nie
   dokładają zdań do promptu) (wpływa na prompty przez

@@ -1119,8 +1119,10 @@ public class MainActivity extends Activity {
         String dietKey = surveyDietKey();
         if (survey != null && survey.needsCommitRecovery()) {
             commitSurveyPicks(); // nowa ankieta nie może zgubić niezapisanych wyborów
-            if (survey.isFinished() && survey.needsCommitRecovery()) {
-                return; // zapis nadal się nie udaje: stara ankieta zostaje do ponowienia
+            if (survey.needsCommitRecovery()) {
+                // Zapis nadal się nie udaje: ankieta zostaje nietknięta (bez przeplanowania
+                // i filtrowania), a ponowienie przyjdzie przy następnym ekranie lub starcie.
+                return;
             }
         }
         if (survey == null || survey.isFinished()
@@ -1660,8 +1662,11 @@ public class MainActivity extends Activity {
             reactions = reactions.append(new DishReaction(pick,
                     DishReaction.describe(detailsByTitle.get(pick)), true, stamp));
         }
+        // Polubienia przygotowane lokalnie: trafiają do żywego stanu dopiero po udanym
+        // zapisie, żeby inny zapis polubień nie utrwalił ich przed reakcjami.
+        UserPreferences staged = preferences;
         for (String pick : picks) {
-            preferences = preferences.withLike(pick);
+            staged = staged.withLike(pick);
         }
         List<TasteEvent> newEvents = new ArrayList<>();
         for (String pick : TasteSurvey.missingFrom(picks, recordedEvents)) {
@@ -1675,11 +1680,12 @@ public class MainActivity extends Activity {
         // Zapis dziennika także przy pustej partii: zdarzenia z nieudanej próby są już
         // w pamięci, ale nie na dysku.
         durable = durable && (picks.isEmpty() || appendTasteEvents(newEvents, true));
-        durable = durable && (picks.isEmpty() || preferenceStore.saveDurably(preferences));
+        durable = durable && (picks.isEmpty() || preferenceStore.saveDurably(staged));
         if (!durable) {
             // Znacznik zostaje: start aplikacji (albo następna próba) dokończy zapis.
             return false;
         }
+        preferences = staged;
         saveSurvey(survey.commit());
         return !picks.isEmpty();
     }
