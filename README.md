@@ -230,6 +230,10 @@ Aby utrzymać główny ekran prostym, dodatkowe akcje są pod przyciskiem „Wi�
 - **Zmień liczbę osób** — zmienia zapamiętaną liczbę osób, dla których gotujesz.
 - **Ankieta gustu** — dokończenie przerwanej albo nowa ankieta A/B o wybranej
   długości; wybory dokładają się do listy reakcji „lubię”.
+- **Zresetuj dane** — po potwierdzeniu usuwa postęp ankiety, profil, historię,
+  dziennik, zapisane przepisy, ustawienia i propozycje zapisane w bieżącym
+  profilu Androida. Przycisk jest też widoczny podczas ankiety A/B. Aplikacja
+  wraca do pierwszego pytania i zachowuje logowanie do ChatGPT.
 - **Profil domowników** — zmienia odpowiedzi z quizu startowego (dla kogo
   gotujesz, czego nie jadacie, ile masz czasu, jak Ci idzie gotowanie, ostrość,
   lekko/sycąco, budżet, klasyki/nowości) oraz ulubione kuchnie (deklaracja opcjonalna — gustu kuchni aplikacja i tak uczy

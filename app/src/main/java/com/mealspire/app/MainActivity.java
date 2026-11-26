@@ -6,6 +6,7 @@ import com.mealspire.app.storage.SharedPreferencesBackendStore;
 import com.mealspire.app.backend.BackendClient;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.NotificationManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
@@ -109,6 +110,7 @@ import com.mealspire.app.net.HttpVersionJsonFetcher;
 import com.mealspire.app.notify.FoodLogNotifications;
 import com.mealspire.app.notify.MealNotifications;
 import com.mealspire.app.notify.MealReminderScheduler;
+import com.mealspire.app.storage.MealspireDataReset;
 import com.mealspire.app.storage.SharedPreferencesAppSettings;
 import com.mealspire.app.storage.SharedPreferencesCookbookStore;
 import com.mealspire.app.storage.SharedPreferencesFoodLogStore;
@@ -122,6 +124,8 @@ import com.mealspire.app.storage.SharedPreferencesTasteEventStore;
 import com.mealspire.app.storage.SharedPreferencesTasteSurveyStore;
 import com.mealspire.app.storage.SharedPreferencesUpdateStateStore;
 import com.mealspire.app.ui.Ui;
+
+import org.json.JSONObject;
 
 import java.io.IOException;
 import java.security.SecureRandom;
@@ -264,7 +268,7 @@ public class MainActivity extends Activity {
     private BackendClient backendClient;
     private DishRater dishRater;
     // Ready pool refills run one at a time, in the background (one LLM call each).
-    private Executor readyPoolExecutor;
+    private java.util.concurrent.ExecutorService readyPoolExecutor;
     private final Set<Integer> refillingMeals = new HashSet<>();
     // Dishes (lower-case) already shown in this series: since the meal tile was tapped.
     private final Set<String> seriesShown = new HashSet<>();
@@ -346,11 +350,22 @@ public class MainActivity extends Activity {
     // Ankieta otwarta z ekranu startowego/menu, poza quizem: bez pytań profilu
     // i jednorazowych dialogów startowych.
     private boolean surveyOnly;
+    private static final String RESET_DATA_LABEL = "Zresetuj dane";
+    private boolean resettingData;
+    private long dataGeneration;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        if (MealspireDataReset.isPending(this)) {
+            setIntent(new Intent(this, MainActivity.class));
+            if (!clearApplicationData()) {
+                showResetFailure();
+                return;
+            }
+        }
+        dataGeneration = MealspireDataReset.generation(this);
         buildLlmClients();
         preferenceStore = new SharedPreferencesPreferenceStore(this);
         preferences = preferenceStore.load();
@@ -513,6 +528,57 @@ public class MainActivity extends Activity {
         return header;
     }
 
+    private void confirmDataReset() {
+        new AlertDialog.Builder(this)
+                .setTitle(RESET_DATA_LABEL)
+                .setMessage("Bezpowrotnie usuniesz postęp i odpowiedzi ankiety, profil domowników, "
+                        + "preferencje, zapisane przepisy, historię posiłków, dziennik, ustawienia "
+                        + "i dotychczasowe propozycje. Mealspire wróci do pierwszego pytania. "
+                        + "Zachowasz konto i logowanie do ChatGPT.")
+                .setNegativeButton("Anuluj", null)
+                .setPositiveButton(RESET_DATA_LABEL, (dialog, which) -> resetApplicationData())
+                .show();
+    }
+
+    private boolean clearApplicationData() {
+        NotificationManager notifications = getSystemService(NotificationManager.class);
+        if (notifications != null) {
+            notifications.cancelAll();
+        }
+        return MealspireDataReset.reset(this);
+    }
+
+    private void resetApplicationData() {
+        resettingData = true;
+        contentEpoch++;
+        if (!clearApplicationData()) {
+            showResetFailure();
+            return;
+        }
+        toast("Dane Mealspire zostały zresetowane.");
+        setIntent(new Intent(this, MainActivity.class));
+        recreate();
+    }
+
+    private void showResetFailure() {
+        resettingData = true;
+        LinearLayout retry = new LinearLayout(this);
+        retry.setOrientation(LinearLayout.VERTICAL);
+        retry.setPadding(dp(20), dp(24), dp(20), dp(24));
+        retry.addView(Ui.body(this, "Reset danych nie powiódł się. Spróbuj ponownie."), matchWrap());
+        Button button = new Button(this);
+        button.setText("Ponów reset");
+        Ui.primary(button);
+        button.setOnClickListener(v -> resetApplicationData());
+        retry.addView(button, marginTop(12));
+        setContentView(retry);
+    }
+
+    private boolean isCurrentData() {
+        return !resettingData && !isDestroyed()
+                && dataGeneration == MealspireDataReset.generation(this);
+    }
+
     /** A vector icon in {@code color}, mutated so shared drawables stay untouched. */
     private Drawable tinted(int drawableRes, int color) {
         Drawable drawable = getDrawable(drawableRes).mutate();
@@ -586,14 +652,25 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        // Data reset elsewhere (another task/instance): start over from the initial state.
+        if (!resettingData && dataGeneration != MealspireDataReset.generation(this)) {
+            resettingData = true;
+            contentEpoch++;
+            setIntent(new Intent(this, MainActivity.class));
+            recreate();
+            return;
+        }
         // Back from the browser: the stored session is the truth, whatever was on screen.
-        if (aiChip != null) {
+        if (aiChip != null && isCurrentData()) {
             updateAiChip();
         }
     }
 
     @Override
     protected void onDestroy() {
+        if (readyPoolExecutor != null) {
+            readyPoolExecutor.shutdownNow();
+        }
         signInFlow.cancel();
         releaseSignInResources();
         super.onDestroy();
@@ -602,8 +679,10 @@ public class MainActivity extends Activity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        setIntent(intent);
-        handleMealIntent(intent);
+        if (isCurrentData()) {
+            setIntent(intent);
+            handleMealIntent(intent);
+        }
     }
 
     /**
@@ -615,6 +694,10 @@ public class MainActivity extends Activity {
      */
     @Override
     public void onBackPressed() {
+        if (!isCurrentData()) {
+            super.onBackPressed();
+            return;
+        }
         // The quiz-active state has a single source of truth (onboardingStep);
         // the ONBOARDING screen is derived from it, never stored.
         BackNavigation.Screen screen = isOnboardingActive()
@@ -983,6 +1066,10 @@ public class MainActivity extends Activity {
         signInFlow.succeeded(attempt);
         releaseSignInResources();
         dismissSignInFailure();
+        // The session survives a data reset; stale UI/pools of the old data do not.
+        if (!isCurrentData()) {
+            return;
+        }
         updateAiChip();
         warmReadyPools();
         // Refresh the open recipe so the AI-only "Zmień przepis" button appears.
@@ -999,7 +1086,7 @@ public class MainActivity extends Activity {
             return;
         }
         releaseSignInResources();
-        if (isFinishing() || isDestroyed()) {
+        if (isFinishing() || isDestroyed() || !isCurrentData()) {
             return;
         }
         updateAiChip();
@@ -1393,6 +1480,13 @@ public class MainActivity extends Activity {
         contentContainer.addView(none, marginTop(12));
 
         addQuizSkipButton("Przerwij — dokończę później");
+
+        Button reset = new Button(this);
+        reset.setId(R.id.reset_data_button);
+        reset.setText(RESET_DATA_LABEL);
+        Ui.outlinedButton(reset);
+        reset.setOnClickListener(v -> confirmDataReset());
+        contentContainer.addView(reset, marginTop(6));
     }
 
     private void addSurveyOption(int index, String dish, String details, int choice) {
@@ -1752,6 +1846,7 @@ public class MainActivity extends Activity {
             }
             final ReadyProposals.Refill result = refill;
             runOnUiThread(() -> {
+                if (!isCurrentData()) return;
                 refillingMeals.remove(meal);
                 if (result != null && !result.isEmpty()) {
                     backendStore.saveReadyPool(meal, result.applyTo(backendStore.readyPool(meal),
@@ -2083,6 +2178,7 @@ public class MainActivity extends Activity {
             try {
                 final Recipe recipe = recipeService.generateRecipeFor(dishName, request);
                 runOnUiThread(() -> {
+                    if (!isCurrentData()) return;
                     // Cache the recipe so going back and reopening is instant.
                     if (requestedIndex < proposalRecipes.size()) {
                         proposalRecipes.set(requestedIndex, recipe);
@@ -2096,7 +2192,7 @@ public class MainActivity extends Activity {
             } catch (IOException e) {
                 final String message = e.getMessage();
                 runOnUiThread(() -> {
-                    if (epoch != contentEpoch) {
+                    if (!isCurrentData() || epoch != contentEpoch) {
                         return;
                     }
                     // Bring the proposals back so the user isn't stranded on an
@@ -2346,7 +2442,7 @@ public class MainActivity extends Activity {
                 final Recipe revised = recipeService.modifyRecipe(base, instruction,
                         householdProfile);
                 runOnUiThread(() -> {
-                    if (epoch != contentEpoch) {
+                    if (!isCurrentData() || epoch != contentEpoch) {
                         return;
                     }
                     showFullRecipe(revised);
@@ -2355,7 +2451,7 @@ public class MainActivity extends Activity {
             } catch (IOException e) {
                 final String message = e.getMessage();
                 runOnUiThread(() -> {
-                    if (epoch != contentEpoch) {
+                    if (!isCurrentData() || epoch != contentEpoch) {
                         return;
                     }
                     showFullRecipe(base);
@@ -2393,6 +2489,8 @@ public class MainActivity extends Activity {
         actions.add(this::showAddKnownDishDialog);
         labels.add("Zarządzaj moimi danymi");
         actions.add(this::showManageDialog);
+        labels.add(RESET_DATA_LABEL);
+        actions.add(this::confirmDataReset);
         if (chatGptAccount.isSignedIn()) {
             labels.add(MODEL_MENU_PREFIX + chatGptAccount.modelChoice().label);
             actions.add(this::showModelChoiceDialog);
@@ -2493,9 +2591,18 @@ public class MainActivity extends Activity {
         final String endpoint = backendStore.baseUrl();
         final int epoch = contentEpoch;
         new Thread(() -> {
-            try { backendStore.cache(endpoint, backendClient.catalog()); }
+            JSONObject data = null;
+            try { data = backendClient.catalog(); }
             catch (IOException ignored) { /* Last catalog or bootstrap remains available. */ }
-            runOnUiThread(() -> { if (epoch == contentEpoch && after != null) after.run(); });
+            final JSONObject catalog = data;
+            runOnUiThread(() -> {
+                if (!isCurrentData()) return;
+                if (catalog != null) {
+                    try { backendStore.cache(endpoint, catalog); }
+                    catch (IOException ignored) { /* Keep the last valid catalog. */ }
+                }
+                if (epoch == contentEpoch && after != null) after.run();
+            });
         }).start();
     }
 
@@ -2639,7 +2746,8 @@ public class MainActivity extends Activity {
             try {
                 final CookbookEntry entry = dishImporter.importDish(input);
                 runOnUiThread(() -> {
-                    // Always persist the imported dish, even if the view moved on.
+                    if (!isCurrentData()) return;
+                    // Persist even if the view moved on within the same data generation.
                     cookbook = cookbook.add(entry);
                     cookbookStore.save(cookbook);
                     preferences = preferences.withLike(entry.getTitle());
@@ -2663,7 +2771,7 @@ public class MainActivity extends Activity {
             } catch (IOException e) {
                 final String message = e.getMessage();
                 runOnUiThread(() -> {
-                    if (epoch != contentEpoch) {
+                    if (!isCurrentData() || epoch != contentEpoch) {
                         return;
                     }
                     showHint(message != null ? message : "Nie udało się dodać dania.");

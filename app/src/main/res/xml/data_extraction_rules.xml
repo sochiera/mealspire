@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android 12+: tokeny konta ChatGPT nie trafiają do chmury ani na inne urządzenie. -->
+<!-- Keep personal data and sign-in state within the current Android profile. -->
 <data-extraction-rules>
     <cloud-backup>
-        <exclude domain="sharedpref" path="mealspire_chatgpt.xml" />
-        <exclude domain="sharedpref" path="mealspire_backend.xml" />
+        <include domain="sharedpref" path="mealspire_update_state.xml" />
     </cloud-backup>
     <device-transfer>
-        <exclude domain="sharedpref" path="mealspire_chatgpt.xml" />
-        <exclude domain="sharedpref" path="mealspire_backend.xml" />
+        <include domain="sharedpref" path="mealspire_update_state.xml" />
     </device-transfer>
 </data-extraction-rules>

@@ -1,6 +1,8 @@
 package com.mealspire.app;
 
+import android.app.AlertDialog;
 import android.content.Context;
+import android.os.Looper;
 import android.widget.Button;
 import android.widget.TextView;
 import androidx.test.core.app.ApplicationProvider;
@@ -17,6 +19,8 @@ import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
+import org.robolectric.shadows.ShadowAlertDialog;
+import static org.robolectric.Shadows.shadowOf;
 import static org.junit.Assert.*;
 
 /**
@@ -165,6 +169,31 @@ public class ReadyDishPoolRobolectricTest {
         assertEquals(3, proposals(activity).size());
         assertEquals(MainActivity.proposalSourceNote(ReadyProposals.Source.OFFLINE), statusText(activity));
         assertEquals(0, readyPool(LUNCH).size());
+    }
+
+    @Test public void refillStartedBeforeResetCannotRestoreOldProposals() {
+        MainActivity activity = Robolectric.buildActivity(MainActivity.class).setup().get();
+        assertEquals(3, background.size());
+        click(activity, R.id.more_button);
+        AlertDialog menu = ShadowAlertDialog.getLatestAlertDialog();
+        android.widget.ListAdapter items = menu.getListView().getAdapter();
+        int reset = 0;
+        while (reset < items.getCount() && !"Zresetuj dane".equals(items.getItem(reset))) {
+            reset++;
+        }
+        assertTrue("reset w menu Więcej", reset < items.getCount());
+        menu.getListView().performItemClick(null, reset, items.getItemId(reset));
+        ShadowAlertDialog.getLatestAlertDialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        shadowOf(Looper.getMainLooper()).idle();
+
+        background.runAll();
+        shadowOf(Looper.getMainLooper()).idle();
+
+        assertEquals("spóźnione odpowiedzi z serwera dotarły", 3, transport.proposeCalls);
+        for (int meal = 0; meal < 3; meal++) {
+            assertEquals(0, readyPool(meal).size());
+        }
+        assertTrue(new SharedPreferencesBackendStore(context).serverNoticeShown());
     }
 
     private static Set<String> lower(List<String> names) {

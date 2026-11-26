@@ -15,7 +15,7 @@ public class BackendServerTest {
     private final AtomicInteger calls = new AtomicInteger();
     @Before public void start() throws Exception {
         server = new BackendServer(new InetSocketAddress("127.0.0.1", 0), (token, model) -> {
-            if (!"test-access".equals(token)) throw new BackendServer.ApiError(401, "unauthorized");
+            if (!Set.of("test-access", "second-access").contains(token)) throw new BackendServer.ApiError(401, "unauthorized");
             return (system, user) -> {
                 calls.incrementAndGet();
                 if (system.contains("Oceń gust")) return "{\"profile\":[\"Lubi owsiankę\"]}";
@@ -81,11 +81,15 @@ public class BackendServerTest {
         assertEquals(426, send("/v1/recipe", "{\"apiVersion\":2,\"model\":\"gpt-6-luna\"}", "test-access").statusCode());
         assertEquals(400, send("/v1/recipe", "{\"model\":\"gpt-6-luna\",\"request\":{\"household\":{\"exclusions\":[7]}}}", "test-access").statusCode());
     }
-    @Test public void tasteCacheAvoidsRepeatInference() throws Exception {
-        String body = "{\"model\":\"gpt-6-luna\",\"request\":{\"preferences\":{\"likes\":[\"Owsianka\"]}}}";
-        assertEquals(200, send("/v1/taste", body, "test-access").statusCode());
-        assertEquals(200, send("/v1/taste", body, "test-access").statusCode());
-        assertEquals(1, calls.get());
+    @Test public void tasteUsesOnlyCurrentRequestAcrossAccounts() throws Exception {
+        String empty = "{\"model\":\"gpt-6-luna\"}";
+        String personalized = "{\"model\":\"gpt-6-luna\",\"request\":{\"preferences\":{\"likes\":[\"Owsianka\"]}}}";
+        assertEquals(200, send("/v1/taste", personalized, "test-access").statusCode());
+        assertEquals(200, send("/v1/taste", personalized, "second-access").statusCode());
+        JSONObject fresh = new JSONObject(send("/v1/taste", empty, "test-access").body());
+        assertEquals(0, fresh.getJSONObject("taste").getJSONArray("profile").length());
+        assertEquals(200, send("/v1/taste", personalized, "second-access").statusCode());
+        assertEquals(3, calls.get());
     }
 
     @Test public void rateIsOneCallFilteredByDietAndBounded() throws Exception {

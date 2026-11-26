@@ -22,11 +22,6 @@ public final class BackendServer implements AutoCloseable {
     private final ExecutorService workers = Executors.newFixedThreadPool(4);
     private final Semaphore capacity = new Semaphore(2);
     private final ClientFactory factory;
-    private static final class CachedTaste {
-        final String json; final long expires;
-        CachedTaste(JSONObject value) { json = value.toString(); expires = System.currentTimeMillis() + 900000; }
-    }
-    private final Map<String, CachedTaste> tasteCache = new LinkedHashMap<>();
     private static final Set<String> POST_PATHS = Set.of("/v1/proposals", "/v1/recipe", "/v1/modify", "/v1/import", "/v1/taste", "/v1/rate");
     public BackendServer(InetSocketAddress address, ClientFactory factory) throws IOException {
         if (!address.getAddress().isLoopbackAddress()) throw new IOException("Bind only to loopback; use a TLS reverse proxy.");
@@ -56,7 +51,7 @@ public final class BackendServer implements AutoCloseable {
             if (!capacity.tryAcquire()) throw new ApiError(429, "busy");
             try {
                 LlmClient llm = factory.create(authorization.substring(7), body.getString("model"));
-                send(x, 200, execute(path, body, llm, authorization.substring(7)));
+                send(x, 200, execute(path, body, llm));
             } finally { capacity.release(); }
         } catch (ApiError e) { send(x, e.status, error(e.getMessage())); }
         catch (JSONException | IllegalArgumentException e) { send(x, 400, error("invalid_request")); }
@@ -104,15 +99,15 @@ public final class BackendServer implements AutoCloseable {
             return BackendCodec.envelope().put("revision", revision).put("meals", meals);
         } catch (java.security.NoSuchAlgorithmException e) { throw new IllegalStateException(e); }
     }
-    private JSONObject execute(String path, JSONObject body, LlmClient llm, String token) throws IOException {
+    private JSONObject execute(String path, JSONObject body, LlmClient llm) throws IOException {
         JSONObject out = BackendCodec.envelope();
         RecipeRequest request = BackendCodec.request(body.optJSONObject("request") == null ? new JSONObject() : body.getJSONObject("request"));
         RecipeService service = new RecipeService(llm, new RecipePromptBuilder(), new RecipeTextParser());
         switch (path) {
-            case "/v1/taste": return out.put("taste", cachedTaste(request, llm, token + "\n" + body.getString("model")));
+            case "/v1/taste": return out.put("taste", assessTaste(request, llm));
             case "/v1/proposals": {
                 if (request.getPreferences().getLikes().size() >= PersonalizationReadiness.MIN_LIKED_DISHES) {
-                    JSONObject taste = cachedTaste(request, llm, token + "\n" + body.getString("model"));
+                    JSONObject taste = assessTaste(request, llm);
                     request = request.withTasteContext(new TasteContext(BackendCodec.strings(taste.getJSONArray("profile")),
                             new ArrayList<>(request.getPreferences().getLikes()).subList(0, Math.min(8, request.getPreferences().getLikes().size())))
                             .withExploration(request.getTasteContext().getExplorationSentence())
@@ -167,25 +162,6 @@ public final class BackendServer implements AutoCloseable {
             }
             default: throw new ApiError(404, "not_found");
         }
-    }
-    private JSONObject cachedTaste(RecipeRequest request, LlmClient llm, String token) throws IOException {
-        String key;
-        try {
-            byte[] bytes = java.security.MessageDigest.getInstance("SHA-256").digest((token + "\n" +
-                    new PreferencesSerializer().toJson(request.getPreferences()) + "\n" +
-                    new HouseholdProfileSerializer().toJson(request.getHouseholdProfile())).getBytes(StandardCharsets.UTF_8));
-            key = Base64.getEncoder().encodeToString(bytes);
-        } catch (java.security.NoSuchAlgorithmException e) { throw new IOException(e); }
-        synchronized (tasteCache) {
-            CachedTaste cached = tasteCache.get(key);
-            if (cached != null && cached.expires > System.currentTimeMillis()) return new JSONObject(cached.json);
-        }
-        JSONObject value = assessTaste(request, llm);
-        synchronized (tasteCache) {
-            if (tasteCache.size() >= 256) tasteCache.remove(tasteCache.keySet().iterator().next());
-            tasteCache.put(key, new CachedTaste(value));
-        }
-        return value;
     }
     private static JSONObject assessTaste(RecipeRequest request, LlmClient llm) throws IOException {
         if (request.getPreferences().getLikes().isEmpty()) return new JSONObject().put("profile", new JSONArray());

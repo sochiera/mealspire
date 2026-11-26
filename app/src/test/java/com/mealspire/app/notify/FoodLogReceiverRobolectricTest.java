@@ -15,6 +15,7 @@ import androidx.test.core.app.ApplicationProvider;
 
 import com.mealspire.app.domain.FoodLog;
 import com.mealspire.app.domain.FoodLogReminder;
+import com.mealspire.app.storage.MealspireDataReset;
 import com.mealspire.app.storage.SharedPreferencesFoodLogStore;
 
 import org.junit.Test;
@@ -54,14 +55,7 @@ public class FoodLogReceiverRobolectricTest {
 
     @Test
     public void replyIsSavedToTheFoodLog() {
-        Intent reply = new Intent(FoodLogReceiver.ACTION_REPLY);
-        Bundle results = new Bundle();
-        results.putCharSequence(FoodLogNotifications.KEY_REPLY_TEXT, "  pierogi ruskie  ");
-        RemoteInput.addResultsToIntent(new RemoteInput[]{
-                new RemoteInput.Builder(FoodLogNotifications.KEY_REPLY_TEXT).build()},
-                reply, results);
-
-        new FoodLogReceiver().onReceive(context, reply);
+        new FoodLogReceiver().onReceive(context, reply("  pierogi ruskie  "));
 
         FoodLog log = new SharedPreferencesFoodLogStore(context).load();
         assertEquals(1, log.entries().size());
@@ -70,6 +64,30 @@ public class FoodLogReceiverRobolectricTest {
                 FoodLogNotifications.NOTIFICATION_ID);
         assertTrue(saved.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
                 .startsWith("Zapisane"));
+    }
+
+    @Test
+    public void replyQueuedBeforeResetCannotRestoreFoodLog() {
+        Intent stale = reply("stary wpis");
+        assertTrue(MealspireDataReset.reset(context));
+
+        FoodLogReceiver receiver = new FoodLogReceiver();
+        receiver.onReceive(context, stale);
+        assertTrue(new SharedPreferencesFoodLogStore(context).load().isEmpty());
+
+        receiver.onReceive(context, reply("nowy wpis"));
+        assertEquals(1, new SharedPreferencesFoodLogStore(context).load().entries().size());
+    }
+
+    private Intent reply(String text) {
+        Intent reply = new Intent(FoodLogReceiver.ACTION_REPLY);
+        reply.putExtra(FoodLogReceiver.EXTRA_DATA_GENERATION, MealspireDataReset.generation(context));
+        Bundle results = new Bundle();
+        results.putCharSequence(FoodLogNotifications.KEY_REPLY_TEXT, text);
+        RemoteInput.addResultsToIntent(new RemoteInput[]{
+                new RemoteInput.Builder(FoodLogNotifications.KEY_REPLY_TEXT).build()},
+                reply, results);
+        return reply;
     }
 
     @Test

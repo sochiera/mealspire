@@ -19,7 +19,7 @@ public final class SharedPreferencesChatGptSessionStore implements ChatGptSessio
     static final String PREFS_NAME = "mealspire_chatgpt";
     private static final String KEY_SESSION = "session";
     private static final String KEY_HOST_ID = "host_id";
-    private static final String KEY_MODEL_CHOICE = "model_choice";
+    static final String KEY_MODEL_CHOICE = "model_choice";
 
     private final SharedPreferences sharedPreferences;
 
