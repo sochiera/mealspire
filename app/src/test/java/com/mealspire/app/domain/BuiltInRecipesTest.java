@@ -87,6 +87,24 @@ public class BuiltInRecipesTest {
         assertEquals(before + 1, details.size());
     }
 
+    @Test
+    public void nazwyDanSaNaturalnymiPolskimiNazwamiZgodnymiZPrzepisem() {
+        Map<String, String> details = BuiltInRecipes.detailsByTitle(null);
+        // Ziemniaki z twarogiem i cebulką to po polsku pierogi ruskie.
+        String ruskie = details.get("Pierogi ruskie");
+        assertTrue(ruskie != null && ruskie.contains("ziemniaki") && ruskie.contains("twaróg"));
+        // Gotowe kanapki, nie „serek na kanapki".
+        String kanapki = details.get("Kanapki z serkiem wiejskim i warzywami");
+        assertTrue(kanapki != null && kanapki.contains("nałóż na pieczywo"));
+        for (String title : details.keySet()) {
+            String lower = title.toLowerCase();
+            assertTrue("kalka „na kanapki\" w nazwie: " + title, !lower.endsWith("na kanapki"));
+            assertTrue("opisowa nazwa zamiast ruskich: " + title,
+                    !lower.startsWith("pierogi z serem i ziemniakami")
+                            && !lower.startsWith("pierogi z ziemniakami i serem"));
+        }
+    }
+
     private static Recipe findByTitle(Recipe[] recipes, String title) {
         for (Recipe recipe : recipes) {
             if (recipe.getTitle().equals(title)) {

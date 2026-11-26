@@ -185,8 +185,14 @@ oficjalne „Sign in with ChatGPT” od OpenAI:
    otwiera przeglądarkę ze stroną logowania OpenAI.
 2. Logujesz się i zgadzasz, by Mealspire korzystał z Twojego planu ChatGPT
    (w ustawieniach ChatGPT możesz ustawić tygodniowy limit dla tej aplikacji).
-3. Przeglądarka pokazuje „Gotowe — możesz wrócić do aplikacji Mealspire”.
-   Wracasz do aplikacji i AI jest odblokowane.
+3. Przeglądarka pokazuje „Wróć do aplikacji Mealspire”. Wracasz do aplikacji,
+   ta kończy logowanie i AI jest odblokowane (chip „AI · …” i komunikat
+   „Zalogowano do ChatGPT…”). Do tego czasu chip pokazuje „Logowanie do ChatGPT…”.
+   Jeśli przeglądarka długo czekała albo pokazała własny błąd, a przekierowanie
+   do aplikacji jednak dotarło, logowanie i tak się kończy, bez fałszywego błędu.
+   Prawdziwe niepowodzenie kończy oczekiwanie oknem z przyciskiem
+   „Spróbuj ponownie”. Ponowne dotknięcie chipu w trakcie logowania pozwala
+   „Zacząć od nowa” (poprzednia próba zostaje wtedy po cichu porzucona).
 
 Technicznie: OAuth 2.0 Authorization Code + PKCE z dynamiczną rejestracją
 klienta (ścieżka dla aplikacji open source), przekierowanie na

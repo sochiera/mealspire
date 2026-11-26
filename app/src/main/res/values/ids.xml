@@ -14,6 +14,7 @@
     <item name="ready_pool_status" type="id" />
     <item name="back_button" type="id" />
     <item name="more_button" type="id" />
+    <item name="ai_chip" type="id" />
     <item name="update_banner" type="id" />
     <item name="update_message" type="id" />
     <item name="onboarding_question" type="id" />

@@ -1,6 +1,7 @@
 package com.mealspire.app.domain;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -152,10 +153,35 @@ public final class TasteSurvey {
         return position > committed;
     }
 
+    /**
+     * „Cofnij" z kontrolą poprzedniej pary: oba dania muszą być w aktualnym
+     * katalogu ({@code catalogDetails}) i spełniać dietę. Para sprzed zmiany nazw
+     * lub sprzed zmiany wykluczeń zachowuje odpowiedź, ale nie wraca na ekran.
+     */
+    public boolean canGoBack(DietConstraints diet, Map<String, String> catalogDetails) {
+        if (!canGoBack()) {
+            return false;
+        }
+        Pair previous = pairs.get(position - 1);
+        return catalogDetails.containsKey(previous.dishA) && catalogDetails.containsKey(previous.dishB)
+                && allows(diet, previous.dishA, catalogDetails)
+                && allows(diet, previous.dishB, catalogDetails);
+    }
+
     public TasteSurvey back() {
         return canGoBack()
                 ? new TasteSurvey(pairs, answers, position - 1, committed, dietKey, continuedAt)
                 : this;
+    }
+
+    /** Czy jest choć jedna odpowiedź (także przed bieżącą pozycją po „Cofnij"). */
+    public boolean hasAnswers() {
+        for (int answer : answers) {
+            if (answer != NOT_ANSWERED) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Wybrane dania z odpowiedzi czekających na zapis (kolejność odpowiedzi). */
@@ -225,6 +251,30 @@ public final class TasteSurvey {
                 continuedAt);
     }
 
+    /**
+     * Usuwa nieprzejrzane pary z daniem spoza aktualnego katalogu, np. zapisane
+     * pod nazwą sprzed aktualizacji (przemianowane dania). Takiego dania nie da
+     * się sprawdzić z dietą ani pokazać pod aktualną nazwą — para odpada, a
+     * przejrzane pary zostają bez zmian ({@link #canGoBack(DietConstraints, Map)}
+     * nie pozwala na nie wrócić). Bez zmian zwraca {@code this}.
+     */
+    public TasteSurvey withoutUnknownDishes(Collection<String> knownTitles) {
+        List<Pair> keptPairs = new ArrayList<>();
+        List<Integer> keptAnswers = new ArrayList<>();
+        for (int i = 0; i < pairs.size(); i++) {
+            Pair pair = pairs.get(i);
+            // Odpowiedź od pozycji w przód (po „Cofnij") nie jest wyborem — liczy się
+            // dopiero po ponownej odpowiedzi — więc taka para odpada tak samo.
+            if (i < position || (knownTitles.contains(pair.dishA)
+                    && knownTitles.contains(pair.dishB))) {
+                keptPairs.add(pair);
+                keptAnswers.add(answers.get(i));
+            }
+        }
+        return keptPairs.size() == pairs.size() ? this
+                : new TasteSurvey(keptPairs, keptAnswers, position, committed, dietKey);
+    }
+
     private List<String> picks(int from, int to) {
         List<String> result = new ArrayList<>();
         for (int i = from; i < to; i++) {
@@ -244,7 +294,11 @@ public final class TasteSurvey {
             return true;
         }
         String details = detailsByTitle == null ? null : detailsByTitle.get(dish);
-        return diet.allows(dish + "\n" + (details == null ? "" : details));
+        if (details == null) {
+            // Bez składników nie da się potwierdzić diety — przy wykluczeniach odpada.
+            return diet.isEmpty();
+        }
+        return diet.allows(dish + "\n" + details);
     }
 
     private static int clamp(int value, int min, int max) {
